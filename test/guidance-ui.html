@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Guidance UI review</title>
+<style>body{margin:0;background:#132129;color:#e9dfcd;font:14px system-ui;overflow:hidden}#back{position:fixed;inset:0;background:url('/artifacts/guidance-interiors/after/after-dRoomNight.png') center/cover}nav{position:fixed;z-index:70;bottom:16px;left:16px;display:flex;gap:8px;flex-wrap:wrap}button{font:inherit;background:#172128;color:#e9dfcd;border:1px solid #9a978c;padding:9px;cursor:pointer}.hint{position:fixed;z-index:70;bottom:65px;left:16px}</style></head><body>
+<div id="back"></div><div class="hint">Actual StoryUI + camera projection, without touching the game save.</div><nav><button id="onscreen">Nearby task</button><button id="right">Off screen right</button><button id="behind">Behind you</button><button id="prompt">At interaction</button><button id="hidden">Hide marker</button></nav>
+<script type="module">
+import '../src/story/story.css';
+import { StoryUI } from '../src/story/StoryUI.js';
+import { Vector3, PerspectiveCamera } from '../src/engine/index.js';
+const ui=new StoryUI(),camera=new PerspectiveCamera(70,innerWidth/innerHeight,.1,1000);
+ui.setClock('19.00 · Thursday 3rd January 1901');ui.setObjective('Chalk the observations on the slate in the keepers’ room.');
+let mode='onscreen';
+const targets={onscreen:new Vector3(-1,0,-5),right:new Vector3(25,0,-5),behind:new Vector3(0,0,5),prompt:new Vector3(0,0,-1)};
+document.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{mode=b.id}));
+function frame(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();ui.guidance(mode==='hidden'?null:{at:targets[mode],label:'Observations · E',id:'slate'},camera,mode==='prompt');requestAnimationFrame(frame)}frame();
+</script></body></html>

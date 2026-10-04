@@ -1,0 +1,26 @@
+{
+  "name": "seven-hunters",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5189",
+    "dev:vr": "node tools/xr/serve.mjs",
+    "test:xr": "node test/xr.mjs && node test/xr-render.mjs",
+    "test:xr-scene": "node test/xr-scene.mjs",
+    "test:weather": "node test/sea-weather.mjs",
+    "test:weather-render": "node test/sea-weather-render.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node test/game-logic.mjs && node test/flannan.mjs && node test/demo-walk.mjs && node test/demo-story.mjs && node test/guidance.mjs && node test/engine-smoke.mjs",
+    "story-guide": "node tools/story-guide/build.mjs",
+    "shots": "node tools/shots/shots.mjs",
+    "shots:weather": "node tools/shots/sea-weather.mjs"
+  },
+  "devDependencies": {
+    "jpeg-js": "^0.4.4",
+    "vite": "^8.3.0",
+    "webgpu": "^0.6.1"
+  },
+  "license": "MIT",
+  "private": true,
+  "type": "module"
+}

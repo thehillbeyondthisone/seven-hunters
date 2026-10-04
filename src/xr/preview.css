@@ -1,0 +1,19 @@
+.xr-preview { position: fixed; z-index: 1000; left: 24px; bottom: 24px; width: min(420px, calc(100vw - 48px)); box-sizing: border-box; max-height: calc(100dvh - 48px); overflow: auto; padding: 24px; color: #eee9dd; background: rgba(15, 24, 28, .96); border: 1px solid #536265; border-radius: 12px; box-shadow: 0 12px 40px #0006; font: 14px/1.55 Inter, system-ui, sans-serif; }
+.xr-preview[hidden] { display: none; }
+.xr-preview .xr-kicker { margin: 0 0 8px; font-size: 10px; letter-spacing: .12em; color: #bed0cc; }
+.xr-preview h1 { margin: 0 0 12px; font: normal 30px/1.15 Georgia, serif; }
+.xr-preview p { margin: 10px 0; }
+.xr-preview label { display: block; margin: 14px 0; }
+.xr-preview select { display: block; margin-top: 5px; width: 100%; padding: 9px; color: #eee9dd; background: #233337; border: 1px solid #738786; border-radius: 5px; font: inherit; }
+.xr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.xr-preview button { cursor: pointer; border: 1px solid #85968d; border-radius: 6px; padding: 10px 13px; font: 600 13px/1.4 Inter, system-ui, sans-serif; color: #172426; background: #e2d7b8; }
+.xr-preview button.xr-desktop { background: transparent; color: #eee9dd; }
+.xr-preview button:disabled { cursor: default; opacity: .5; }
+.xr-preview a { color: #e2d7b8; }
+.xr-preview .xr-status { font-size: 12px; color: #bed0cc; }
+.xr-preview details { font-size: 12px; margin-bottom: 14px; }
+.xr-preview summary { cursor: pointer; }
+.xr-preview :focus-visible { outline: 2px solid #efc783; outline-offset: 3px; }
+.xr-preview.is-compact { padding: 12px 16px; width: min(340px, calc(100vw - 48px)); }
+.xr-preview.is-compact h1, .xr-preview.is-compact > p:not(.xr-kicker):not(.xr-status), .xr-preview.is-compact details { display: none; }
+@media (max-height: 650px) { .xr-preview { padding: 16px; bottom: 12px; left: 12px; max-height: calc(100dvh - 24px); } }

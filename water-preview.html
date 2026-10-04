@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>West landing · water experiment</title><link rel="stylesheet" href="/tools/water-preview/preview.css"></head>
+<body><div id="app"></div><div id="fps"></div><div id="loading">Building the west landing…</div>
+<aside id="controls" hidden>
+ <div class="heading"><div><small>SEVEN HUNTERS · LOCAL EXPERIMENT</small><h1>The west landing</h1></div><button id="collapse" aria-label="Collapse controls" aria-expanded="true">−</button></div>
+ <div id="body"><p>Watch the swell meet the rocks and return to sea.</p>
+ <div class="modes" aria-label="Water comparison"><button data-mode="0">Current water</button><button data-mode="1">Free swell</button><button data-mode="2" aria-pressed="true">Coastal solver</button></div>
+ <div class="pair"><label>Swell<select id="period"><option value="14">Long · 14 seconds</option><option value="9">Short · 9 seconds</option></select></label><label>Direction<select id="angle"><option value="0">Into the landing</option><option value="25">25° from the north</option><option value="-25">25° from the south</option></select></label></div>
+ <div class="pair"><label>Height<select id="amplitude"><option value="0.5">Small</option><option value="1.4">Moderate test</option><option value="2">Strong test</option></select></label><label>Waves<select id="irregular"><option value="1">Mixed set</option><option value="0">Regular swell</option></select></label></div>
+ <div class="actions"><button id="pause">Pause waves</button><button id="restart">Restart set</button><button id="mapToggle">Hide motion map</button></div>
+ <div class="actions"><button data-view="fWestWatch">Landing steps</button><button data-view="fCliffGale">Facing the cliff</button><button id="overhead">Overhead</button></div>
+ <p id="status" aria-live="polite"></p>
+ <p class="help">Click the scene to look · WASD move · Esc releases the mouse. Switching water keeps the same camera and wave clock.</p>
+ <p class="note">Free swell and the solver share one incoming set. Foam and spray are off. This experiment uses a fixed shoreline; it cannot model curling breakers or climbing water sheets.</p>
+ <a href="/">Return to Seven Hunters</a>
+ </div>
+</aside><figure id="map"><canvas width="384" height="384"></canvas><figcaption>Surface height · arrows show oscillating flow<br><span>Blue trough ← level → gold crest · rock in grey</span></figcaption></figure>
+<script type="module" src="/tools/water-preview/main.js"></script></body></html>
