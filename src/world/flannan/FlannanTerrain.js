@@ -301,14 +301,19 @@ export class FlannanTerrainData extends TerrainData {
 
 		}
 		const pts = smooth.map( ( y, t ) => [ head.x - dx * t, y, head.z - dz * t ] );
-		// grade a 3.4 m wide band under the steps (and the rock-cut sides a little steeper)
-		for ( let t = - 1; t <= end + 3; t += 0.5 ) for ( let s = - 4; s <= 4; s += 0.5 ) {
+		// Fit the flight into a broad, ledged cutting. The earlier four-metre blend
+		// left near-vertical trench walls beside the treads. Route and tread heights
+		// remain reconstructed; the photographs guide the rock/construction language.
+		for ( let t = - 1; t <= end + 3; t += 0.5 ) for ( let s = - 13; s <= 13; s += 0.5 ) {
 
 			const x = head.x - dx * t + px * s, z = head.z - dz * t + pz * s;
 			const k = idx( x, z );
 			if ( k < 0 ) continue;
-			const y = smooth[ clamp( Math.round( t ), 0, end ) ] + Math.max( 0, Math.abs( s ) - 1.7 ) * 0.6;
-			const w = smoothstep( 4, 1.7, Math.abs( s ) ) * smoothstep( end + 3, end, t );
+			const edge = Math.abs( s );
+			const ledge = Math.floor( Math.max( 0, edge - 2.2 ) / 1.6 ) * 0.5;
+			const y = smooth[ clamp( Math.round( t ), 0, end ) ] + Math.max( 0, edge - 1.7 ) * 0.55 + ledge;
+			const reach = 11 + this.noise2.noise( t / 9, s > 0 ? 4.1 : 8.7 ) * 1.5;
+			const w = smoothstep( reach, 2.2, edge ) * smoothstep( end + 3, end, t );
 			H[ k ] = lerp( H[ k ], y, w );
 			this.rock[ k ] = lerp( this.rock[ k ], 0.9, w * 0.8 );
 			this.path[ k ] = Math.max( this.path[ k ], Math.round( 255 * smoothstep( 2.2, 1.2, Math.abs( s ) ) * w ) );

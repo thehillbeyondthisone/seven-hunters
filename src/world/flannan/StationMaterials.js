@@ -1,7 +1,7 @@
 import { standard, physical } from '../../materials/Materials.js';
-import { villageMaterialModule } from '../village/VillageMaterials.js';
+import { villageMaterialModule, createHardMaterial } from '../village/VillageMaterials.js';
 
-// Station finishes reuse the baked grain at metre scale, with indoor wear rules.
+// Dedicated station finishes use baked normal/roughness detail at metre scale.
 // tint is the actual linear albedo, rather than a multiplier on silver driftwood.
 // vdata retains WOOD's seed / paint / pattern / weather layout. Board and panel
 // construction belongs to geometry; the grain always follows the builder's u axis.
@@ -21,7 +21,7 @@ function stationSurface( T, names, params = {} ) {
 
 export function createStationTimber( T, floor = false ) {
 
-	const m = stationSurface( T, [ 'woodA', 'woodN', 'paintN' ], { defines: floor ? { STATION_BOARDS: 1 } : {} } );
+	const m = stationSurface( T, [ 'indoorWoodA', 'indoorWoodN', 'keptPaintN' ], { defines: floor ? { STATION_BOARDS: 1 } : {} } );
 	m.name = floor ? 'StationFloorboards' : 'StationJoinery';
 	m.surface = /* wgsl */`
 	let data = in.vs.vData;
@@ -48,30 +48,123 @@ export function createStationTimber( T, floor = false ) {
 	seamSlope = bevel * select( vec2f( - 0.12 ), vec2f( 0.12 ), vec2f( along, across ) > vec2f( 1.4, 0.095 ) );
 #endif
 	let off = vec2f( vlmHash21( seed * 137.0, 1.3 ), vlmHash21( seed * 137.0, 7.9 ) );
-	let grainUV = uv * vec2f( 0.38, 0.8 ) + off;
-	let A = textureSample( stationwoodA, smpAnisoRepeat, grainUV );
-	let N = textureSample( stationwoodN, smpAnisoRepeat, grainUV );
-	let P = textureSample( stationpaintN, smpAnisoRepeat, uv * vec2f( 0.5, 1.5 ) + off );
-	// Compress the old outdoor texture's cracks and bleaching into fine indoor grain.
-	let grain = clamp( ( luminance( A.rgb ) - 0.3 ) * 1.25 + 1.0, 0.72, 1.16 );
+	let grainUV = uv / vec2f( 2.8, 0.76 ) + off;
+	let A = textureSample( stationindoorWoodA, smpAnisoRepeat, grainUV );
+	let N = textureSample( stationindoorWoodN, smpAnisoRepeat, grainUV );
+	let P = textureSample( stationkeptPaintN, smpAnisoRepeat, uv / vec2f( 1.0, 0.5 ) + off );
+	let grain = A.rgb;
 	let tone = 0.92 + vlmHash21( seed * 91.0, 3.8 ) * 0.16;
 	let raw = in.vs.vTint * grain * tone * mix( 1.0, 0.82, end );
 	let painted = step( 0.01, data.y );
 	// Kept paint: brush relief and only a trace of exposed grain, no large flakes.
-	let paint = in.vs.vTint * ( 0.97 + P.b * 0.06 );
+	let paint = in.vs.vTint * ( 0.99 + ( P.b - 0.54 ) * 0.045 );
 	s.albedo = mix( raw, paint, painted ) * ( 1.0 - seam * 0.55 );
-	s.roughness = mix( 0.72 + N.b * 0.1, 0.53 + P.b * 0.12, painted );
+	s.roughness = clamp( mix( N.b + seam * 0.12, P.b, painted ), 0.42, 0.9 );
 	s.ao = mix( 0.94 + N.a * 0.06, 1.0, painted ) * ( 1.0 - seam * 0.25 );
-	let slope = mix( vlmSlopeOf( N ) * 0.16, vlmSlopeOf( P ) * 0.12 + vlmSlopeOf( N ) * 0.025, painted );
+	let slope = mix( vlmSlopeOf( N ) * 0.8, vlmSlopeOf( P ) * 0.7 + vlmSlopeOf( N ) * 0.06, painted );
 	s.normal = vlmNormalFromSlope( in.P, in.N, uv, slope + seamSlope );
 `;
 	return m;
 
 }
 
+// Flannan masonry has roughly squared stones and thin mortar beds. Keep this
+// separate from Tidewater's cellular rubble and heavily weathered plaster.
+export function createStationMasonry( T ) {
+	const m = stationSurface( T, [ 'stoneN', 'limeA', 'limeN', 'grime', 'stoneGrainA', 'stoneGrainN' ], { roughness: 0.92 } );
+	m.name = 'FlannanMasonry';
+	m.surface = /* wgsl */`
+	let data = in.vs.vData;
+	// Modes 3/4 are physical stones / recessed mortar. Their joints and bevels
+	// are geometry, so never stamp the legacy rectangular masonry pattern here.
+	if ( data.y > 2.5 ) {
+		let aN = abs( in.N );
+		let sideUV = select( in.P.xy, in.P.zy, aN.x > aN.z );
+		let stoneUV = select( sideUV, in.P.xz, aN.y > max( aN.x, aN.z ) );
+		let grainUV = stoneUV * 1.3 + vec2f( data.x * .13, data.x * .07 );
+		let grain = textureSample( stationstoneGrainN, smpAnisoRepeat, grainUV );
+		let colour = textureSample( stationstoneGrainA, smpAnisoRepeat, grainUV ).rgb;
+		let wash = textureSample( stationgrime, smpAnisoRepeat, stoneUV * .62 + vec2f( data.x * .31 ) );
+		let mortar = step( 3.5, data.y );
+		s.albedo = in.vs.vTint * mix( colour * (1.0 - wash.r*.035), vec3f(.96 + grain.a*.05), mortar );
+		s.normal = vlmNormalFromSlope( in.P, in.N, stoneUV, vlmSlopeOf( grain ) * mix( .85, .12, mortar ) );
+		s.roughness = mix( grain.b, .95 + grain.b * .025, mortar );
+		s.ao = mix( data.w, .93, mortar );
+	} else {
+	let cap = step( 1500.0, in.uv.x );
+	let end = step( 500.0, in.uv.x );
+	let uv = in.uv - vec2f( mix( 1000.0, 2000.0, cap ) * end, 0.0 );
+	let plaster = 1.0 - step( 0.5, abs( data.y - 1.0 ) );
+	let coursed = 1.0 - step( 1.5, data.y );
+	let rowCoord = ( uv.y + sin( uv.x * 1.9 + data.x * 8.0 ) * 0.013 ) / 0.29;
+	let row = floor( rowCoord );
+	let stoneWidth = 0.48 + vlmHash21( row, data.x * 19.0 ) * 0.35;
+	let u = uv.x + vlmHash21( row, 3.7 ) * 2.0;
+	let cell = floor( u / stoneWidth );
+	let id = vlmHash21( cell + data.x * 113.0, row );
+	let d = vec2f( min( fract( u / stoneWidth ), 1.0 - fract( u / stoneWidth ) ) * stoneWidth, min( fract( rowCoord ), 1.0 - fract( rowCoord ) ) * 0.29 );
+	let aa = max( fwidth( uv ), vec2f( 0.0008 ) );
+	let gap = 1.0 - clamp( ( d - vec2f( 0.006, 0.009 ) ) / aa + 0.5, vec2f( 0.0 ), vec2f( 1.0 ) );
+	let mortar = max( gap.x, gap.y ) * coursed;
+	let grain = textureSample( stationstoneN, smpAnisoRepeat, uv * 3.7 + vec2f( data.x ) ).a;
+	let wash = textureSample( stationgrime, smpAnisoRepeat, uv * 0.13 + vec2f( data.x, 0.7 ) );
+	let limeUV = uv / 1.6 + vec2f( data.x * .37, data.x * .13 );
+	let paint = textureSample( stationlimeN, smpAnisoRepeat, limeUV );
+	let lime = textureSample( stationlimeA, smpAnisoRepeat, limeUV );
+	let stone = in.vs.vTint * ( 0.73 + id * 0.45 ) * ( 0.96 + grain * 0.08 );
+	let jointCol = in.vs.vTint * 0.48;
+	var raw = mix( stone, jointCol, mortar * 0.78 );
+	let kept = in.vs.vTint * ( 0.96 + lime.r * 0.08 ) * ( 1.0 - wash.r * 0.018 - lime.g * 0.012 );
+	var col = mix( raw, kept, plaster );
+	let foot = 1.0 - smoothstep( 0.04, 0.42, uv.y );
+	col *= 1.0 - foot * mix( 0.12, 0.045, plaster );
+	let bevel = exp( -d / vec2f( 0.024 ) ) * ( 1.0 - smoothstep( vec2f( 0.008 ), vec2f( 0.055 ), aa ) );
+	let sign = select( vec2f( -1.0 ), vec2f( 1.0 ), vec2f( fract( u / stoneWidth ), fract( rowCoord ) ) > vec2f( 0.5 ) );
+	let slope = bevel * sign * 0.22 * coursed;
+	let film = vlmSlopeOf( paint ) * 0.8;
+	s.normal = vlmNormalFromSlope( in.P, in.N, in.uv, mix( slope, film, plaster ) );
+	s.albedo = col;
+	s.roughness = mix( 0.9 + grain * 0.06, paint.b, plaster );
+	s.ao = 1.0 - mortar * 0.16 * ( 1.0 - plaster );
+	}
+`;
+	return m;
+}
+
+// Landing concrete is exposed cast material, not limewashed station plaster.
+// World-space mapping keeps aggregate consistent across stage, risers and kerbs.
+export function createLandingConcrete( T ) {
+	const m = stationSurface( T, [ 'stoneN', 'stoneGrainN', 'grime' ], { roughness: 0.92, uniforms: { arrivalDetail: [ 'f32', 0 ] } } );
+	m.name = 'FlannanLandingConcrete';
+	m.surface = /* wgsl */`
+	let n = abs( in.N );
+	let top = step( 0.65, n.y );
+	let wallUV = select( in.P.xy, in.P.zy, n.x > n.z );
+	let uv = mix( wallUV, in.P.xz, top );
+	let grain = textureSample( stationstoneN, smpAnisoRepeat, uv * 4.5 );
+	let broad = textureSample( stationgrime, smpAnisoRepeat, uv * 0.19 );
+	let fine = textureSample( stationgrime, smpAnisoRepeat, uv * 2.3 );
+	let aggregate = textureSample( stationstoneGrainN, smpAnisoRepeat, uv * 1.3 );
+	let detail = mat.arrivalDetail;
+	let tide = 1.0 - smoothstep( 0.3, 2.7, in.P.y );
+	let damp = tide * 0.36 + top * broad.r * 0.16;
+	let tone = 0.73 + broad.a * 0.32 + ( grain.a - 0.5 ) * 0.12;
+	// Sparse construction lifts on vertical faces; no brick courses on concrete.
+	let lift = min( fract( uv.y / 0.9 ), 1.0 - fract( uv.y / 0.9 ) ) * 0.9;
+	let aa = max( fwidth( uv.y ), 0.0005 );
+	let joint = clamp( ( 0.0015 - lift ) / aa + 0.5, 0.0, 1.0 ) * min( 1.0, 0.003 / aa ) * ( 1.0 - top );
+	s.albedo = in.vs.vTint * tone * ( 1.0 - damp - fine.r * 0.09 - broad.r * 0.15 - joint * 0.2 );
+	s.roughness = 0.93 - tide * ( 0.17 + detail * 0.18 ) - top * broad.r * 0.06;
+	s.ao = 1.0 - joint * 0.06;
+	let close = 1.0 - smoothstep( 0.006, 0.045, max( length( fwidth( uv ) ), 0.0001 ) );
+	s.normal = vlmNormalFromSlope( in.P, in.N, uv, vlmSlopeOf( grain ) * 0.07 + vlmSlopeOf( aggregate ) * detail * close * 0.42 );
+`;
+	return m;
+}
+
 export function createStationFlags( T ) {
 
-	const m = stationSurface( T, [ 'stoneN', 'grime' ] );
+	const m = stationSurface( T, [ 'stoneGrainN', 'grime' ] );
 	m.name = 'StationStoneFlags';
 	m.surface = /* wgsl */`
 	// Planar metres: radial wall UVs collapsed to a fan on the tower floor.
@@ -85,15 +178,24 @@ export function createStationFlags( T ) {
 	let gaps = clamp( ( vec2f( 0.002 ) - distance ) / aa + 0.5, vec2f( 0.0 ), vec2f( 1.0 ) ) * min( vec2f( 1.0 ), vec2f( 0.004 ) / aa );
 	let seam = max( gaps.x, gaps.y );
 	let G = textureSample( stationgrime, smpAnisoRepeat, uv * 0.7 );
-	let N = textureSample( stationstoneN, smpAnisoRepeat, uv * 1.7 );
+	let N = textureSample( stationstoneGrainN, smpAnisoRepeat, uv * 1.3 );
 	let tone = 0.9 + vlmHash21( cell.x, cell.y + in.vs.vData.x ) * 0.16;
 	s.albedo = in.vs.vTint * tone * ( 0.94 + G.a * 0.12 ) * ( 1.0 - seam * 0.5 );
-	s.roughness = 0.82 + G.a * 0.08;
+	s.roughness = clamp( N.b - G.a * 0.1 + seam * 0.12, 0.7, 0.96 );
 	s.ao = 1.0 - seam * 0.2;
-	s.normal = vlmNormalFromSlope( in.P, in.N, uv, vlmSlopeOf( N ) * 0.035 );
+	s.normal = vlmNormalFromSlope( in.P, in.N, uv, vlmSlopeOf( N ) * 0.45 );
 `;
 	return m;
 
+}
+
+// Keep the hard material's rope/tidal handling, with finer maintained cast iron.
+// The replacement is per-station; the shared village hard material is untouched.
+export function createStationIron( T ) {
+	const m = createHardMaterial( { ...T, hardN: T.castIronN } );
+	m.name = 'StationIronwork';
+	m.defines.STATION_IRON = 1;
+	return m;
 }
 
 // Materials of the light station's own (Station.js assembleStation): the lantern's glazing and the lens.

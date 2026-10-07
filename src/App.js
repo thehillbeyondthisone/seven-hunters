@@ -4,11 +4,14 @@ import { SunShadows } from './engine/render/Shadows.js';
 import { FrameUniforms } from './engine/render/Frame.js';
 import { configurePreview } from './xr/PreviewOptions.js';
 import { configureSeaPreview } from './weather/SeaWeatherState.js';
-import { SeaWeather } from './weather/SeaWeather.js';
+import { SeaWeather, stationShelter } from './weather/SeaWeather.js';
+import { ExtremeSea } from './weather/ExtremeSea.js';
+import { SeaDread } from './weather/SeaDread.js';
 import { CliffSurge } from './ocean/CliffSurge.js';
 
 import { Engine } from './core/Engine.js';
 import { Input } from './core/Input.js';
+import { configureMobile } from './mobile/MobileOptions.js';
 import { CDLOD } from './core/CDLOD.js';
 import { G } from './core/Globals.js';
 import { Profiler } from './core/Profiler.js';
@@ -29,6 +32,7 @@ import { loadFlannanData } from './world/flannan/FlannanData.js';
 import { FlannanTerrainData } from './world/flannan/FlannanTerrain.js';
 import { FlannanSward } from './world/flannan/Sward.js';
 import { buildStation, assembleStation, STATION, TOWER, ROOM } from './world/flannan/Station.js';
+import { KITCHEN, BERTH } from './world/flannan/NextRooms.js';
 import { Lamp } from './station/Lamp.js';
 import { HandLamp } from './station/HandLamp.js';
 import { Beams } from './station/Beams.js';
@@ -45,6 +49,7 @@ import { BoatArrival } from './story/BoatArrival.js';
 import { Rocks } from './world/Rocks.js';
 import { Debris } from './world/Debris.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
+import { RevealGulls } from './story/RevealGulls.js';
 import { Whale } from './world/marine/Whale.js';
 
 import { OceanFFT } from './ocean/OceanFFT.js';
@@ -98,8 +103,17 @@ export class App {
 			guidance: true,
 		};
 		this.qs = new URLSearchParams( location.search );
+		this.isArrivalAtmosphere = this.qs.has( 'arrivalAtmospherePreview' );
+		if ( this.isArrivalAtmosphere ) {
+			this.qs.set( 'arrivalPreview', '' );
+			this.qs.set( 'setting', 'flannan' );
+		}
 		this.isVRPreview = configurePreview( this.qs );
 		this.isWeatherPreview = configureSeaPreview( this.qs );
+		this.isMobile = configureMobile( this.qs );
+		// The anachronistic dev toy has an exploration entry point; no story save is opened.
+		if ( this.qs.has( 'disco' ) ) this.qs.set( 'playground', '' );
+		if ( this.qs.has( 'devWeapons' ) || this.qs.has( 'playground' ) ) this.qs.set( 'nostory', '' );
 		// ?syncPipelines: compile pipelines synchronously (software rendering, tools/shots)
 		if ( this.qs.has( 'syncPipelines' ) ) GPU.syncPipelines = true;
 		if ( this.qs.has( 'serialPipelines' ) ) GPU.serialPipelines = true;
@@ -116,6 +130,7 @@ export class App {
 
 		const qs = this.qs;
 		const vrPreview = this.isVRPreview;
+		const compactWater = vrPreview || this.isMobile;
 		if ( vrPreview ) this.settings.timeSpeed = 0;
 		// report a stage, then let the page paint it before the (synchronous) stage work starts
 		const progress = async ( p, text, until ) => {
@@ -145,7 +160,7 @@ export class App {
 
 		}
 
-		this.input = new Input( engine.domElement );
+		this.input = new Input( engine.domElement, { touch: this.isMobile } );
 		this.fly = new FlyCamera( camera, engine.domElement, this.input );
 		this.fly.setPose( new Vector3( 20, 6, - 20 ), Math.PI * 0.9, - 0.12 );
 
@@ -168,7 +183,7 @@ export class App {
 		// contact-hardening filter sized by the sun's disc on the near cascade. Each cascade's depth range
 		// is its light margin (200 m) + its extent, which keeps the depth bias small in metres.
 		// Shadows come from the opaque and the late (transparent-pass) layers.
-		this.csm = this.shadows = new SunShadows( { size: vrPreview ? 1024 : 2048, splits: [ 10, 60, 400 ], lightMargin: 200, normalBias: [ 0.015, 0.06, 0.3 ], bias: 0.00002 } );
+		this.csm = this.shadows = new SunShadows( { size: compactWater ? 1024 : 2048, splits: [ 10, 60, 400 ], lightMargin: 200, normalBias: [ 0.015, 0.06, 0.3 ], bias: 0.00002 } );
 		this.shadows.layerMask = ( 1 << LAYERS.OPAQUE ) | ( 1 << LAYERS.TRANSPARENT );
 
 		this.environment = new Environment( renderer, scene, this.sky );
@@ -183,9 +198,10 @@ export class App {
 		// the village flattens building pads into the heightmap: build it before any terrain
 		// data is derived (shore field, GPU textures, meshes). The station grades its yard and tracks.
 		await progress( 0.12, this.flannan ? 'Building the light station…' : 'Building the village…' );
-		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, build: this.flannan ? buildStation : null } );
+		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, build: this.flannan ? ( ctx, village ) => buildStation( { ...ctx, keeperStudy: this.qs.has( 'keeperPreview' ) }, village ) : null } );
 		// the lens, the doors and gate, the lantern's glass (they move: meshes of their own)
 		if ( this.flannan ) assembleStation( this.village );
+		if ( this.flannan && this.isArrivalAtmosphere ) this.village.materials.landingConcrete.uniforms.arrivalDetail.value = 1;
 		if ( this.flannan && ! qs.has( 'noVeg' ) ) this.sward = new FlannanSward( { scene, terrain: this.terrainData, village: this.village } );
 		if ( ! qs.has( 'noVeg' ) && ! this.flannan ) {
 
@@ -200,7 +216,7 @@ export class App {
 		this.shoreField = computeShoreField( this.terrainData, { res: 512, swellDir } );
 		this.terrainGPU = new TerrainGPU( this.terrainData, this.shoreField );
 		// terrain and rocks apply the heightfield sun shadow (long hill shadows) in their own lighting
-		this.terrain = new Terrain( { scene, terrainData: this.terrainData, terrainGPU: this.terrainGPU, renderer } );
+		this.terrain = new Terrain( { scene, terrainData: this.terrainData, terrainGPU: this.terrainGPU, renderer, stoneTexture: this.flannan ? this.village.textures.textures.stoneGrainN : null } );
 		if ( this.flannan ) this.terrain.material.uniforms.maritime.value = 1;
 		this.rocks = new Rocks( { scene, terrain: this.terrain, village: this.village, colliders: this.colliders } );
 		// Lewis, Harris, St Kilda and the other Seven Hunters, across the sea
@@ -255,12 +271,18 @@ export class App {
 		this.foamTexture = createFoamTexture( renderer );
 		// the Flannans: one more level (to ~80 km: the sea horizon is 38 km from the lantern, farther from
 		// above) and bounds that hold the sea as it curves away (FarShore.js CURVATURE)
-		this.oceanLOD = new CDLOD( { gridSize: Number( qs.get( 'G' ) || 32 ), leafSize: 8, levels: this.flannan ? 13 : 12, minY: this.flannan ? - 800 : - 25, maxY: 25 } );
+		this.oceanLOD = new CDLOD( { gridSize: Number( qs.get( 'G' ) || 32 ), leafSize: 8, levels: this.flannan ? 13 : 12, minY: this.flannan ? - 800 : - 25, maxY: this.flannan ? 300 : 25 } );
 		this.surface = new WaterSurface( { fft: this.fft, cdlod: this.oceanLOD, foamTexture: this.foamTexture } );
 		this.surface.terrain = this.terrainGPU;
+		this.surface.coastalSafe.value = this.flannan ? 1 : 0;
+		this.surface.distanceDetail.value = this.isArrivalAtmosphere ? 1 : 0;
+		this.extremeSea = this.flannan && ! compactWater ? new ExtremeSea( this ) : null;
+		if ( this.extremeSea ) this.surface.extremeSea = this.extremeSea;
 		this.seaDetail = new SeaDetail();
 		this.surface.detail = this.seaDetail;
 		this.shore = new ShoreWaves( this.terrainGPU );
+		// Sheer geos need standing surf and spray, without the sandy bay's tube folds.
+		if ( this.flannan ) this.shore.curl.value = 0;
 		this.surface.shore = this.shore;
 		// Cliffs need reflecting/run-up surf rather than the sandy bay's breaking lips.
 		// Attach before WaterQuery and WaterMaterial first compose the surface shader.
@@ -307,6 +329,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		const interiors = this.flannan ? [
 			[ { cyl: [ 0, 0, TOWER.rIn + 0.3, TOWER.floor - 0.5, TOWER.deck - 0.05 ] }, 0.22 ],
 			[ { box: [ ROOM.x0 - 0.3, TOWER.floor - 0.5, ROOM.z0 - 0.3, ROOM.x1 + 0.3, ROOM.ceiling + 0.3, ROOM.z1 + 0.3 ] }, 0.12 ],
+			...[ KITCHEN, BERTH ].map( R => [ { box: [ R.x0 -0.3, TOWER.floor -0.5, R.z0 -0.3, R.x1 +0.3, ROOM.ceiling +0.3, R.z1 +0.3 ] }, 0.12 ] ),
 		] : [];
 		this.underwaterLighting = installUnderwaterLighting( {
 			fft: this.fft, caustics: this.caustics, clouds: this.clouds, terrain: this.terrainGPU,
@@ -318,7 +341,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.sceneRenderer = new SceneRenderer( engine.meshRenderer, scene, camera );
 		// the water's refraction source: the scene below the water only, half resolution
 		this.refraction = new RefractionPass( { meshRenderer: engine.meshRenderer, scene, camera, sceneRenderer: this.sceneRenderer, scale: 0.5 } );
-		if ( ! vrPreview ) this.sceneRenderer.onBeforeWater = () => this.refraction.render( G.seaLevel.value );
+		if ( ! compactWater ) this.sceneRenderer.onBeforeWater = () => this.refraction.render( G.seaLevel.value );
 		if ( this.sky.background ) this.sceneRenderer.background = this.sky.background;
 		// lanterns, lamp posts, path lights, lit windows, the boat's cabin / navigation lights and the
 		// flashlight (L): nearest few packed into one small uniform array each frame
@@ -399,11 +422,11 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		} );
 		// the sea is not drawn inside the boat (its hull volume masks the surface)
-		if ( ! vrPreview ) this.sceneRenderer.addHullMask( this.boat.createHullVolumeGeometry(), this.boat.group );
+		if ( ! compactWater ) this.sceneRenderer.addHullMask( this.boat.createHullVolumeGeometry(), this.boat.group );
 		this.waterMaterial = new WaterMaterial( {
 			surface: this.surface, sky: this.sky, sceneCopy: this.sceneRenderer.opaqueCopy, sceneDepthHalf: this.sceneRenderer.opaqueDepthHalf.texture,
-			refraction: vrPreview ? null : this.refraction,
-			hullMask: vrPreview ? null : this.sceneRenderer.hullMaskRT.texture, hullMaskActive: vrPreview ? null : this.sceneRenderer.hullMaskActive,
+			refraction: compactWater ? null : this.refraction,
+			hullMask: compactWater ? null : this.sceneRenderer.hullMaskRT.texture, hullMaskActive: compactWater ? null : this.sceneRenderer.hullMaskActive,
 		} );
 		this.waterMaterial.clouds = this.clouds;
 		this.ocean = new Mesh( this.oceanLOD.geometry, this.waterMaterial );
@@ -469,8 +492,16 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.wake = new WakeSim( renderer, { terrainGPU: this.terrainGPU, boat: this.boatCtl, colliders: this.colliders } );
 		// The on-foot preview omits boat wake textures and uses the opaque scene
 		// copy for water refraction, staying within mobile's 16-texture budget.
-		if ( ! vrPreview ) this.surface.wake = this.wake;
+		if ( ! compactWater ) this.surface.wake = this.wake;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl, reef: this.reef } );
+		this.player.ambientDrift = ( swimming ) => {
+			const p = this.player.position;
+			if ( swimming && this.extremeSea?.active ) {
+				const flow = this.extremeSea.sample( p.x, p.z );
+				return { x: Math.max( - 12, Math.min( 12, flow.u ) ), z: Math.max( - 12, Math.min( 12, flow.v ) ) };
+			}
+			return null;
+		};
 		if ( this.flannan ) this.arrival = new BoatArrival( this );
 		if ( this.flannan ) {
 
@@ -488,6 +519,8 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			query: this.query, spray: this.spray, csm: this.csm,
 		} );
 		this.freeCam = qs.has( 'fly' );
+		// Only the three local gulls, without enabling Tidewater's tropical wildlife.
+		this.islandGulls = this.flannan && ! qs.has( 'noWildlife' ) && ! qs.has( 'lite' ) ? new RevealGulls( { scene, csm: this.csm } ) : null;
 
 		// ---------------------------------------------------------------- post
 		await progress( 0.34, 'Preparing the shaders…' );
@@ -523,6 +556,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		if ( this.cliffSurge ) this.cliffSurge.audio = this.stationSound;
 		this.seaWeather = this.isWeatherPreview ? new SeaWeather( this ) : null;
 		if ( this.isWeatherPreview ) this.settings.timeOfDay = 12.4;
+		this.seaDread = this.isWeatherPreview && qs.has( 'seaDread' ) ? new SeaDread( this ) : null;
 		this.player.audio = this.audio;
 		// the fishing game (rod, bites, catch, cooler, fish stand)
 		this.game = this.flannan ? null : new Game( this );
@@ -554,6 +588,16 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		installDebugViews( this );
 		window.__app = this;
 		this.gpu = GPU; // console / test access
+		if ( this.flannan && qs.has( 'playground' ) && ! vrPreview && ! this.isMobile ) {
+			await progress( 0.35, 'Assembling the Admiralty gravity manipulator…' );
+			const { KeeperPlayground } = await import( './dev/KeeperPlayground.js' );
+			this.settings.timeSpeed = 0;
+			this.playground = new KeeperPlayground( this );
+		}
+		if ( this.flannan && qs.has( 'devWeapons' ) && ! vrPreview && ! this.isMobile ) {
+			await progress( 0.35, 'Unpacking unauthorised keeper equipment…' );
+			await this.toggleDevArmory();
+		}
 
 		// ---- compile pipelines asynchronously (keeps the page responsive), then prime a few
 		// frames behind the loading screen so any remaining first-use stalls happen there
@@ -823,8 +867,29 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 	}
 
+	async toggleDevArmory() {
+
+		if ( ! this.flannan || this.isMobile || this.xr?.active || this.isVRPreview ) return;
+		if ( this.playground?.equipped ) this.playground.toggle();
+		if ( this.devArmory ) { this.devArmory.toggle(); return; }
+		if ( this._loadingArmory ) return;
+		this._loadingArmory = true;
+		try {
+			const { DevArmory } = await import( './dev/DevArmory.js' );
+			this.devArmory = await DevArmory.create( this );
+			this.ui?.ui.toast( 'The Board did not authorise this. Hold left click / X to fire; G summons practice buoys; F8 holsters.', 6000 );
+		} catch ( error ) {
+			console.error( 'Dev armory:', error );
+			this.ui?.ui.toast( 'Could not unpack the minigun. Press F8 to retry.' );
+			if ( this.qs.has( 'devWeapons' ) ) throw error;
+		} finally { this._loadingArmory = false; }
+
+	}
+
 	_frame( dt ) {
 
+		if ( this.isMobile && document.hidden && ! this.qs.has( 'bench' ) ) return;
+		this.mobile?.beforeFrame();
 		GPU.beginFrame();
 		FrameUniforms.fields.frameIndex.value = GPU.frame;
 		const s = this.settings;
@@ -834,6 +899,11 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		if ( s.timeSpeed !== 0 ) s.timeOfDay = ( s.timeOfDay + dt * s.timeSpeed + 24 ) % 24;
 
 		// ---- player / boat (boat physics first so the cameras follow this frame's pose)
+		if ( this.input.hit( 'F8' ) ) this.toggleDevArmory();
+		if ( this.playground && this.input.hit( 'F9' ) ) {
+			if ( this.devArmory?.equipped ) this.devArmory.toggle();
+			this.playground.toggle();
+		}
 		if ( this.input.hit( 'KeyF' ) ) this.setFreeCam( ! this.freeCam );
 		if ( this.input.hit( 'KeyT' ) ) this.toggleTime();
 		if ( this.input.hit( 'KeyL' ) ) {
@@ -854,19 +924,28 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			if ( this.ui ) this.ui.ui.toast( this.audio.muted ? 'Sound off' : 'Sound on' );
 
 		}
+		this.extremeSea?.update( dt );
 		this.boatCtl.update( dt );
 		this.boatSpray.update( dt );
-		if ( ! this.isVRPreview ) this.wake.update( dt );
+		if ( ! this.isVRPreview && ! this.isMobile ) this.wake.update( dt );
 		if ( this.xr?.active ) { /* The headset owns the camera and the preview walker. */ }
 		else if ( this.freeCam ) this.fly.update( dt );
-		else if ( ! this.story?.aboard ) this.player.update( dt );
+		else if ( ! this.story?.aboard && ! this.story?.islandReveal?.active ) this.player.update( dt );
 		if ( this.game ) this.game.update( dt );
 		if ( this.weatherPreview ) this.weatherPreview.update( dt );
 		// the first night (src/story/Story.js) keeps the clock, the weather and the lamp; without it (the
 		// review shots) the lamp just burns
 		if ( this.story ) this.story.update( dt );
 		else if ( this.lamp ) this.lamp.update( dt, 0 );
+		if ( ! this.story && this.qs.has( 'chimneySmoke' ) ) this.village.station?.moving.smoke.update( dt, this.camera, 1 );
+		this.mobile?.update();
+		if ( ! this.story && this.arrival?.group.visible && this.arrival.reviewView ) {
+			this.arrival.pose( dt );
+			this.arrival.reviewCamera();
+		}
 		if ( this.seaWeather ) this.seaWeather.update( dt );
+		this.seaDread?.update( dt );
+		this.devMenu?.update( dt );
 		if ( this.flannan ) Beams.uniforms.pixel.value = MathUtils.degToRad( this.camera.fov ) / Math.max( 1, this.sceneRenderer.height );
 		this.updateSun();
 		// the world drops away below the camera with the Earth's curvature (FarShore.js)
@@ -875,6 +954,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.atmosphere.update( dt, this.camera.position.y );
 		this.applyAtmosphereReadback();
 		if ( this.seaWeather ) this.seaWeather.applyLighting();
+		this.seaDread?.applyLighting();
 
 		// ---- water simulation
 		this.fft.update( dt );
@@ -899,7 +979,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		if ( this.shoreSim ) this.shoreSim.update();
 		this.underwaterLighting.update( this.camera );
 		this.breakers.update( this.camera );
-		if ( this.cliffSurge ) this.cliffSurge.update( dt, this.camera, this.seaWeather?.state );
+		if ( this.cliffSurge ) this.cliffSurge.update( dt, this.camera, this.seaWeather?.active ? this.seaWeather.state : null );
 		this.spray.update();
 		if ( this.clouds ) this.clouds.update( dt, this.camera );
 		this.environment.update( dt );
@@ -916,11 +996,14 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		if ( this.whale ) this.whale.update( dt, this.camera );
 		this.boat.update( dt );
 		if ( this.wildlife ) this.wildlife.update( dt, this.camera, this.freeCam ? null : this.player );
+		this.islandGulls?.update();
+		if ( this.devArmory ) this.devArmory.update( dt );
+		this.playground?.update( dt );
 		if ( this.handLamp ) {
 
 			// the storm lantern: in your hand unless you are flying, at the signal lamp or at the telescope
 			const st = this.story;
-			const show = ( ! this.freeCam || this.handInView ) && ! ( st && ( st.signal || st.tel > 0.3 ) );
+			const show = ( ! this.freeCam || this.handInView ) && ! ( st && ( st.signal || st.tel > 0.3 ) ) && ! this.devArmory?.canUse() && ! this.playground?.canUse();
 			this.handLamp.update( dt, this.camera, { show } );
 			const fl = this.localLights.flashlight;
 			fl.on = this.handLamp.glow > 0.002;
@@ -931,6 +1014,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.localLights.update( this.camera, dt );
 
 		// ---- render
+		this.seaDread?.beginRender();
 		G.exposure.value = s.exposure;
 		updateCameraVelocity( this.camera );
 		this.post.lens.update( dt, this.camera.position.y < ( this.cameraWaterHeight ?? 0 ) );
@@ -959,6 +1043,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		}
 		this.profiler.update( dt );
+		this.seaDread?.endRender();
 
 		this.updateAudio( dt );
 		if ( this.ui ) this.ui.update( dt );
@@ -1021,7 +1106,9 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			nearPier: Math.abs( p.x - WORLD.pier.x ) < 12 && p.z > WORLD.pier.zStart - 5 && p.z < WORLD.pier.zEnd + 8,
 			boat: this.arrival?.group.visible ? {
 				active: false, rpm: 0, throttle: 0, speed: this.story?.ui.open ? 0 : this.arrival.speed,
-				position: this.arrival.group.position, listenerInside: false,
+				position: this.arrival.group.position, listenerInside: this.isArrivalAtmosphere && !! this.story?.aboard,
+				wooden: this.isArrivalAtmosphere, visible: true, rowing: this.arrival.rowingActive,
+				rowingTime: this.arrival.rowingTime, paused: this.arrival.rowingPaused,
 			} : {
 				active: this.boatCtl.driven, rpm: this.boatCtl.rpm, throttle: this.boatCtl.throttle, speed: this.boatCtl.velocity.length(),
 				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first',

@@ -35,6 +35,29 @@ entries first.
                    --adapt --params="setting=flannan&lite" --w=640 --h=360 --frames=24
   ```
 
+## 2026-10-04: supplied-photograph architecture and materials pass
+
+Seven reference photographs now guide the station's pale porthole drum, fine upper
+gallery rails, taller sash openings, thinner house roof bands, low front plinth and
+iron palings, exposed masonry gate piers and individual saddleback coping stones.
+A dedicated Flannan masonry material supplies restrained whitewash and roughly
+squared courses. The chapel gains irregular thin physical stone slabs; maritime
+cliffs/outcrops gain grey fractured surfaces and coherent embedded slabs.
+
+HES LB48143, NLB's contemporary reports, the original optic's museum record and
+the Western Isles chapel record bound the reconstruction. Existing original optic,
+playable stair/door route, terrain shape, story and normal saves are retained.
+Supplied modern solar equipment is excluded; exact period colours, dimensions,
+port spacing, interiors and the chapel's 1901 roof state remain provisional.
+The local before/after board is `artifacts/reference-pass/index.html`; provenance,
+sources and review commands are in `docs/REFERENCE-PASS.md`.
+
+The complete `npm test` suite, weather logic/render checks and production build
+passed. Final chapel changes also passed station geometry and the full walking
+route. Eight matched views were rendered and inspected without GPU/shader errors,
+with a separate lamp-lit night view. Physical XR/audio acceptance and sustained
+device performance remain unmeasured. Nothing was published.
+
 ## 2026-10-03: sea, weather and the west-landing gale preview
 
 The Atlantic Watch is an isolated desktop weather preview at `?weatherPreview`: four blended

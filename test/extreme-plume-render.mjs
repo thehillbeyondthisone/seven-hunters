@@ -1,0 +1,32 @@
+import './headless.mjs';
+import assert from 'node:assert/strict';
+import { mkdirSync } from 'node:fs';
+import { GPU, ShaderModule, RenderTarget, readTexture, MeshRenderer, FullscreenPass, SunShadows } from '../src/engine/webgpu.js';
+import { setFrameCamera, G } from '../src/engine/render/Frame.js';
+import { Scene, PerspectiveCamera } from '../src/engine/index.js';
+import { ExtremeSea } from '../src/weather/ExtremeSea.js';
+import { writePNG } from '../tools/shots/png.mjs';
+await GPU.init( { headless: true } ); GPU.syncPipelines = true; GPU.device.pushErrorScope( 'validation' );
+const scene = new Scene(), camera = new PerspectiveCamera( 65, 16 / 9, 0.1, 1000 );
+camera.position.set( 0, 18, 0 ); camera.lookAt( 0, 18, - 65 );
+const app = { scene, camera, terrainData: { heightAt: () => - 30, landing: () => ( { stage: { x: 0, z: 0 }, dir: [ 0, - 1 ] } ) }, terrainGPU: { module: new ShaderModule( { name: 'plumeTestTerrain', code: 'fn terrainHeightAt( p: vec2f ) -> f32 { return -30.0; }' } ) } };
+const sea = new ExtremeSea( app ); sea.launch( 'blast' );
+for ( let i = 0; i < 8; i ++ ) sea.update( 0.1 );
+const W = 640, H = 360, rt = new RenderTarget( W, H, { colors: [ 'rgba16float', 'rgba16float', 'rgba8unorm' ], depth: 'depth32float' } );
+const ldr = new RenderTarget( W, H, { colors: [ 'rgba8unorm' ] } ), renderer = new MeshRenderer();
+const shadows = new SunShadows( { size: 64 } );
+G.skyIrradiance.value.setRGB( 0.6, 0.7, 0.9 ); G.sunColor.value.setRGB( 1, 1, 1 );
+const tonemap = new FullscreenPass( { label: 'plume review', colorFormats: [ 'rgba8unorm' ], bindings: { hdr: { texture: () => rt.texture } }, code: 'fn fragment( in: FSIn ) -> vec4f { let c = textureLoad( hdr, vec2i( in.pos.xy ), 0 ).rgb; return vec4f( linearToSrgb( sat3( c ) ), 1.0 ); }' } );
+const frames = [];
+for ( const visible of [ false, true ] ) {
+	sea.plume.visible = visible; GPU.beginFrame(); setFrameCamera( camera, W, H );
+	shadows.render( scene, renderer, shadows.update( camera, G.sunDir.value ) );
+	renderer.render( scene, { camera, kind: 'main', colorViews: rt.textures.map( t => t.view() ), colorFormats: rt.formats, clearColors: [ [ 0.03, 0.07, 0.1, 1 ], [ 0, 0, 0, 0 ], [ 0, 0, 0, 0 ] ], depthView: rt.depthTexture.view(), depthFormat: 'depth32float', clearDepth: 0 } );
+	tonemap.render( { colorViews: [ ldr.texture ] } ); GPU.submit(); await GPU.queue.onSubmittedWorkDone();
+	frames.push( new Uint8Array( ( await readTexture( ldr.texture ) ).data ) );
+}
+const validation = await GPU.device.popErrorScope(); assert.equal( validation, null, validation?.message );
+let difference = 0; for ( let i = 0; i < frames[ 0 ].length; i ++ ) difference += Math.abs( frames[ 0 ][ i ] - frames[ 1 ][ i ] );
+mkdirSync( 'artifacts/extreme-sea', { recursive: true } ); writePNG( 'artifacts/extreme-sea/plume.png', W, H, frames[ 1 ] );
+assert.ok( difference > W * H, 'plume contributes visible pixels, not just a draw call' );
+console.log( 'PASS ballistic blast plume: visible pixel contribution and native WebGPU validation.' ); process.exit( 0 );

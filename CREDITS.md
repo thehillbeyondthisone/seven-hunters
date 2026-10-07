@@ -69,6 +69,10 @@ Marini, SIL Open Font License 1.1), also from Google Fonts.
 
 ## Seven Hunters
 
+- The optional dev minigun is [Minigun](https://sketchfab.com/3d-models/minigun-9f0d4c65f1284914a8a8f9de76896b21)
+  by [TWORKS / trbrick](https://sketchfab.com/trbrick), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  Packed as GLB and animated for the easter egg; [asset credits](public/models/dev-weapons/CREDITS.md).
+
 - Eilean Mòr, the far shore and the seabed: the Copernicus GLO-30 DEM (© DLR e.V. 2010-2014 and © Airbus
   Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA) and the AWS
   Terrain Tiles (Mapzen terrarium, which credits SRTM, GMTED2010, ETOPO1 and others).

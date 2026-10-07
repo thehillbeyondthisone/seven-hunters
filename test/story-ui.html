@@ -2,6 +2,7 @@
 <html>
 <head>
 	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Story screens</title>
 	<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet" />
 	<style>body { margin: 0; background: linear-gradient(180deg, #1b2334 0%, #39405a 55%, #11151d 56%, #06080b 100%); height: 100vh; }</style>
@@ -9,28 +10,59 @@
 <body>
 <script type="module">
 // Dev page: Seven Hunters' screens (src/story/StoryUI.js) over a dusk backdrop, one per ?view=
-//   card | prologue | letter | codebook | form | strip | telescope | journal | end | hud
+//   card | prologue | intro | intro-boat | papers | letter | codebook | form | strip | telescope | journal | end | hud
 import '../src/story/story.css';
 import { StoryUI } from '../src/story/StoryUI.js';
 import * as S from '../src/story/Script.js';
+import { EPISODES } from '../src/story/NextScript.js';
 import { morseText } from '../src/story/Watcher.js';
+import { INTRO_CLIMB, INTRO_PAPERS } from '../src/story/IntroLessons.js';
+import '../src/mobile/mobile.css';
 
-const view = new URLSearchParams( location.search ).get( 'view' ) || 'card';
-const ui = new StoryUI();
+const query = new URLSearchParams( location.search );
+const view = query.get( 'view' ) || 'card';
+const mobile = query.has( 'mobile' );
+if ( mobile ) document.documentElement.classList.add( 'is-mobile' );
+const ui = new StoryUI( { input: mobile ? { touchMode: true, enabled: true, keys: new Set(), requestLock() {} } : null } );
+if ( view === 'waypoint' ) {
+	const { PerspectiveCamera, Vector3 } = await import( '../src/engine/index.js' );
+	const camera = new PerspectiveCamera( 70, innerWidth / innerHeight, 0.1, 5000 );
+	const target = { id: 'station', label: 'Light station', at: new Vector3( query.has( 'edge' ) ? 100 : 1.8, 0.8, - 10 ) };
+	const replay = document.createElement( 'button' ); replay.textContent = 'Replay waypoint ping'; replay.className = 'sh-btn';
+	replay.style.cssText = 'position:fixed;bottom:28px;left:28px;z-index:200'; replay.onclick = () => { ui._guideKey = null; };
+	document.body.append( replay );
+	const frame = () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); ui.guidance( target, camera ); requestAnimationFrame( frame ); }; frame();
+}
 ui.setClock( '16.41 · Thursday 3rd January 1901' );
 ui.setObjective( S.GOALS.answer );
+if ( view === 'waypoint' ) ui.setObjective( 'Follow the marker to the light station.' );
 const rows = [ [ '13.40', 'Landed at the east landing from the Hesperus.' ], [ '15.12', 'Lamp lit.' ], [ '15.13', 'Machine set going.' ], [ '18.00', 'Bar. 29.94. Wind: fresh breeze, SW. Sea: moderate. Visibility: very good: Lewis in sight.' ], [ '20.36', 'Haar came down from the west.' ], [ '03.00', 'Bar. 29.80. Wind SW, fresh. Haar. Sea rising at the west landing.' ], [ '08.54', 'Lamp extinguished. Machine stopped.' ] ];
-const node = S.WATCHER.nodes.ceit;
+const script = EPISODES[ query.get( 'day' ) ] || S.WATCHER;
+const node = script.nodes[ query.get( 'node' ) ] || script.nodes.ceit || script.nodes[ script.start ];
 if ( view === 'card' ) ui.card( [ S.DAY.place ], { kicker: S.TITLE, title: S.DAY.date } );
 if ( view === 'prologue' ) ui.card( S.PROLOGUE );
+if ( view === 'intro' ) {
+	const cue = INTRO_CLIMB.find( c => c.id === query.get( 'cue' ) ) || INTRO_CLIMB[ 0 ];
+	ui.setClock( '13.43 · Thursday 3rd January 1901' ); ui.setObjective( cue.id === 'yard' ? S.GOALS.room : S.GOALS.climb );
+	ui.arrival( { ...cue, lesson: true } );
+}
+if ( view === 'intro-boat' ) {
+	ui.setClock( '13.31 · Thursday 3rd January 1901' ); ui.setObjective( mobile ? 'Look around as the island draws closer. Papers are in Tools.' : S.GOALS.crossing );
+	ui.arrival( S.CROSSING_LINES[ 0 ], mobile ? 'Tools · Papers · Read more' : 'B · Papers     Enter · Bring the landing closer' );
+}
+if ( view === 'papers' ) ui.packet( [ ...S.CROSSING_PAPERS, ...INTRO_PAPERS ] );
 if ( view === 'letter' ) ui.read( S.LETTER );
-if ( view === 'codebook' ) ui.choose( { title: 'The code book', intro: `Gallan Head: ${ node.her }`, options: node.options.map( ( o, i ) => ( { label: o.code ? `${ o.code } · ${ o.text }` : o.text, sub: o.code ? `The Board's code: about ${ o.minutes } minutes` : `Spelled out letter by letter: about ${ o.minutes } minutes`, value: i } ) ), cancel: 'Step away from the lamp' } );
+if ( view === 'codebook' ) ui.choose( { title: S.SIGNAL_UI.title, intro: `Gallan Head: ${ node.her.replace( / K$/, '' ) }\n\n${ S.SIGNAL_UI.replyInstruction }`, options: ( node.options || [] ).map( ( o, i ) => ( { label: o.code ? `${ o.code } · ${ o.text }` : o.text, sub: `${ o.code ? 'Station signal' : 'Spelled out' } · about ${ o.minutes } ${ o.minutes === 1 ? 'minute' : 'minutes' }`, value: i } ) ), cancel: 'Step away from the lamp' } );
 if ( view === 'form' ) ui.form( { title: 'The slate: 6 p.m.', intro: `The barometer reads ${ S.barometer( 18 ) } Chalk up the wind, the sea and the visibility.`, fields: [ { key: 'wind', label: 'Wind', options: S.OBS.wind }, { key: 'sea', label: 'Sea', options: S.OBS.sea }, { key: 'visibility', label: 'Visibility', options: S.OBS.visibility } ] } );
 if ( view === 'strip' || view === 'telescope' ) {
 
-	ui.strip( { from: 'Gallan Head', text: 'THIS IS CEIT MACLEOD. I WATCH YOUR LI', cursor: true, hint: 'Space: read on', morse: morseText( 'YOUR LI' ) } );
+	ui.strip( { from: 'Gallan Head', text: node.her, hint: node.end ? '' : S.SIGNAL_UI.replyHint, morse: morseText( node.wire || node.her ), translation: node.translation, language: node.language } );
 	if ( view === 'telescope' ) ui.telescope( 1 );
 
+}
+if ( view === 'call' ) {
+	ui.strip( { from: 'Gallan Head, through the telescope', text: S.CALL, hint: S.SIGNAL_UI.callHint } );
+	ui.telescope( 1 );
 }
 
 if ( view === 'journal' ) ui.journal( { heading: 'Thursday 3rd to Friday 4th January 1901', rows, remarks: [ { key: 'islet', ask: S.REMARKS.islet.ask }, { key: 'gate', ask: S.REMARKS.gate.ask } ], footer: 'W. Innes, Assistant Keeper' } );

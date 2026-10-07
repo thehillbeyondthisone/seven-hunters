@@ -34,6 +34,7 @@
 
 import { WORLD } from '../world/WorldLayout.js';
 import { BANK } from './soundBank.js';
+import { ArrivalSound } from './ArrivalSound.js';
 
 const clamp = ( v, a, b ) => ( v < a ? a : v > b ? b : v );
 const lerp = ( a, b, t ) => a + ( b - a ) * t;
@@ -135,6 +136,7 @@ export class SoundScape {
 
 		this.baseUrl = baseUrl;
 		this.flannan = flannan;
+		this.arrivalSound = new ArrivalSound( this );
 		this.ctx = null;
 		this._failed = false;
 		this._muted = false;
@@ -556,7 +558,7 @@ export class SoundScape {
 		this._dest = {
 			surf_far: this.surfFar, wind: this.windLP, palms: this.above, crickets: this.above, pier_lap: this.pierPan,
 			under_reef: this.under, birds_dawn: this.above, whale_song: this.songPan,
-			boat_engine: this.engineLP, boat_rush: this.boatSum, boat_lap: this.boatSum,
+			boat_engine: this.engineLP, boat_rush: this.boatSum, boat_lap: this.boatSum, arrival_water: this.boatSum,
 			reel_wind: this.rod, reel_drag: this.rod, line_strain: this.rod,
 		};
 
@@ -982,6 +984,7 @@ export class SoundScape {
 		e.indoor = clamp( num( s.indoor, 0 ), 0, 1 );
 		e.hour = typeof s.timeOfDay === 'number' && Number.isFinite( s.timeOfDay ) ? ( ( s.timeOfDay % 24 ) + 24 ) % 24 : null;
 		const b = s.boat || EMPTY, bp = b.position || EMPTY, eb = e.boat;
+		this.arrivalState = b.wooden ? b : null;
 		eb.active = !! b.active;
 		eb.rpm = clamp( num( b.rpm, 0 ), 0, 1 );
 		eb.speed = Math.abs( num( b.speed, 0 ) );
@@ -1062,7 +1065,7 @@ export class SoundScape {
 		// distant surf (the waves themselves are events, see _surf)
 		const lvl = 0.6 + 0.7 * e.surf;
 		// (the Flannans: the sea is all round, 80 m below the cliffs)
-		const dSea = this.flannan ? 110 : d;
+		const dSea = this.flannan ? ( this.arrivalState ? Math.max( 110, d * 2 ) : 110 ) : d;
 		this._bed( 'surf_far', dB( MIX.surfFar ) * ( this.flannan ? 1.8 : 1.25 ) / ( 1 + dSea / 200 ) * lvl / dB( BANK.surf_far.lufs ), now, 0.5 );
 
 		// wind in gusts: a random target every 2-8 s (lulls near silent), eased towards
@@ -1103,8 +1106,11 @@ export class SoundScape {
 		this._ramp( this.engineLP.frequency, 900 + 6500 * Math.pow( rpm, 1.3 ), 0.12 );
 		const sp = eb.speed;
 		this._bed( 'boat_rush', nearBoat ? dB( MIX.boatRush ) * smooth( 0.4, 9, sp ) / dB( BANK.boat_rush.lufs ) : 0, now, 0.3, 0.85 + 0.02 * Math.min( sp, 12 ) );
-		this._bed( 'boat_lap', nearBoat ? dB( MIX.boatLap ) * ( 1 - smooth( 1.5, 5, sp ) ) / dB( BANK.boat_lap.lufs ) : 0, now, 0.5 );
-		if ( nearBoat && sp > 1.2 && e.u < 0.5 ) {
+		const wooden = !! this.arrivalState;
+		this._bed( 'boat_lap', nearBoat && ! wooden ? dB( MIX.boatLap ) * ( 1 - smooth( 1.5, 5, sp ) ) / dB( BANK.boat_lap.lufs ) : 0, now, 0.5 );
+		this._bed( 'arrival_water', wooden && nearBoat ? dB( -35 ) * ( 1 - smooth( 2, 6, sp ) ) / dB( BANK.arrival_water.lufs ) : 0, now, 0.5 );
+		this.arrivalSound.update( dt, this.arrivalState );
+		if ( nearBoat && ! wooden && sp > 1.2 && e.u < 0.5 ) {
 
 			this._slapT -= dt;
 			if ( this._slapT <= 0 ) {

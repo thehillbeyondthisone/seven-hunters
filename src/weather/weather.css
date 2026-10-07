@@ -10,4 +10,7 @@
 .weather-preview a { color:#c9d8d3; font-size:11px; }
 .weather-collapse { font-size:18px!important; padding:0 7px!important; }
 .weather-preview.collapsed .weather-controls { display:none; }
+.weather-dread { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; padding-bottom:10px; border-bottom:1px solid #8ea6a633; }
+.weather-dread p { margin:2px 0 0; color:#9bb2b3; font-size:11px; }
+.weather-dread button:disabled { opacity:.45; cursor:default; }
 @media(max-width:600px) { .weather-preview { left:10px; bottom:10px; width:calc(100vw - 20px); box-sizing:border-box; } }

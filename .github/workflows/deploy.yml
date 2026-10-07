@@ -31,6 +31,7 @@ jobs:
           node test/demo-walk.mjs
           node test/demo-story.mjs
           node test/guidance.mjs
+          node test/mobile-input.mjs
           node test/sea-weather.mjs
           node test/xr.mjs
       - run: npm run build

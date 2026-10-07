@@ -2487,6 +2487,9 @@ body {
 }
 
 .tw-start-cta {
+	flex-shrink: 0;
+	white-space: nowrap;
+	min-width: max-content;
 	position: relative;
 	display: inline-flex;
 	align-items: center;
@@ -2509,6 +2512,10 @@ body {
 }
 
 .tw-start-cta .tw-ico {
+	flex-shrink: 0;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
 	width: calc(18 * var(--tw-u));
 	height: calc(18 * var(--tw-u));
 }

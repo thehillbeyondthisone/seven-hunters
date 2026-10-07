@@ -92,6 +92,7 @@ export class AirHaze {
 			// haze (1 = ~20 km visibility at sea level). Default: a humid tropical day, ~12 km: the far side
 			// of the island and the horizon soften visibly
 			density: [ 'f32', 1.6 ],
+			seaMist: [ 'vec2f', new Vector2( 0, 16 ) ], // optional low spray layer: extinction / height
 			// sun shaft strength (1 = physical single scattering near the camera; more veils everything in
 			// front of a low sun in white)
 			shafts: [ 'f32', 1.0 ],
@@ -104,6 +105,7 @@ export class AirHaze {
 		}, { label: 'haze' } );
 		const U = this.uniforms.fields;
 		this.density = U.density;
+		this.seaMist = U.seaMist;
 		this.shafts = U.shafts;
 		this.enabled = U.enabled;
 		this.frame = U.frame;
@@ -258,7 +260,11 @@ fn hazeVy( dir: vec3f, dist: f32 ) -> f32 {
 // unshadowed in-scatter depth of both layers from height hc along a ray (direction y component vy)
 // over distance d: 1 - their transmittance
 fn hazeInScatter( hc: f32, vy: f32, d: f32 ) -> f32 {
-	return 1.0 - exp( - ( hazeLayerDepth( HZ_MARINE_SIGMA, HZ_MARINE_H, hc, vy, d ) + hazeLayerDepth( HZ_AEROSOL_SIGMA, HZ_AEROSOL_H, hc, vy, d ) ) * hazeParams.density );
+	return 1.0 - exp( - hazeOpticalDepth( hc, vy, d ) );
+}
+fn hazeOpticalDepth( hc: f32, vy: f32, d: f32 ) -> f32 {
+	let ordinary = ( hazeLayerDepth( HZ_MARINE_SIGMA, HZ_MARINE_H, hc, vy, d ) + hazeLayerDepth( HZ_AEROSOL_SIGMA, HZ_AEROSOL_H, hc, vy, d ) ) * hazeParams.density;
+	return ordinary + hazeLayerDepth( hazeParams.seaMist.x, max( hazeParams.seaMist.y, 1.0 ), hc, vy, d );
 }
 
 // Cornette-Shanks (strong forward lobe) plus a little isotropic scattering
@@ -409,7 +415,7 @@ fn hazeApply( uv: vec2f, c: vec4f ) -> vec4f {
 			// ---- aerial perspective / marine haze on geometry (the water surface included)
 			if ( ! sky ) {
 				let vy = hazeVy( dir, dist );
-				let tau = ( hazeLayerDepth( HZ_MARINE_SIGMA, HZ_MARINE_H, camH, vy, dist ) + hazeLayerDepth( HZ_AEROSOL_SIGMA, HZ_AEROSOL_H, camH, vy, dist ) ) * hazeParams.density;
+				let tau = hazeOpticalDepth( camH, vy, dist );
 				let T = exp( - tau );
 				out = out * T + fog * ( 1.0 - T ) * ( 1.0 - fSun * ( 1.0 - h ) );
 				// Style Lab: the ramp fog in place of the aerial perspective
@@ -500,7 +506,7 @@ fn fragment( in: FSIn ) -> vec4f {
 			let dt = u * ${ f( 2 / STEPS ) } * tMax;
 			let P = cam + R.dir * t;
 			let h = max( P.y - frame.seaLevel, 0.0 );
-			let sig = exp( h / - HZ_MARINE_H ) * sigM + exp( h / - HZ_AEROSOL_H ) * sigA;
+			let sig = exp( h / - HZ_MARINE_H ) * sigM + exp( h / - HZ_AEROSOL_H ) * sigA + exp( h / - max( hazeParams.seaMist.y, 1.0 ) ) * hazeParams.seaMist.x;
 			tau += sig * ( t - tPrev );
 			tPrev = t;
 			let Tr = exp( - tau );

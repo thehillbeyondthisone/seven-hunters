@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Keeper weight · development review</title>
+<link rel="stylesheet" href="/src/ui/ui.css"><link rel="stylesheet" href="/src/story/story.css">
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#10191d}canvas{display:block}#begin-review{position:fixed;left:50%;top:110px;transform:translateX(-50%);z-index:106;padding:10px 18px;border:1px solid #c6b99c;background:#10191dcc;color:#eee4cf;font:14px system-ui}#review-note{position:fixed;bottom:12px;left:12px;z-index:105;max-width:310px;padding:8px 12px;background:#10191dcc;color:#eee4cf;font:12px/1.5 system-ui;pointer-events:none}</style></head><body>
+<div id="app"></div>
+<div id="fps" hidden></div>
+<button id="begin-review" hidden>Begin weight observation</button>
+<p id="review-note">Development review · starts beside the weight after first lighting. Click the scene; E examines the weight. Watch it descend, then follow guidance back to the crank. This page writes no watch saves.</p>
+<script type="module">
+import { App } from '../src/App.js';
+import { UI } from '../src/ui/UI.js';
+import { AppUI } from '../src/ui/AppUI.js';
+import { Story } from '../src/story/Story.js';
+import { TOWER } from '../src/world/flannan/Station.js';
+import { SUNSET } from '../src/story/Script.js';
+const app = new App(), ui = new UI(); window.__ui = ui;
+app.qs.set('keeperPreview',''); app.qs.set('noAudio','');
+// Like the benchmark, this review must be able to compile in a background tab.
+const raf = window.requestAnimationFrame.bind(window), caf = window.cancelAnimationFrame.bind(window);
+window.requestAnimationFrame = cb => document.visibilityState === 'hidden' ? setTimeout(()=>cb(performance.now()),16) : raf(cb);
+window.cancelAnimationFrame = id => { clearTimeout(id); caf(id); };
+const note = document.getElementById('review-note'), readyText = note.textContent;
+await app.init((p,label,until)=>{ui.setLoading(p,label,until); note.textContent=`Loading weight review · ${label}`;});
+app.ui = new AppUI(app,ui);
+const s = app.story = new Story(app); s.save = ()=>{};
+s.h = SUNSET + .2; s.beat = 'watch'; s.paused = true;
+s.flags = {landed:true,islandRevealSeen:true,keeperDuty:{inspected:true,verified:true},introLessons:{seen:[],pending:[],active:null,gap:0,yard:true,done:true}};
+s.arrival.group.visible = false;
+s.hand.carried = s.hand.lit = true; s.hand.glow = 1;
+s.lamp.wind = .88; s.lamp.start(); s.lamp.ignite(); s.lamp.glow = s.lamp.speed = 1;
+s.keeper.drive.sync(s.lamp.wind);
+const at = s.keeper.drive.at;
+const treads = Array.from({length:TOWER.count},(_,i)=>({a:TOWER.start+(i+.5)*TOWER.dTread,y:TOWER.floor+(i+1)*TOWER.riser}))
+ .filter(t=>Math.cos(t.a-TOWER.hatch.angle)>.65)
+ .sort((a,b)=>Math.abs(a.y+1.62-at.y)-Math.abs(b.y+1.62-at.y));
+const tread = treads[0], p = app.player;
+p.position.set(Math.cos(tread.a),tread.y,Math.sin(tread.a)); p.mode='walk'; p.grounded=true; p.velocity.set(0,0,0);
+p.yaw=Math.atan2(p.position.x,p.position.z); p.pitch=Math.atan2(at.y-tread.y-1.62,1); p._camY=null; p.update(0);
+s._applyClock(); app.cameraCut();
+await ui.hideLoader();
+app.devMenu = new (await import('../src/dev/DebugMenu.js')).DebugMenu(app);
+app.start();
+note.textContent = readyText;
+const begin = document.getElementById('begin-review'); begin.hidden = false;
+begin.onclick = ()=>{s.paused=false; begin.remove(); app.input.requestLock();};
+</script></body></html>

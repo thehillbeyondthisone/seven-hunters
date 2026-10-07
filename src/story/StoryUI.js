@@ -15,6 +15,7 @@
 //   await ui.journal( { heading, rows, remarks, footer } )
 
 import { projectGuidance } from './Guidance.js';
+import { touchInstruction } from '../mobile/MobileOptions.js';
 
 const el = ( tag, cls, text ) => {
 
@@ -40,17 +41,24 @@ export class StoryUI {
 		this.arrivalEl = el( 'div', 'sh-arrival' );
 		this.arrivalFrom = el( 'div', 'sh-arrival-from' );
 		this.arrivalText = el( 'div', 'sh-arrival-text' );
+		this.arrivalText.setAttribute( 'aria-live', 'polite' );
+		this.arrivalText.setAttribute( 'aria-atomic', 'true' );
 		this.arrivalHint = el( 'div', 'sh-arrival-hint' );
 		this.arrivalEl.append( this.arrivalFrom, this.arrivalText, this.arrivalHint );
+		this.revealSkip = el( 'button', 'sh-reveal-skip', 'Continue · Esc' );
+		this.revealSkip.hidden = true;
+		this.revealSkip.addEventListener( 'click', () => this.onRevealSkip?.() );
 		this.layer = el( 'div', 'sh-layer' );
 		this.guideEl = el( 'div', 'sh-guidance' );
 		this.guideEl.setAttribute( 'aria-hidden', 'true' );
 		this.guideMark = el( 'span', 'sh-guide-mark' );
+		this.guidePulse = el( 'span', 'sh-guide-pulse' );
+		this.guidePulse.innerHTML = '<i></i><i></i><b></b>';
 		this.guideArrow = el( 'span', 'sh-guide-arrow' );
 		this.guideArrow.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 8 L6 3 L10 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 		this.guideLabel = el( 'span', 'sh-guide-label' );
-		this.guideEl.append( this.guideMark, this.guideArrow, this.guideLabel );
-		this.root.append( this.vignette, this.objective, this.guideEl, this.stripEl, this.arrivalEl, this.layer );
+		this.guideEl.append( this.guidePulse, this.guideMark, this.guideArrow, this.guideLabel );
+		this.root.append( this.vignette, this.objective, this.guideEl, this.stripEl, this.arrivalEl, this.layer, this.revealSkip );
 		document.body.append( this.root );
 		this.modal = 0;
 
@@ -140,7 +148,7 @@ export class StoryUI {
 			if ( kicker ) c.append( el( 'div', 'sh-card-kicker', kicker ) );
 			if ( title ) c.append( el( 'div', 'sh-card-title', title ) );
 			for ( const l of lines ) c.append( el( 'p', 'sh-card-line', l ) );
-			const more = el( 'div', 'sh-card-more', 'Click to continue' );
+			const more = el( 'div', 'sh-card-more', this.input?.touchMode ? 'Tap to continue' : 'Click to continue' );
 			c.append( more );
 			this.layer.append( c );
 			void c.offsetWidth;
@@ -207,17 +215,32 @@ export class StoryUI {
 		const hidden = ! pos || this.open || hasPrompt && pos.onScreen && pos.distance < 3;
 		this.guideEl.classList.toggle( 'is-visible', ! hidden );
 		if ( hidden ) return;
+		// Identity, not position: moving stair markers and brief modal/aim hides must
+		// not repeatedly announce the same destination. A new objective can reuse a door.
+		const key = `${ this._goal || '' }|${ target.id || target.label }`;
+		if ( key !== this._guideKey ) {
+			this._guideKey = key;
+			this._guidePingUntil = performance.now() + 1450;
+			this.guideEl.classList.remove( 'is-pinging' );
+			void this.guidePulse.offsetWidth;
+			this.guideEl.classList.add( 'is-pinging' );
+		}
+		const pinging = performance.now() < this._guidePingUntil;
+		this.guideEl.classList.toggle( 'is-pinging', pinging );
 		this.guideEl.style.left = `${ pos.x.toFixed( 1 ) }px`;
 		this.guideEl.style.top = `${ pos.y.toFixed( 1 ) }px`;
 		this.guideEl.classList.toggle( 'is-edge', ! pos.onScreen );
-		this.guideEl.classList.toggle( 'has-label', pos.onScreen && pos.distance < 12 );
+		this.guideEl.classList.toggle( 'has-label', pinging || pos.onScreen && pos.distance < 12 );
+		this.guideEl.classList.toggle( 'label-right', pos.x < 130 );
+		this.guideEl.classList.toggle( 'label-left', pos.x > window.innerWidth - 130 );
 		this.guideArrow.style.transform = `translate(-50%, -50%) rotate(${ pos.angle.toFixed( 1 ) }deg)`;
-		this.guideLabel.textContent = target.label;
+		this.guideLabel.textContent = this.input?.touchMode ? touchInstruction( target.label ) : target.label;
 
 	}
 
 	setObjective( text ) {
 
+		if ( this.input?.touchMode ) text = touchInstruction( text );
 		if ( text === this._goal ) return;
 		this._goal = text;
 		this.goalEl.textContent = text || '';
@@ -256,7 +279,7 @@ export class StoryUI {
 		}
 
 		this.stripEl.classList.add( 'is-on' );
-		const key = s.from + '|' + s.text + '|' + ( s.hint || '' ) + '|' + ( s.morse || '' );
+		const key = s.from + '|' + s.text + '|' + ( s.hint || '' ) + '|' + ( s.morse || '' ) + '|' + ( s.translation || '' );
 		if ( key === this._strip ) return;
 		this._strip = key;
 		this.stripEl.innerHTML = '';
@@ -265,6 +288,7 @@ export class StoryUI {
 		t.append( document.createTextNode( s.text ) );
 		if ( s.cursor ) t.append( el( 'span', 'sh-strip-cursor', '▍' ) );
 		this.stripEl.append( t );
+		if ( s.translation ) this.stripEl.append( el( 'div', 'sh-strip-translation', `${ s.language || 'Translation' } · ${ s.translation }` ) );
 		if ( s.morse ) this.stripEl.append( el( 'div', 'sh-strip-morse', s.morse ) );
 		if ( s.hint ) this.stripEl.append( el( 'div', 'sh-strip-hint', s.hint ) );
 
@@ -272,12 +296,23 @@ export class StoryUI {
 
 	// ---- pages
 
+	islandReveal( active, skip = null ) {
+		if ( active ) this.arrival( null );
+		this.root.classList.toggle( 'is-island-reveal', active );
+		document.body.classList.toggle( 'is-island-reveal', active );
+		this.revealSkip.hidden = ! active;
+		this.revealSkip.textContent = this.input?.touchMode ? 'Continue' : 'Continue · Esc';
+		this.onRevealSkip = skip;
+	}
+
 	arrival( line, hint = '' ) {
 
+		if ( line?.lesson ) hint = '';
 		this.arrivalEl.classList.toggle( 'is-on', !! line || !! hint );
-		this.arrivalFrom.textContent = line?.from || '';
-		this.arrivalText.textContent = line?.text || '';
-		this.arrivalHint.textContent = hint;
+		this.arrivalEl.classList.toggle( 'is-lesson', !! line?.lesson );
+		if ( this.arrivalFrom.textContent !== ( line?.from || '' ) ) this.arrivalFrom.textContent = line?.from || '';
+		if ( this.arrivalText.textContent !== ( line?.text || '' ) ) this.arrivalText.textContent = line?.text || '';
+		if ( this.arrivalHint.textContent !== hint ) this.arrivalHint.textContent = hint;
 
 	}
 
@@ -292,16 +327,18 @@ export class StoryUI {
 				if ( paper ) {
 
 					page.append( el( 'h2', 'sh-page-title', paper.title ) );
+					if ( paper.sources ) page.append( el( 'p', 'sh-paper-kind', 'Historical background · Written for the game' ) );
 					for ( const p of paper.body ) page.append( el( 'p', 'sh-page-p', p ) );
 					const details = el( 'details', 'sh-paper-source' );
-					details.append( el( 'summary', '', 'About this document' ), el( 'p', '', paper.provenance ) );
-					if ( paper.source ) {
+					details.append( el( 'summary', '', 'History and story · About this document' ), el( 'p', '', paper.provenance ) );
+					const sources = paper.sources || ( paper.source ? [ { label: paper.sourceLabel || 'Northern Lighthouse Board transcript', url: paper.source } ] : [] );
+					for ( const source of sources ) {
 
-						const link = el( 'a', '', 'Northern Lighthouse Board transcript' );
-						link.href = paper.source;
+						const link = el( 'a', '', source.label );
+						link.href = source.url;
 						link.target = '_blank';
 						link.rel = 'noopener noreferrer';
-						details.append( link );
+						const row = el( 'p' ); row.append( link ); details.append( row );
 
 					}
 					page.append( details );
@@ -312,7 +349,7 @@ export class StoryUI {
 
 				} else {
 
-					page.append( el( 'h2', 'sh-page-title', 'The papers in your coat' ), el( 'p', 'sh-page-p', 'A letter, an account of the last relief, and your posting. Read whatever you wish.' ) );
+					page.append( el( 'h2', 'sh-page-title', 'The papers in your coat' ), el( 'p', 'sh-page-p', 'Your letter and posting, the last relief’s account, and notes for finding your feet. Read whatever you wish.' ) );
 					const options = el( 'div', 'sh-options' );
 					for ( const p of papers ) {
 

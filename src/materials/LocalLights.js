@@ -199,14 +199,14 @@ export class LocalLights {
 		// daylight through a small window into a dark interior) the other way round
 		const on = smooth( G.night.value, 0.15, 0.75 ) * this.strength;
 		const onDay = ( 1 - smooth( G.night.value, 0.05, 0.5 ) ) * this.strength;
-		if ( ( on > 0.002 || ( onDay > 0.002 && this.dayLights ) ) && this.enabled ) {
+		if ( this.enabled ) {
 
 			const cp = camera.position;
 			const list = this._list;
 			list.length = 0;
 			for ( const s of this.sources ) {
 
-				if ( s.enabled === false || ( s.day ? onDay : on ) <= 0.002 ) continue;
+				if ( s.enabled === false || ( s.always ? this.strength : s.day ? onDay : on ) <= 0.002 ) continue;
 				if ( s.update ) s.update();
 				s.d2 = s.position.distanceToSquared( cp );
 				list.push( s );
@@ -222,7 +222,7 @@ export class LocalLights {
 				const s = list[ i ];
 				const fade = Number.isFinite( dCut ) ? smooth( Math.sqrt( s.d2 ), dCut, dCut * 0.8 ) : 1;
 				const fl2 = s.flicker ? 1 + s.flicker * Math.sin( this.time * 9 + s.phase ) * Math.sin( this.time * 5.3 + s.phase * 0.37 ) : 1;
-				const k = s.intensity * ( s.day ? onDay : on ) * fade * fl2 * ( s.scale ?? 1 );
+				const k = s.intensity * ( s.always ? this.strength : s.day ? onDay : on ) * fade * fl2 * ( s.scale ?? 1 );
 				if ( k <= 1e-4 ) continue;
 				const r = s.range;
 				pos[ n ].set( s.position.x, s.position.y, s.position.z, r * r );
@@ -291,7 +291,10 @@ export function addVillageLights( lights, village ) {
 	for ( const l of village.getLightSources() ) {
 
 		const kind = l.kind || 'lantern';
-		const src = { position: l.position, color: l.color, intensity: l.intensity * ( K[ kind ] ?? 1.2 ), range: R[ kind ] ?? 12, kind };
+		const src = { position: l.position, color: l.color, intensity: l.intensity * ( K[ kind ] ?? 1.2 ), range: l.range ?? R[ kind ] ?? 12, kind, day: !! l.day };
+		if ( l.day && l.dir ) {
+			src.dir = l.dir.clone(); src.cosInner = 0.3; src.cosOuter = -0.2;
+		}
 		if ( kind === 'window' ) {
 
 			// outward normal: the window's own (l.dir), or away from the nearest building centre
@@ -316,7 +319,7 @@ export function addVillageLights( lights, village ) {
 			src.cosInner = 0.35;
 			src.cosOuter = - 0.15;
 
-		} else {
+		} else if ( ! l.day ) {
 
 			src.flicker = 0.08;
 

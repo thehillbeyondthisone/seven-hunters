@@ -320,7 +320,7 @@ export class AppUI {
 			: p.mode === 'deck' ? 'On deck'
 			: p.mode === 'swim' ? ( app.camera.position.y < ( app.cameraWaterHeight ?? 0 ) - 0.3 ? 'Diving' : 'Swimming' ) : 'Walking';
 		ui.setMode( mode );
-		if ( p.prompt ) ui.setPrompt( p.prompt.key, p.prompt.text, p.prompt.hold ? p.prompt.progress : null );
+		if ( p.prompt ) ui.setPrompt( p.prompt.key, p.prompt.text, p.prompt.hold && ! p.prompt.hideProgress ? p.prompt.progress : null );
 		else ui.setPrompt( null );
 
 		const b = app.boatCtl;

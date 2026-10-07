@@ -62,15 +62,16 @@ export const CROSSING_PAPERS = [
 ];
 
 export const CROSSING_LINES = [
-	{ at: 0, until: 12, from: '3rd January 1901 · The east approach', text: 'The Hesperus lies behind you. The landing boat carries you the last stretch.' },
-	{ at: 24, until: 36, from: 'The boatman', text: '“That’s the light up there. Keep your bag close.”' },
-	{ at: 58, until: 71, from: 'The boatman', text: '“We’ll put you up first. Then we’ll see about the others.”' },
+	{ at: 0, until: 21, lesson: true, from: '3rd January 1901 · The east approach', text: 'The Hesperus is a lighthouse tender, bringing keepers and supplies. Her landing boat carries you the last stretch to the island.' },
+	{ at: 27, until: 41, from: 'The boatman', text: '“That’s the light up there. Keep your bag close.”' },
+	{ at: 47, until: 65, lesson: true, from: 'The relief', text: 'Relief means a change of keepers. A fortnight is two weeks. The boat’s return depends on the sea.' },
+	{ at: 71, until: 85, from: 'The boatman', text: '“We’ll put you up first. Then we’ll see about the others.”' },
 	{ at: 90, until: Infinity, from: 'The east landing', text: 'The boat holds under the cliff. Your bag is ready.' },
 ];
 
 // objectives, by beat
 export const GOALS = {
-	crossing: 'E · Read your papers. Look around as the island draws closer.',
+	crossing: 'B · Read your papers. Look around as the island draws closer.',
 	climb: 'Go up the steps to the light station.',
 	room: 'Find the keepers\' room: the door in the east side of the house.',
 	letter: 'Read the Board\'s letter on the desk.',
@@ -95,17 +96,18 @@ export const GOALS = {
 export const SUNSET = 15.15; // local solar time on the day (Setting.js: 15:09)
 export const SUNRISE = 8.9;
 
-// the Board's letter of instructions, on the desk (the instructions are fiction; the Board, its office and
-// the station's routine are real)
+// The Board's letter is a fictional prop. The lamp link, signal book and its numbered groups
+// belong to the game, not to a documented Flannan installation.
 export const LETTER = {
 	title: 'Northern Lighthouse Board, 84 George Street, Edinburgh',
 	body: [
 		'31st December 1900',
 		'To the Assistant Keeper, Flannan Islands.',
 		'Until the arrival of the Principal Keeper you will take sole charge of the light, and you will keep it in accordance with the General Instructions.',
-		'The light is to be exhibited from sunset to sunrise without interruption. The lamp is to be lit at sunset precisely and the machine set going. The machine is to be wound before its weight reaches the foot of the tube: a bell will warn you of it.',
-		'Observations of the barometer, the wind, the sea and the visibility are to be entered on the slate at six in the evening and at the hours prescribed, and copied fair into the journal in the morning, with the times of lighting and extinguishing.',
-		'The observer at Gallan Head on Lewis watches the light nightly and will signal if conditions allow. The Board\'s code of signals is in the drawer of the lantern.',
+		'The light is to be exhibited from sunset to sunrise without interruption. Light the lamp at sunset precisely and set the machine going.',
+		'Wind the machine before its weight reaches the foot of the tube. Attend to the warning bell without delay.',
+		'Enter the barometer, wind, sea and visibility on the slate at six in the evening and at the prescribed hours. Copy the entries fair into the journal each morning, including the times of lighting and extinguishing.',
+		'The observer at Gallan Head on Lewis keeps a nightly lookout. Use the signal lamp when the air is clear. The station signal book is in the lantern drawer.',
 		'You will not leave the station, nor go down to either landing in a heavy sea.',
 		'I am, Sir, your obedient servant,',
 		'Secretary.',
@@ -115,10 +117,10 @@ export const LETTER = {
 export const NOTES = {
 	journal: { title: 'The station journal', body: [ 'A new book. The old journal went to Edinburgh with the Superintendent.', 'The first page is ruled for the 3rd of January and is empty. It is written up in the morning, from the slate.' ] },
 	slate: { title: 'The slate', body: [ 'Wiped clean, the chalk on its ledge.' ] },
-	oilskins: { title: 'The oilskins', body: [ 'One set of oilskins on the pegs, and two pegs empty.', 'The Superintendent\'s report says it: the men who went to the west landing on the 15th of December went in their oilskins. One of them went in his shirtsleeves.' ] },
+	oilskins: { title: 'The oilskins', body: [ 'One set of oilskins on the pegs. Two pegs empty.', 'There are places for three men to hang their things.' ] },
 	stove: { title: 'The stove', body: [ 'Cold. There is coal in the scuttle.' ] },
-	westDoor: { title: 'The bedrooms', body: [ 'There is no sleeping tonight. The light first.' ] },
-	kitchenDoor: { title: 'The kitchen', body: [ 'Your crate is in there, and the bread. It can wait.' ] },
+	westDoor: { title: 'The bedrooms', body: [ 'The beds are beyond this door. First, the light.' ] },
+	kitchenDoor: { title: 'The kitchen', body: [ 'Your crate and the bread are in there. They can wait until the light is burning.' ] },
 	chapel: { title: 'Teampull Beannachadh', body: [ 'St Flannan\'s chapel: a cell of dry stone with a doorway you would have to stoop through.', 'The fowlers who came here once a year took off their caps when they reached the top of the island, and turned sunwise, and never called the island by its name.' ] },
 	ropeBox: { title: 'The west landing', body: [ 'A box for the ropes and the landing gear, in a cleft of the rock 110 feet above the sea.', 'The one that stood here in December was gone when the Superintendent came on the 29th, and the railings round the crane were twisted out of shape.' ] },
 };
@@ -142,11 +144,20 @@ export const OBS = {
 // ---- the Watcher
 //
 // Her messages are sent letter by letter by lamp (Morse) and read through the telescope. Your answers are
-// a code group from the Board's book (quick, formal) or a message spelled out (slow, your own words):
+// a group from the fictional station book (quick, formal) or a message spelled out (slow, your own words):
 // each costs the night's clock `minutes`. say: whether a message says the island's name on the island.
+// Routine transmissions aim for 5–15 words; brief answers may be shorter. The game's K invites
+// a reply and never closes a conversation. Node IDs/order retain existing save and choice paths.
 //
 //   node: { her: 'MESSAGE', options: [ { code?: n, text, minutes, next } ], end? }
 export const CALL = 'FLANNAN FLANNAN K';
+export const SIGNAL_UI = {
+	title: 'The signal book',
+	callHint: 'K means “answer”. Reply at the signal lamp on the balcony.',
+	replyHint: 'Your turn to answer',
+	replyInstruction: 'Choose your reply. The lamp sends it for you.',
+	readingHint: 'Reply at the signal lamp on the balcony',
+};
 
 export const WATCHER = {
 	start: 'hello',
@@ -159,7 +170,7 @@ export const WATCHER = {
 			],
 		},
 		who: {
-			her: 'WHO IS KEEPING',
+			her: 'WHO HAS THE WATCH',
 			options: [
 				{ text: 'INNES. ASSISTANT. FROM LEITH.', minutes: 8, next: 'ceit' },
 				{ text: 'NEW MAN. ALONE TILL THE BOAT.', minutes: 10, next: 'alone' },
@@ -173,7 +184,7 @@ export const WATCHER = {
 			],
 		},
 		ceit: {
-			her: 'THIS IS CEIT MACLEOD. I WATCH YOUR LIGHT FOR THE BOARD. EVERY NIGHT',
+			her: 'CEIT MACLEOD HERE. CALL ME CATE. I WATCH YOUR LIGHT FOR THE BOARD.',
 			options: [
 				{ text: 'GLAD OF IT.', minutes: 4, next: 'pay' },
 				{ text: 'DID YOU WATCH IT IN DECEMBER', minutes: 9, next: 'december' },
@@ -181,18 +192,18 @@ export const WATCHER = {
 			],
 		},
 		pay: {
-			her: 'DONT BE. THE BOARD PAYS EIGHT POUNDS A YEAR. I WOULD WATCH FOR LESS',
+			her: 'THE BOARD PAYS EIGHT POUNDS A YEAR. I WOULD WATCH FOR LESS.',
 			options: [
 				{ text: 'WHY', minutes: 2, next: 'nothing' },
 				{ code: 11, text: 'SIGNAL UNDERSTOOD.', minutes: 3, next: 'name' },
 			],
 		},
 		nothing: {
-			her: 'NOTHING ELSE TO LOOK AT FROM HERE',
+			her: 'NOT MUCH ELSE TO LOOK AT FROM HERE.',
 			options: [ { code: 11, text: 'SIGNAL UNDERSTOOD.', minutes: 3, next: 'name' } ],
 		},
 		december: {
-			her: 'I WATCHED. THE HAAR LAY ON YOU A WEEK. I TOLD MYSELF IT WAS THE WEATHER',
+			her: 'I COULD NOT SEE THE LIGHT. I TOLD MYSELF IT WAS THE MIST.',
 			options: [
 				{ text: 'IT WAS THE WEATHER.', minutes: 6, next: 'maybe' },
 				{ text: 'NOT YOUR FAULT.', minutes: 5, next: 'maybe' },
@@ -200,11 +211,11 @@ export const WATCHER = {
 			],
 		},
 		maybe: {
-			her: 'MAYBE',
+			her: 'MAYBE.',
 			options: [ { code: 11, text: 'SIGNAL UNDERSTOOD.', minutes: 3, next: 'name' } ],
 		},
 		name: {
-			her: 'A WORD FOR YOU. ON THE ISLAND DO NOT SAY ITS NAME. SAY THE COUNTRY',
+			her: 'ON THE ISLAND SAY THE COUNTRY. DO NOT SAY ITS NAME.',
 			options: [
 				{ text: 'WHY', minutes: 2, next: 'fowlers' },
 				{ text: 'SUPERSTITION.', minutes: 5, next: 'humour' },
@@ -212,22 +223,22 @@ export const WATCHER = {
 			],
 		},
 		fowlers: {
-			her: 'THE OLD MEN NEVER DID. I WOULD NOT START',
+			her: 'THE OLD FOWLERS NEVER DID. I WOULD NOT START.',
 			options: [ { code: 11, text: 'SIGNAL UNDERSTOOD.', minutes: 3, next: 'west' } ],
 		},
 		humour: {
-			her: 'AYE. HUMOUR ME',
+			her: 'AYE. HUMOUR ME.',
 			options: [ { code: 11, text: 'SIGNAL UNDERSTOOD.', minutes: 3, next: 'west' } ],
 		},
 		west: {
-			her: 'GLASS FALLING HERE. MIND THE WEST LANDING. GOOD NIGHT. KEEP HER LIT',
+			her: 'GLASS FALLING HERE. MIND THE WEST LANDING.',
 			options: [
 				{ text: 'GOOD NIGHT GALLAN HEAD.', minutes: 5, next: 'end' },
 				{ text: 'GOOD NIGHT FROM FLANNAN.', minutes: 5, next: 'end', say: true },
 				{ code: 2, text: 'GOOD NIGHT.', minutes: 3, next: 'end' },
 			],
 		},
-		end: { her: 'K', end: true },
+		end: { her: 'GOOD NIGHT. KEEP HER LIT.', end: true },
 	},
 };
 

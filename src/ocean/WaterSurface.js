@@ -39,14 +39,18 @@ export class WaterSurface {
 
 		this.params = new UniformBlock( 'WaterSurfaceParams', {
 			amplitude: [ 'f32', 1 ],
+			coastalSafe: [ 'f32', 0 ],
 			slopeScale: [ 'f32', 1 ],
+			distanceDetail: [ 'f32', 0 ],
 			foamCoverage: [ 'f32', 1 ],
 			foamSharpness: [ 'f32', 2.2 ],
 			foamScale: [ 'f32', 0.09 ], // pattern repeats per meter
 		}, { label: 'waterSurface' } );
 		const F = this.params.fields;
 		this.amplitude = F.amplitude;
+		this.coastalSafe = F.coastalSafe;
 		this.slopeScale = F.slopeScale;
+		this.distanceDetail = F.distanceDetail;
 		this.foamCoverage = F.foamCoverage;
 		this.foamSharpness = F.foamSharpness;
 		this.foamScale = F.foamScale;
@@ -73,6 +77,14 @@ fn waterSurfaceCascadeAttenuation( c: i32, depth: f32 ) -> f32 {
 	let floorAmt = ${ arr( floorAmt ) };
 	let a = smoothstep( 0.0, d0[ c ], depth );
 	return mix( floorAmt[ c ] * smoothstep( 0.0, 0.6, depth ), 1.0, a );
+}
+// Dissipate wind/surf waves in shallows. The long-wave flood is added later,
+// without limiting it to the original sea depth.
+fn waterSurfaceSafeDisplacement( d: vec3f, depth: f32, amplitude: f32, safe: f32 ) -> vec3f {
+	if ( safe < 0.5 ) { return d; }
+	let limit = max( 0.04, max( depth, 0.0 ) * 0.38 );
+	let horizontal = smoothstep( 1.0, 35.0, depth ) * 0.3 / max( amplitude, 1.0 );
+	return vec3f( d.x * horizontal, limit * tanh( d.y / limit ), d.z * horizontal );
 }
 `,
 		} );
@@ -113,6 +125,7 @@ fn waterSurfaceCascadeAttenuation( c: i32, depth: f32 ) -> f32 {
 		const SF = this.surfFoam;
 		const SIM = !! this.shoreSim;
 		const CLIFF = !! this.cliffSurf;
+		const EXTREME = !! this.extremeSea;
 		const cd = this.cdlod.module.name;
 		const CdV = cd[ 0 ].toUpperCase() + cd.slice( 1 ) + 'Vertex';
 		const f = ( x ) => Number( x ).toFixed( 6 );
@@ -196,8 +209,13 @@ ${ SH ? /* wgsl */`
 	}` : '' }
 ${ WK ? '	extra += wakeDisplacement( worldXZ );' : '' }
 
-	var total = disp + extra;
+	var total = waterSurfaceSafeDisplacement( disp + extra, depth, waterSurface.amplitude, waterSurface.coastalSafe );
 	var y = frame.seaLevel + total.y;
+${ EXTREME ? `
+	let extreme = extremeSeaSample( worldXZ );
+	y += extreme.x;
+	total.y += extreme.x;
+	shoreFoam += extreme.w;` : '' }
 ${ SH ? /* wgsl */`
 	if ( nearShore ) {
 		// thin run-up sheet on the sand: take whichever surface is higher (smooth max)
@@ -219,10 +237,14 @@ ${ SH ? /* wgsl */`
 		total = vec3f( total.x * still, total.y, total.z * still );
 		surfMask *= still;
 	}` : '' }
+${ EXTREME ? `
+	shoreN = normalize( shoreN + extremeSeaNormal( worldXZ ) - vec3f( 0.0, 1.0, 0.0 ) );` : '' }
 ${ T ? /* wgsl */`
 	// hide the water sheet below dry land (beyond the swash zone)
-	let below = select( ground - 0.06, min( ground - 2.0, frame.seaLevel - 1.0 ), depth < -3.0 );
-	y = select( y, min( y, below ), y < ground );` : '' }
+	if ( waterSurface.coastalSafe < 0.5 ) {
+		let below = select( ground - 0.06, min( ground - 2.0, frame.seaLevel - 1.0 ), depth < -3.0 );
+		y = select( y, min( y, below ), y < ground );
+	}` : '' }
 
 	var o: WaterSurfaceVertex;
 	o.position = vec3f( worldXZ.x + total.x, y, worldXZ.y + total.z );
@@ -246,6 +268,9 @@ ${ T ? /* wgsl */`
 			let att = `waterSurfaceCascadeAttenuation( ${ c }, depth )`;
 			if ( DT && c >= C - 2 ) att += ' * rough';
 			else if ( DT && c === C - 3 ) att += ' * mix( 1.0, rough, 0.4 )';
+			// Preserve swell geometry and wave queries. Filter only short-wave slopes
+			// beyond the close water, so broad swells remain legible at distance.
+			if ( c >= C - 2 ) att += ` * mix( 1.0, mix( ${ c === C - 1 ? '0.36' : '0.64' }, 1.0, 1.0 - smoothstep( 28.0, 210.0, length( P.xz - frame.cameraPos.xz ) ) ), waterSurface.distanceDetail )`;
 			// (4x anisotropy: 8x only sharpened the far grazing sea imperceptibly, at ~0.1 ms)
 			cascadesF += `\td += textureSample( oceanDerivatives, smpAniso4Repeat, lagXZ / ocean.sizes[ ${ c } ].x, ${ c } ) * ( ${ att } );\n`;
 
@@ -291,7 +316,14 @@ ${ DT ? '	let det = seaDetailSample( lagXZ );\n	let rough = det.rough;' : '	let 
 
 ${ cascadesF }
 	d *= waterSurface.amplitude;
+	// Match the reduced horizontal compression of the stable mesh.
+	let safeHorizontal = smoothstep( 1.0, 35.0, depth ) * 0.3 / max( waterSurface.amplitude, 1.0 );
+	d = vec4f( d.xy, d.zw * mix( 1.0, safeHorizontal, waterSurface.coastalSafe ) );
 	var slopes = vec2f( d.x / max( d.z + 1.0, 0.2 ), d.y / max( d.w + 1.0, 0.2 ) );
+${ EXTREME && ! SH ? `
+	let en = extremeSeaNormal( lagXZ );
+	slopes += -en.xz / max( en.y, 0.1 );
+	foamSum += extremeSeaSample( lagXZ ).w;` : '' }
 
 	// Near-field capillary ripples. Within a few metres of the camera a pixel covers less than
 	// the finest cascade's texel (~3 cm), so the surface looks glassy. Re-sample that cascade at
@@ -389,7 +421,7 @@ ${ SF ? /* wgsl */`
 		return new ShaderModule( {
 			name: 'waterSurface',
 			deps: [ commonModule, fft.module, this.cdlod.module, this.attenuationModule, T && this.terrain.module, SH && this.shore.module,
-				WK && this.wake.module, DT && this.detail.module, SF && SF.module, CLIFF && this.cliffSurf.module ],
+				WK && this.wake.module, DT && this.detail.module, SF && SF.module, CLIFF && this.cliffSurf.module, EXTREME && this.extremeSea.module ],
 			uniforms: this.params,
 			uniformName: 'waterSurface',
 			bindings: { waterFoamTex: { texture: this.foamTexture } },

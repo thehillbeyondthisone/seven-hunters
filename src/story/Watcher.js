@@ -26,7 +26,7 @@ export const MORSE = {
 // a message as Morse: { on: [ [ t0, t1 ], ... ] lamp-on spans, letters: [ [ char, tEnd ] ], length } in units
 export function morse( text ) {
 
-	const on = [], letters = [];
+	const on = [], letters = [], symbols = [];
 	let t = 0;
 	const words = String( text ).toUpperCase().split( /\s+/ ).filter( Boolean );
 	words.forEach( ( w, wi ) => {
@@ -48,6 +48,7 @@ export function morse( text ) {
 				if ( ei > 0 ) t += 1;
 				const d = e === '.' ? 1 : 3;
 				on.push( [ t, t + d ] );
+				symbols.push( { mark: e === '.' ? '·' : '–', start: t, end: t + d, separator: ei > 0 ? '' : ci > 0 ? ' ' : wi > 0 ? ' / ' : '' } );
 				t += d;
 
 			} );
@@ -57,7 +58,7 @@ export function morse( text ) {
 
 	} );
 
-	return { on, letters, length: t + 1 };
+	return { on, letters, symbols, length: t + 1 };
 
 }
 
@@ -84,6 +85,7 @@ export class Watcher {
 		this._t = 0;
 		this._read = 0; // units of the message read so far (advances only while watched)
 		this.onSent = null; // ( text, minutes ): your answer went (the story spends the clock)
+		this.familiar = false;
 
 	}
 
@@ -117,10 +119,11 @@ export class Watcher {
 
 		this.node = this.script.nodes[ id ];
 		this.state = 'sending';
-		this._m = morse( this.node.her );
+		this._m = morse( this.node.wire || this.node.her );
 		this._t = 0;
 		this._read = 0;
 		this.text = '';
+		this.wireText = '';
 		this.options = null;
 
 	}
@@ -132,8 +135,9 @@ export class Watcher {
 		const o = this.options[ i ];
 		this.log.push( { from: 'you', text: o.text, code: o.code, minutes: o.minutes } );
 		if ( o.say ) this.flags.saidName = true;
+		if ( o.flag ) this.flags[ o.flag ] = true;
 		this.state = 'replying';
-		this._m = morse( o.text );
+		this._m = morse( o.wire || o.text );
 		this._t = 0;
 		this._next = o.next;
 		this._sent = o;
@@ -181,10 +185,12 @@ export class Watcher {
 			case 'sending': {
 
 				// her lamp keeps her own time; what you read of it advances only while you watch
-				this._t += u * ( hurry ? 4 : 1 );
+				const pace = hurry ? 4 : this.familiar ? 1.8 : 1;
+				this._t += u * pace;
 				this.lamp = this._on( this._t % this._m.length ) ? 1 : 0;
-				if ( watched ) this._read = Math.min( this._m.length, this._read + u * ( hurry ? 4 : 1 ) );
-				this.text = this._m.letters.filter( ( [ , te ] ) => te <= this._read ).map( ( [ c ] ) => c ).join( '' );
+				if ( watched ) this._read = Math.min( this._m.length, this._read + u * pace );
+				this.wireText = this._m.letters.filter( ( [ , te ] ) => te <= this._read ).map( ( [ c ] ) => c ).join( '' );
+				this.text = this.node.wire && this._read >= this._m.length ? this.node.her : this.wireText;
 				if ( this._read >= this._m.length ) {
 
 					this.log.push( { from: 'her', text: this.node.her } );
@@ -226,6 +232,16 @@ export class Watcher {
 	}
 
 	// your lamp now (while replying): on / off
+	get rawMorse() {
+		if ( ! this._m ) return '';
+		const t = this.state === 'replying' || this.state === 'calling' ? this._t : this._read;
+		return this._m.symbols.filter( e => e.end <= t ).map( e => e.separator + e.mark ).join( '' );
+	}
+
+	get translation() {
+		return this.node?.translation && this._read >= this._m.length ? this.node.translation : '';
+	}
+
 	get yourLamp() {
 
 		return this.state === 'replying' && this._on( this._t ) ? 1 : 0;
@@ -241,7 +257,8 @@ export class Watcher {
 
 	save() {
 
-		return { state: this.state, node: this.node && Object.keys( this.script.nodes ).find( ( k ) => this.script.nodes[ k ] === this.node ), log: this.log, flags: this.flags, lost: !! this.lost };
+		return { state: this.state, node: this.node && Object.keys( this.script.nodes ).find( ( k ) => this.script.nodes[ k ] === this.node ), log: this.log, flags: this.flags, lost: !! this.lost, familiar: this.familiar,
+			progress: { t: this._t, read: this._read, next: this._next, sent: this._sent } };
 
 	}
 
@@ -251,8 +268,23 @@ export class Watcher {
 		this.log = s.log || [];
 		this.flags = s.flags || {};
 		this.lost = !! s.lost;
-		// a conversation in progress starts that message again
-		if ( s.state === 'sending' || s.state === 'waiting' || s.state === 'replying' ) this._send( s.node || this.script.start );
+		this.familiar = !! s.familiar;
+		// Older saves restart the current message. New saves retain the received
+		// symbols and pending reply, so loading cannot repeat a choice or invent text.
+		if ( s.state === 'sending' || s.state === 'waiting' || s.state === 'replying' ) {
+			this._send( this.script.nodes[ s.node ] ? s.node : this.script.start );
+			if ( s.progress ) {
+				this._t = s.progress.t || 0; this._read = s.progress.read || 0;
+				this.wireText = this._m.letters.filter( ( [ , te ] ) => te <= this._read ).map( ( [ c ] ) => c ).join( '' );
+				this.text = this.node.wire && this._read >= this._m.length ? this.node.her : this.wireText;
+				this.state = s.state;
+				if ( s.state === 'waiting' ) this.options = this.node.options;
+				if ( s.state === 'replying' && s.progress.sent ) {
+					this._sent = s.progress.sent; this._next = s.progress.next;
+					this._m = morse( this._sent.wire || this._sent.text );
+				}
+			}
+		}
 		else this.state = s.state === 'calling' ? 'steady' : s.state || 'away';
 
 	}

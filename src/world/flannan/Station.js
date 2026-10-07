@@ -1,10 +1,14 @@
 import { Color, Group, Matrix4, Mesh, Vector3 } from '../../engine/index.js';
-import { createLanternGlass, createLensMaterial, createStationTimber, createStationFlags } from './StationMaterials.js';
+import { createLanternGlass, createLensMaterial, createStationTimber, createStationFlags, createStationMasonry, createLandingConcrete, createStationIron } from './StationMaterials.js';
+import { portholeDrum } from './ReferenceDetails.js';
+import { fittedStoneWall, stoneBlock, islandStoneScatter } from './StoneMasonry.js';
 import { dressKeepersRoom, deskOilLamp } from './InteriorDressing.js';
+import { nextRooms, haulingShed, KITCHEN, HAULING_SHED } from './NextRooms.js';
+import { ChimneySmoke } from './ChimneySmoke.js';
 import { Builder, Part, quad01Part, sagPoints } from '../village/GeoBuilder.js';
 import { windowUnit } from '../village/Buildings.js';
 import { lin, WOOD, HARD, C, bollard, ropeCoil, lantern } from '../Props.js';
-import { smoothstep, lerp, clamp } from '../../util/Noise.js';
+import { smoothstep, lerp, clamp, mulberry32 } from '../../util/Noise.js';
 
 // The Flannan Isles light station as it stood in the winter of 1900-01 (docs/PLAN.md §3), on the island
 // FlannanTerrain.js makes from the real DEM. Engine frame: the light at x = z = 0, x east, z south.
@@ -44,7 +48,7 @@ const Y0 = STATION.yard;
 // Reconstruction palette in display hex; exact 1901 paint colours are unverified.
 const P = {
 	white: lin( 0xeeeae1 ), // limewash, white paint
-	ochre: lin( 0xc79d55 ), // the Board's buff: margins, base and blocking courses
+	ochre: lin( 0xbdb296 ), // restrained buff reconstruction; photographs do not establish 1901 colour
 	black: lin( 0x1c1d1d ), // lantern, cupola, railings
 	door: lin( 0x536151 ), // restrained green paint; its 1901 colour is unverified
 	trim: lin( 0xf0ede4 ),
@@ -256,7 +260,8 @@ function flightTop( pts, t ) {
 
 }
 
-// lower the ground under a landing's flight (2.6 m wide) to 5 cm below its treads
+// Excavate below the full concrete bed, so interpolated terrain cannot cover
+// risers and leave disconnected pale tread strips. Walking uses tread colliders.
 function cutUnderFlight( T, L ) {
 
 	const pts = L.steps.pts, [ dx, dz ] = L.dir, hx = L.head.x, hz = L.head.z, n = T.res;
@@ -270,7 +275,7 @@ function cutUnderFlight( T, L ) {
 		const t = - ( ( x - hx ) * dx + ( z - hz ) * dz ), w = - ( x - hx ) * dz + ( z - hz ) * dx;
 		if ( t < 0 || t > end || Math.abs( w ) > half ) continue;
 		const k = j * n + i;
-		T.heights[ k ] = Math.min( T.heights[ k ], flightTop( pts, t ) - 0.05 );
+		T.heights[ k ] = Math.min( T.heights[ k ], flightTop( pts, t ) - 0.85 );
 
 	}
 
@@ -293,8 +298,8 @@ function stationWall( ctx, S, W ) {
 	const ops = ( W.openings || [] ).map( ( o ) => {
 
 		const door = o.kind === 'door';
-		const w = door ? 1.1 : ( o.w ?? 1.0 );
-		const y0 = o.y0 ?? ( door ? S.floor - 0.02 : S.floor + 0.8 ), y1 = o.y1 ?? S.floor + 2.3;
+		const w = door ? 1.1 : ( o.w ?? 0.88 );
+		const y0 = o.y0 ?? ( door ? S.floor - 0.02 : S.floor + 0.68 ), y1 = o.y1 ?? S.floor + ( door ? 2.3 : 2.65 );
 		return { ...o, door, w, x0: o.at - w / 2, x1: o.at + w / 2, y0, y1 };
 
 	} ).sort( ( p, q ) => p.at - q.at );
@@ -305,29 +310,29 @@ function stationWall( ctx, S, W ) {
 	let x = 0;
 	for ( const o of ops ) {
 
-		wallBox( B, 'stone', x, o.x0, base, S.eaves, - T, 0, white );
-		wallBox( B, 'stone', o.x0, o.x1, base, o.y0, - T, 0, white );
-		wallBox( B, 'stone', o.x0, o.x1, o.y1, S.eaves, - T, 0, white );
+		wallBox( B, 'stationMasonry', x, o.x0, base, S.eaves, - T, 0, white );
+		wallBox( B, 'stationMasonry', o.x0, o.x1, base, o.y0, - T, 0, white );
+		wallBox( B, 'stationMasonry', o.x0, o.x1, o.y1, S.eaves, - T, 0, white );
 		x = o.x1;
 
 	}
 
-	wallBox( B, 'stone', x, L, base, S.eaves, - T, 0, white );
+	wallBox( B, 'stationMasonry', x, L, base, S.eaves, - T, 0, white );
 
 	// base course (broken by the doors), cornice, blocking course and cope
 	x = 0;
 	for ( const o of ops ) {
 
 		if ( ! o.door ) continue;
-		wallBox( B, 'stone', x, o.x0 - 0.2, base, S.floor + 0.05, 0, 0.05, ochre );
+		wallBox( B, 'stationMasonry', x, o.x0 - 0.2, base, S.floor + 0.05, 0, 0.05, ochre );
 		x = o.x1 + 0.2;
 
 	}
 
-	wallBox( B, 'stone', x, L, base, S.floor + 0.05, 0, 0.05, ochre );
-	wallBox( B, 'stone', 0, L, S.eaves - 0.32, S.eaves - 0.1, 0, 0.1, ochre );
-	wallBox( B, 'stone', 0, L, S.eaves - 0.1, S.top, - T + 0.15, 0.03, ochre );
-	wallBox( B, 'stone', - 0.03, L + 0.03, S.top, S.top + 0.07, - T + 0.1, 0.07, { ...ochre, tint: P.cope } );
+	wallBox( B, 'stationMasonry', x, L, base, S.floor + 0.05, 0, 0.05, ochre );
+	wallBox( B, 'stationMasonry', 0, L, S.eaves - 0.1, S.eaves + 0.015, 0, 0.085, ochre );
+	wallBox( B, 'stationMasonry', 0, L, S.eaves + 0.015, S.top, - T + 0.15, 0.025, white );
+	wallBox( B, 'stationMasonry', - 0.035, L + 0.035, S.top, S.top + 0.065, - T + 0.1, 0.085, { ...ochre, tint: P.roof } );
 
 	// long-and-short quoins at the outer corners
 	for ( const [ end, on ] of [ [ 0, W.quoins && W.quoins[ 0 ] ], [ L, W.quoins && W.quoins[ 1 ] ] ] ) {
@@ -337,8 +342,8 @@ function stationWall( ctx, S, W ) {
 		for ( let y = S.floor + 0.05; y < S.eaves - 0.34; y += 0.3, k ++ ) {
 
 			const w = k % 2 ? 0.26 : 0.46, y1 = Math.min( y + 0.3, S.eaves - 0.32 );
-			if ( end === 0 ) wallBox( B, 'stone', - 0.035, w, y, y1 - 0.012, 0, 0.035, ochre );
-			else wallBox( B, 'stone', L - w, L + 0.035, y, y1 - 0.012, 0, 0.035, ochre );
+			if ( end === 0 ) wallBox( B, 'stationMasonry', - 0.035, w, y, y1 - 0.012, 0, 0.035, ochre );
+			else wallBox( B, 'stationMasonry', L - w, L + 0.035, y, y1 - 0.012, 0, 0.035, ochre );
 
 		}
 
@@ -347,10 +352,10 @@ function stationWall( ctx, S, W ) {
 	// the openings: margins, sills, sashes and doors, set back in the reveals
 	for ( const o of ops ) {
 
-		const m = 0.2, pr = 0.035;
-		wallBox( B, 'stone', o.x0 - m, o.x0, o.door ? S.floor + 0.05 : o.y0 - 0.06, o.y1, 0, pr, ochre );
-		wallBox( B, 'stone', o.x1, o.x1 + m, o.door ? S.floor + 0.05 : o.y0 - 0.06, o.y1, 0, pr, ochre );
-		wallBox( B, 'stone', o.x0 - m, o.x1 + m, o.y1, o.y1 + m + 0.05, 0, pr, ochre );
+		const m = 0.14, pr = 0.035;
+		wallBox( B, 'stationMasonry', o.x0 - m, o.x0, o.door ? S.floor + 0.05 : o.y0 - 0.06, o.y1, 0, pr, ochre );
+		wallBox( B, 'stationMasonry', o.x1, o.x1 + m, o.door ? S.floor + 0.05 : o.y0 - 0.06, o.y1, 0, pr, ochre );
+		wallBox( B, 'stationMasonry', o.x0 - m, o.x1 + m, o.y1, o.y1 + m + 0.05, 0, pr, ochre );
 		if ( o.door ) {
 
 			// (leaf: false: the door is a moving part of its own)
@@ -364,14 +369,14 @@ function stationWall( ctx, S, W ) {
 			// two steps up to the threshold
 			if ( S.floor - Y0 > 0.2 ) {
 
-				wallBox( B, 'stone', o.x0 - 0.2, o.x1 + 0.2, Y0 - 0.25, S.floor - 0.01, 0, 0.36, concrete );
-				wallBox( B, 'stone', o.x0 - 0.35, o.x1 + 0.35, Y0 - 0.3, lerp( Y0, S.floor, 0.5 ), 0, 0.72, concrete );
+				wallBox( B, 'stationMasonry', o.x0 - 0.2, o.x1 + 0.2, Y0 - 0.25, S.floor - 0.01, 0, 0.36, concrete );
+				wallBox( B, 'stationMasonry', o.x0 - 0.35, o.x1 + 0.35, Y0 - 0.3, lerp( Y0, S.floor, 0.5 ), 0, 0.72, concrete );
 
 			}
 
 		} else {
 
-			wallBox( B, 'stone', o.x0 - 0.1, o.x1 + 0.1, o.y0 - 0.1, o.y0, - 0.12, 0.1, { ...ochre, tint: P.cope } );
+			wallBox( B, 'stationMasonry', o.x0 - 0.1, o.x1 + 0.1, o.y0 - 0.1, o.y0, - 0.12, 0.1, { ...ochre, tint: P.cope } );
 			B.pushAt( 0, 0, - 0.14 );
 			const w = windowUnit( B, rand, o.at, o.y0 + 0.02, o.w - 0.16, o.y1 - o.y0 - 0.2, { ...WINDOW, litChance: o.lit ?? WINDOW.litChance } );
 			B.pop();
@@ -398,9 +403,9 @@ function chimney( ctx, x, z, y0, y1, seed ) {
 	const { B } = ctx;
 	B.pushAt( x, 0, z );
 	const white = { tint: P.white, data: PLASTER( seed ) }, ochre = { tint: P.ochre, data: PLASTER( seed + 0.3 ) };
-	wallBox( B, 'stone', - 0.6, 0.6, y0, y1, - 0.4, 0.4, white );
-	wallBox( B, 'stone', - 0.66, 0.66, y1, y1 + 0.12, - 0.46, 0.46, ochre );
-	for ( const px of [ - 0.3, 0.3 ] ) B.cyl( 'stone', px, y1 + 0.12, 0, 0.12, 0.14, 0.42, { segs: 10, tint: P.pot, data: [ seed + px, 1, 0.3, 0 ] } );
+	wallBox( B, 'stationMasonry', - 0.6, 0.6, y0, y1, - 0.4, 0.4, white );
+	wallBox( B, 'stationMasonry', - 0.66, 0.66, y1, y1 + 0.12, - 0.46, 0.46, ochre );
+	for ( const px of [ - 0.3, 0.3 ] ) B.cyl( 'stationMasonry', px, y1 + 0.12, 0, 0.12, 0.14, 0.42, { segs: 10, tint: P.pot, data: [ seed + px, 1, 0.3, 0 ] } );
 	B.pop();
 
 }
@@ -446,16 +451,16 @@ export const ROOM = { x0: - 9, x1: 1.2, z0: - 1.2, z1: 5.4, ceiling: Y0 + 3.6, d
 // the keepers' house: an L round the tower's south-west, the tower at its north-east corner
 function keepersHouse( ctx, village, parts ) {
 
-	const S = { floor: TOWER.floor, eaves: Y0 + 3.95, top: Y0 + 4.5, t: 0.6, seed: 0.37 };
+	const S = { floor: TOWER.floor, eaves: Y0 + 3.95, top: Y0 + 4.19, t: 0.6, seed: 0.37 };
 	// outline (outer faces) from the tower corner, counter-clockwise in plan: north face west, west face
 	// south, the south faces and the inner corner, the east face back north to the tower (the tower's own
 	// wall closes the corner)
 	const walls = [
-		{ a: [ - 2.6, - 1.8 ], b: [ - 22, - 1.8 ], quoins: [ false, true ], openings: [ { at: 3.9 }, { at: 7.9 }, { at: 11.9 }, { at: 15.9 } ] },
+		{ a: [ - 2.6, - 1.8 ], b: [ - 22, - 1.8 ], quoins: [ false, true ], openings: [ { at: 3.9 }, { at: 7.9 }, { at: 11.9 }, { at: 15.9, kind: 'door' } ] },
 		{ a: [ - 22, - 1.8 ], b: [ - 22, 6 ], quoins: [ true, true ], openings: [ { at: 2.2 }, { at: 5.6 } ] },
-		{ a: [ - 22, 6 ], b: [ - 6, 6 ], quoins: [ true, false ], openings: [ { at: 2.0 }, { at: 5.5 }, { at: 9.0 }, { at: 12.0, kind: 'door' }, { at: 14.4 } ] },
+		{ a: [ - 22, 6 ], b: [ - 6, 6 ], quoins: [ true, false ], openings: [ { at: 3.6 }, { at: 10.9, kind: 'door' } ] },
 		{ a: [ - 6, 6 ], b: [ - 6, 15 ], quoins: [ false, true ], openings: [ { at: 2.4, kind: 'door' }, { at: 6.0 } ] },
-		{ a: [ - 6, 15 ], b: [ 1.8, 15 ], quoins: [ true, true ], openings: [ { at: 2.2 }, { at: 5.6 } ] },
+		{ a: [ - 6, 15 ], b: [ 1.8, 15 ], quoins: [ true, true ], openings: [ { at: 1.35 }, { at: 3.9 }, { at: 6.45 } ] },
 		{ a: [ 1.8, 15 ], b: [ 1.8, 2.6 ], quoins: [ true, false ], openings: [ { at: 2.0 }, { at: 5.4 }, { at: 15 - ROOM.door.z, kind: 'door', leaf: false } ] },
 	];
 	let u0 = 0;
@@ -480,7 +485,9 @@ function keepersHouse( ctx, village, parts ) {
 	const { colliders } = ctx, R = ROOM, hy = new Vector3( 0, 2.6, 0 );
 	const box = ( x0, z0, x1, z1, tag = 'house' ) => colliders.addBox( new Vector3( ( x0 + x1 ) / 2, Y0 + 2.2, ( z0 + z1 ) / 2 ), hy.clone().setX( ( x1 - x0 ) / 2 ).setZ( ( z1 - z0 ) / 2 ), 0, { tag } );
 	box( - 22, - 1.8, R.x0, 6 ); // the west rooms
-	box( - 6, R.z1, 1.8, 15 ); // the south wing
+	box( - 6, R.z1, - 5.4, 15, 'wall' );
+	box( 1.2, R.z1, 1.8, 15, 'wall' );
+	box( - 5.4, 14.4, 1.2, 15, 'wall' ); // playable kitchen and spare berth in the south wing
 	box( R.x0, 5.4, - 6, 6, 'wall' ); // the room's south wall, west of the wing
 	box( R.x0, - 1.8, - 2.6, R.z0, 'wall' ); // its north wall, to the tower
 	box( R.x1, 2.6, 1.8, R.door.z - R.door.w / 2, 'wall' ); // its east wall, either side of the door
@@ -503,7 +510,7 @@ function keepersRoom( ctx, parts, S ) {
 	const plaster = { tint: P.white, data: PLASTER( 0.43, 0.25 ) };
 	const boards = { tint: lin( 0x9b815f ), data: WOOD( 0.5, 0.08 ) };
 	rectAroundTower( B, 'stationFloor', R.x0, R.z0, R.x1 + 0.6, R.z1, 3.3, F, true, boards );
-	rectAroundTower( B, 'stone', R.x0, R.z0, R.x1, R.z1, 3.0, R.ceiling, false, plaster );
+	rectAroundTower( B, 'stationMasonry', R.x0, R.z0, R.x1, R.z1, 3.0, R.ceiling, false, plaster );
 	// the threshold through the tower's wall, and the step up at the yard door
 	sectorSlab( B, 'stationFlags', TOWER.rIn - 0.05, 3.5, TOWER.doorAngle - DOOR_HALF, TOWER.doorAngle + DOOR_HALF, F - 0.12, F, { tint: P.flags, data: RUBBLE( 0.45 ) } );
 	colliders.addBox( new Vector3( ( R.x0 + 1.8 ) / 2, F - 0.25, ( R.z0 + R.z1 ) / 2 ), new Vector3( ( 1.8 - R.x0 ) / 2, 0.25, ( R.z1 - R.z0 ) / 2 ), 0, { walkable: true, solid: false, tag: 'floor' } );
@@ -511,13 +518,9 @@ function keepersRoom( ctx, parts, S ) {
 	colliders.addBox( new Vector3( 1.98, F - 0.2, R.door.z ), new Vector3( 0.18, 0.19, 0.75 ), 0, { walkable: true, tag: 'step' } );
 
 	// the partitions: west (to the bedrooms) and south (to the kitchen), each with a shut door
-	const part = ( x0, z0, x1, z1 ) => wallBox( B, 'stone', x0, x1, F - 0.1, R.ceiling + 0.1, z0, z1, { u0: 0, ...plaster } );
+	const part = ( x0, z0, x1, z1 ) => wallBox( B, 'stationMasonry', x0, x1, F - 0.1, R.ceiling + 0.1, z0, z1, { u0: 0, ...plaster } );
 	part( R.x0 - 0.6, R.z0, R.x0, R.z1 );
-	part( - 5.4, R.z1, R.x1, R.z1 + 0.6 );
 	B.pushAt( R.x0, 0, 2.6, Math.PI / 2 );
-	stationDoorUnit( B, rand, 0, F, true );
-	B.pop();
-	B.pushAt( - 2.2, 0, R.z1, Math.PI );
 	stationDoorUnit( B, rand, 0, F, true );
 	B.pop();
 	R.westDoor = new Vector3( R.x0 + 0.1, F + 1.0, 2.6 );
@@ -573,7 +576,7 @@ function keepersRoom( ctx, parts, S ) {
 	B.rod( 'stationTimber', [ desk.x + 0.38, top + 0.04, desk.z + 0.05 ], [ desk.x + 0.5, top + 0.045, desk.z + 0.16 ], 0.004, 0.003, { segs: 4, tint: lin( 0x2a1a10 ), data: WOOD( 0.98, 0.2 ) } );
 	B.pushAt( desk.x - 0.48, top, desk.z - 0.2, 0, - 0.25 );
 	B.box( 'stationTimber', 0, 0.2, 0, 0.36, 0.42, 0.025, { grain: 0, tint: lin( 0x6b5036 ), data: WOOD( 0.99, 0.4 ) } );
-	B.box( 'stone', 0, 0.2, 0.014, 0.3, 0.36, 0.006, { u0: 0, tint: lin( 0x2e3135 ), data: RUBBLE( 0.79 ) } );
+	B.box( 'stationMasonry', 0, 0.2, 0.014, 0.3, 0.36, 0.006, { u0: 0, tint: lin( 0x2e3135 ), data: RUBBLE( 0.79 ) } );
 	B.pop();
 	B.box( 'stationTimber', desk.x - 0.36, top + 0.004, desk.z + 0.14, 0.21, 0.004, 0.28, { grain: 0, tint: lin( 0xe8e0cc ), data: WOOD( 0.11, 0.05, 0.9, 0 ) } );
 	R.journal = new Vector3( desk.x + 0.05, top + 0.05, desk.z + 0.04 );
@@ -620,6 +623,7 @@ function keepersRoom( ctx, parts, S ) {
 	B.pop();
 	R.oilskins = new Vector3( R.x1 - 0.15, F + 1.4, 3.2 );
 	dressKeepersRoom( ctx, R, F );
+	nextRooms( ctx, parts, F, R.ceiling, P, door );
 
 }
 
@@ -782,7 +786,7 @@ function lanternFloor( B, y, top, under ) {
 		const t = [ P( Sa0, W0, y ), P( Sb0, W1, y ), P( Sb1, W1, y ), P( Sa1, W0, y ) ];
 		poly( B, 'stationFloor', t, ( q ) => [ q[ 0 ], q[ 2 ] ], { ...top, face: [ 0, 1, 0 ] } );
 		const b = [ P( Sa0, W0, y - 0.2 ), P( Sa1, W0, y - 0.2 ), P( Sb1, W1, y - 0.2 ), P( Sb0, W1, y - 0.2 ) ];
-		poly( B, 'stone', b, ( q ) => [ q[ 0 ], q[ 2 ] ], { ...under, face: [ 0, - 1, 0 ] } );
+		poly( B, 'stationMasonry', b, ( q ) => [ q[ 0 ], q[ 2 ] ], { ...under, face: [ 0, - 1, 0 ] } );
 
 	};
 
@@ -960,21 +964,21 @@ function tower( ctx, parts ) {
 	const dA = T.doorAngle, dw = DOOR_HALF, past = [ dA + dw, dA - dw + Math.PI * 2 ];
 
 	// stage 1: the ochre base and the white shaft, cut for the doorway from the keepers' room
-	revolve( B, 'stone', [ [ 3.45, Y0 - 0.5 ], [ 3.45, Y0 + 0.72 ], [ 3.3, Y0 + 0.92 ], [ 3.2, Y0 + 0.92 ] ], { ...ochre, arc: past } );
-	revolve( B, 'stone', [ [ 3.2, Y0 + 0.9 ], [ r( T.doorTop ), T.doorTop ] ], { ...white, arc: past } );
-	revolve( B, 'stone', [ [ r( T.doorTop ), T.doorTop ], [ 2.95, Y0 + 16.6 ] ], white );
+	revolve( B, 'stationMasonry', [ [ 3.45, Y0 - 0.5 ], [ 3.45, Y0 + 0.72 ], [ 3.3, Y0 + 0.92 ], [ 3.2, Y0 + 0.92 ] ], { ...ochre, arc: past } );
+	revolve( B, 'stationMasonry', [ [ 3.2, Y0 + 0.9 ], [ r( T.doorTop ), T.doorTop ] ], { ...white, arc: past } );
+	revolve( B, 'stationMasonry', [ [ r( T.doorTop ), T.doorTop ], [ 2.95, Y0 + 16.6 ] ], white );
 	// the inside: limewashed, the doorway cut through; a flagged floor; the reveals and the lintel
 	const inside = { tint: P.white, data: PLASTER( 0.17, 0.2 ) };
-	revolve( B, 'stone', [ [ T.rIn, T.deck - 0.2 ], [ T.rIn, T.doorTop ] ], inside );
-	revolve( B, 'stone', [ [ T.rIn, T.doorTop ], [ T.rIn, T.floor ] ], { ...inside, arc: past } );
+	revolve( B, 'stationMasonry', [ [ T.rIn, T.deck - 0.2 ], [ T.rIn, T.doorTop ] ], inside );
+	revolve( B, 'stationMasonry', [ [ T.rIn, T.doorTop ], [ T.rIn, T.floor ] ], { ...inside, arc: past } );
 	revolve( B, 'stationFlags', [ [ T.rIn + 0.1, T.floor ], [ 0.001, T.floor ] ], { segs: 32, tint: P.flags, data: RUBBLE( 0.47 ) } );
-	revolve( B, 'stone', [ [ T.rIn, T.doorTop ], [ 3.24, T.doorTop ] ], { ...inside, arc: [ dA - dw, dA + dw ] } );
+	revolve( B, 'stationMasonry', [ [ T.rIn, T.doorTop ], [ 3.24, T.doorTop ] ], { ...inside, arc: [ dA - dw, dA + dw ] } );
 	for ( const s of [ - 1, 1 ] ) {
 
 		// each side faces into the opening
 		const a = dA + s * dw, c = Math.cos( a ), sn = Math.sin( a );
 		const q = [ [ T.rIn * c, T.floor, T.rIn * sn ], [ 3.46 * c, T.floor, 3.46 * sn ], [ 3.46 * c, T.doorTop, 3.46 * sn ], [ T.rIn * c, T.doorTop, T.rIn * sn ] ];
-		poly( B, 'stone', q, ( p ) => [ Math.hypot( p[ 0 ], p[ 2 ] ), p[ 1 ] - Y0 ], { ...inside, face: [ s * sn, 0, - s * c ] } );
+		poly( B, 'stationMasonry', q, ( p ) => [ Math.hypot( p[ 0 ], p[ 2 ] ), p[ 1 ] - Y0 ], { ...inside, face: [ s * sn, 0, - s * c ] } );
 
 	}
 
@@ -991,7 +995,16 @@ function tower( ctx, parts ) {
 	}
 
 	sectorSlab( B, 'hard', T.newel, T.rIn + 0.05, T.landingFrom, T.landingTo, T.landing - 0.06, T.landing, tread, 8 );
-	B.cyl( 'hard', 0, T.floor, 0, T.newel, T.newel, T.deck - T.floor, { segs: 16, ...iron } );
+	if ( ctx.keeperStudy ) {
+		// An exposed teaching section, only in the keeper study. Retain the solid
+		// newel collider and stair connections; this is not an original Flannan opening.
+		parts.weightWay = { bottom: T.floor + .65, top: T.deck - .8, anchor: T.deck - .25, angle: T.hatch.angle };
+		sectorSlab( B, 'hard', T.newel - .025, T.newel, T.hatch.angle + Math.PI / 3, T.hatch.angle + 5 * Math.PI / 3, T.floor, T.deck - .2, iron, 16 );
+		for ( const a of [ T.hatch.angle - Math.PI / 3, T.hatch.angle + Math.PI / 3 ] ) {
+			B.rod( 'hard', [ Math.cos( a ) * T.newel, T.floor, Math.sin( a ) * T.newel ], [ Math.cos( a ) * T.newel, T.deck - .2, Math.sin( a ) * T.newel ], .012, .012, { segs: 6, ...iron } );
+		}
+		for ( const y of [ T.floor + .25, T.deck - .35 ] ) B.torus( 'hard', 0, y, 0, T.newel, .014, { radial: 6, tubular: 24, ...iron } );
+	} else B.cyl( 'hard', 0, T.floor, 0, T.newel, T.newel, T.deck - T.floor, { segs: 16, ...iron } );
 	// Timber handrail, sampled at each tread to keep the curve smooth
 	const rail = [];
 	for ( let i = 0; i <= T.count; i ++ ) {
@@ -1045,9 +1058,9 @@ function tower( ctx, parts ) {
 	}
 
 	// stage 2: the corbelled walkway (a stone floor, iron railings)
-	revolve( B, 'stone', [ [ 2.95, Y0 + 16.2 ], [ 3.02, Y0 + 16.35 ], [ 3.02, Y0 + 16.5 ], [ 3.28, Y0 + 16.65 ], [ 3.28, Y0 + 16.85 ], [ 3.58, Y0 + 17.05 ], [ 3.58, Y0 + 17.22 ], [ 3.86, Y0 + 17.32 ], [ 3.86, Y0 + 17.58 ], [ 3.82, Y0 + 17.6 ] ], ochre );
-	revolve( B, 'stone', [ [ 3.82, T.deck ], [ 2.2, T.deck ] ], { segs: 48, tint: P.flags, data: PLASTER( 0.29, 0.3 ) } );
-	revolve( B, 'stone', [ [ 2.2, T.deck - 0.2 ], [ T.rIn + 0.6, T.deck - 0.2 ] ], { segs: 48, tint: P.white, data: PLASTER( 0.31, 0.2 ) } );
+	revolve( B, 'stationMasonry', [ [ 2.95, Y0 + 16.2 ], [ 3.02, Y0 + 16.35 ], [ 3.02, Y0 + 16.5 ], [ 3.28, Y0 + 16.65 ], [ 3.28, Y0 + 16.85 ], [ 3.58, Y0 + 17.05 ], [ 3.58, Y0 + 17.22 ], [ 3.86, Y0 + 17.32 ], [ 3.86, Y0 + 17.58 ], [ 3.82, Y0 + 17.6 ] ], white );
+	revolve( B, 'stationMasonry', [ [ 3.82, T.deck ], [ 2.2, T.deck ] ], { segs: 48, tint: P.flags, data: PLASTER( 0.29, 0.3 ) } );
+	revolve( B, 'stationMasonry', [ [ 2.2, T.deck - 0.2 ], [ T.rIn + 0.6, T.deck - 0.2 ] ], { segs: 48, tint: P.white, data: PLASTER( 0.31, 0.2 ) } );
 	// HES LB48143 describes a boarded timber deck supported on iron girders.
 	// Board width, species and finish are reconstruction; retain the open hatch.
 	lanternFloor( B, T.deck, { tint: lin( 0x907657 ), data: WOOD( 0.37, 0.08 ) }, { tint: P.white, data: PLASTER( 0.33, 0.2 ) } );
@@ -1067,18 +1080,20 @@ function tower( ctx, parts ) {
 	// door through the pedestal and one pane's height onto the walkway (pane 11, north-west)
 	const ga = T.galleryDoor, gw = 0.16, gPast = [ ga + gw, ga - gw + Math.PI * 2 ];
 	const top = deck + 1.38;
-	revolve( B, 'hard', [ [ 2.34, deck ], [ 2.3, top ] ], { segs: 32, ...iron, arc: gPast } );
-	revolve( B, 'hard', [ [ 2.2, top ], [ 2.2, deck ] ], { segs: 32, ...iron, arc: gPast } );
-	sectorSlab( B, 'hard', 2.2, 2.75, gPast[ 0 ], gPast[ 1 ], top, top + 0.1, iron, 40 );
+	const drumPaint = { tint: P.white, data: HARD( 0.29, 0, 0, 0.78 ) };
+	portholeDrum( B, { bottom: deck, top, radius: 2.6, doorAngle: ga, doorHalf: gw, paint: drumPaint, iron } );
+	sectorSlab( B, 'hard', 2.2, 2.94, gPast[ 0 ], gPast[ 1 ], top, top + 0.1, drumPaint, 64 );
+	B.torus( 'hard', 0, deck + 0.035, 0, 2.6, 0.035, { radial: 6, tubular: 64, ...drumPaint } );
 	for ( let i = 0; i < 24; i ++ ) {
 
 		const a = ( i + 0.5 ) / 24 * Math.PI * 2;
 		if ( Math.abs( Math.atan2( Math.sin( a - ga ), Math.cos( a - ga ) ) ) < gw + 0.12 ) continue;
-		B.rod( 'hard', [ Math.cos( a ) * 2.66, top + 0.1, Math.sin( a ) * 2.66 ], [ Math.cos( a ) * 2.66, top + 0.95, Math.sin( a ) * 2.66 ], 0.016, 0.014, { segs: 4, ...iron } );
+		B.rod( 'hard', [ Math.cos( a ) * 2.86, top + 0.1, Math.sin( a ) * 2.86 ], [ Math.cos( a ) * 2.86, top + 0.95, Math.sin( a ) * 2.86 ], 0.016, 0.014, { segs: 5, ...iron } );
 
 	}
 
-	B.torus( 'hard', 0, top + 0.95, 0, 2.66, 0.022, { radial: 5, tubular: 48, ...iron } );
+	B.torus( 'hard', 0, top + 0.95, 0, 2.86, 0.022, { radial: 5, tubular: 64, ...iron } );
+	B.torus( 'hard', 0, top + 0.48, 0, 2.86, 0.012, { radial: 5, tubular: 64, ...iron } );
 	// the door's frame: jambs through the pedestal and the sill, a head; the leaf is a moving part
 	const doorTop = deck + 1.95;
 	for ( const a of [ ga - gw, ga + gw ] ) {
@@ -1164,10 +1179,10 @@ function tower( ctx, parts ) {
 		const a = deg * Math.PI / 180, y = Y0 + h, rr = r( y );
 		B.pushAt( 0, 0, 0, Math.PI / 2 - a );
 		const w = 0.56, hh = 0.95, z0 = rr - 0.07, o = { tint: P.ochre, data: PLASTER( 0.19 ), u0: 0 };
-		wallBox( B, 'stone', - w / 2 - 0.16, - w / 2, y - hh / 2 - 0.06, y + hh / 2, z0, rr + 0.05, o );
-		wallBox( B, 'stone', w / 2, w / 2 + 0.16, y - hh / 2 - 0.06, y + hh / 2, z0, rr + 0.05, o );
-		wallBox( B, 'stone', - w / 2 - 0.16, w / 2 + 0.16, y + hh / 2, y + hh / 2 + 0.18, z0, rr + 0.05, o );
-		wallBox( B, 'stone', - w / 2 - 0.08, w / 2 + 0.08, y - hh / 2 - 0.1, y - hh / 2, z0, rr + 0.1, { ...o, tint: P.cope } );
+		wallBox( B, 'stationMasonry', - w / 2 - 0.16, - w / 2, y - hh / 2 - 0.06, y + hh / 2, z0, rr + 0.05, o );
+		wallBox( B, 'stationMasonry', w / 2, w / 2 + 0.16, y - hh / 2 - 0.06, y + hh / 2, z0, rr + 0.05, o );
+		wallBox( B, 'stationMasonry', - w / 2 - 0.16, w / 2 + 0.16, y + hh / 2, y + hh / 2 + 0.18, z0, rr + 0.05, o );
+		wallBox( B, 'stationMasonry', - w / 2 - 0.08, w / 2 + 0.08, y - hh / 2 - 0.1, y - hh / 2, z0, rr + 0.1, { ...o, tint: P.cope } );
 		B.part( 'glass', quad01Part( w, hh ), 0, y, rr + 0.02, { tint: P.curtain, data: [ rand.next() * 0.3, 0, 0, 0 ] } );
 		B.box( 'wood', 0, y, rr + 0.035, w, 0.04, 0.03, { grain: 0, tint: P.trim, data: WOOD( rand.next(), 0.3, 0.85 ) } );
 		B.pop();
@@ -1183,19 +1198,31 @@ function tower( ctx, parts ) {
 
 // ------------------------------------------------------------------ the compound
 
+// Slender iron palings visible in the supplied older principal-elevation photo.
+// Exact spacing, finial shape and the masonry plinth height are reconstructed.
+function yardFence( B, start, end, bottom, z ) {
+	const iron = { tint: P.black, data: IRON( 0.63, 0.035 ) }, height = 1.05;
+	for ( const y of [ bottom + 0.26, bottom + 0.81 ] ) B.box( 'hard', ( start + end ) / 2, y, z, end - start, 0.027, 0.025, iron );
+	const count = Math.max( 1, Math.round( ( end - start ) / 0.17 ) );
+	for ( let i = 0; i <= count; i ++ ) {
+		const x = lerp( start, end, i / count ), post = i % 12 === 0;
+		B.rod( 'hard', [ x, bottom, z ], [ x, bottom + height, z ], post ? 0.017 : 0.009, post ? 0.014 : 0.008, { segs: 5, ...iron } );
+		B.lathe( 'hard', x, bottom + height, z, [ [ 0.009, 0 ], [ 0.018, 0.027 ], [ 0.001, 0.085 ] ], { segs: 5, ...iron } );
+	}
+}
+
 function compound( ctx, village, parts ) {
 
 	const { B, colliders } = ctx;
 	const { x0, x1, z0, z1 } = STATION.compound, sg = STATION.southGate, eg = STATION.eastGate;
 	const top = Y0 + 1.75, T = 0.5;
 	// HES and the exterior photograph show exposed rubble boundaries, not a white rendered wall.
-	const white = { tint: P.gneiss, data: RUBBLE( 0.53 ) };
 	const cope = { tint: P.cope, data: RUBBLE( 0.59 ) };
 	// the four sides (outside on the left walking a -> b) and the gaps for the gates, in metres along each
 	const sides = [
 		{ a: [ x1, z0 ], b: [ x0, z0 ], gaps: [] },
 		{ a: [ x0, z0 ], b: [ x0, z1 ], gaps: [] },
-		{ a: [ x0, z1 ], b: [ x1, z1 ], gaps: [ [ sg.x - x0 - sg.w / 2, sg.x - x0 + sg.w / 2 ] ] },
+		{ a: [ x0, z1 ], b: [ x1, z1 ], palings: true, gaps: [ [ sg.x - x0 - sg.w / 2, sg.x - x0 + sg.w / 2 ] ] },
 		{ a: [ x1, z1 ], b: [ x1, z0 ], gaps: [ [ z1 - eg.z - eg.w / 2, z1 - eg.z + eg.w / 2 ] ] },
 	];
 	let u0 = 0;
@@ -1215,8 +1242,21 @@ function compound( ctx, village, parts ) {
 		runs.push( [ x, L ] );
 		for ( const [ a, b ] of runs ) {
 
-			wallBox( B, 'stone', a, b, Y0 - 0.5, top, - T, 0, { ...white, u0 } );
-			wallBox( B, 'stone', a - 0.03, b + 0.03, top, top + 0.1, - T - 0.04, 0.04, { ...cope, u0 } );
+			const masonryTop = s.palings ? Y0 + 0.62 : top;
+			// Full-thickness fitted blocks, with a narrow recessed mortar web.
+			wallBox( B, 'stationMasonry', a + .01, b - .01, Y0 - .5, masonryTop - .015, -T + .055, -.055,
+				{ tint: lin( 0xaaa69a ), data: [ .53, 4, 0, 1 ] } );
+			B.pushAt( a, 0, 0 );
+			parts.masonry.compound += fittedStoneWall( B, { length: b-a, bottom: Y0-.35, top: masonryTop, depth: T,
+				seed: .53 + u0*.03 + a*.07, tint: P.gneiss } );
+			B.pop();
+			// Saddleback coping, rather than a uniformly flat concrete strip.
+			for ( let x = a; x < b - 0.01; x += 0.78 ) {
+				const to = Math.min( b, x + 0.765 );
+				B.slab( 'stationMasonry', [ new Vector3( x, masonryTop, -T - 0.04 ), new Vector3( to, masonryTop, -T - 0.04 ), new Vector3( to, masonryTop + 0.13, -T / 2 ), new Vector3( x, masonryTop + 0.13, -T / 2 ) ], 0.05, { ...cope } );
+				B.slab( 'stationMasonry', [ new Vector3( x, masonryTop + 0.13, -T / 2 ), new Vector3( to, masonryTop + 0.13, -T / 2 ), new Vector3( to, masonryTop, 0.04 ), new Vector3( x, masonryTop, 0.04 ) ], 0.05, { ...cope } );
+			}
+			if ( s.palings ) yardFence( B, a + 0.035, b - 0.035, masonryTop + 0.13, -T / 2 );
 			const c = B.toWorld( ( a + b ) / 2, ( Y0 + top ) / 2, - T / 2 );
 			colliders.addBox( c, new Vector3( ( b - a ) / 2, ( top - Y0 ) / 2 + 0.3, T / 2 ), ry, { tag: 'wall' } );
 
@@ -1227,9 +1267,15 @@ function compound( ctx, village, parts ) {
 
 			for ( const gx of [ g0 - 0.36, g1 + 0.36 ] ) {
 
-				wallBox( B, 'stone', gx - 0.38, gx + 0.38, Y0 - 0.5, Y0 + 2.25, - T / 2 - 0.38, - T / 2 + 0.38, { tint: P.white, data: PLASTER( 0.71, 0.2 ) } );
-				wallBox( B, 'stone', gx - 0.44, gx + 0.44, Y0 + 2.25, Y0 + 2.4, - T / 2 - 0.44, - T / 2 + 0.44, { tint: P.ochre, data: PLASTER( 0.77 ) } );
-				B.lathe( 'stone', gx, Y0 + 2.4, - T / 2, [ [ 0.001, 0 ], [ 0.52, 0 ], [ 0.44, 0.06 ], [ 0.001, 0.4 ] ], { segs: 4, ry: Math.PI / 4, tint: P.ochre, data: PLASTER( 0.79 ) } );
+				// Gate piers use larger dressed corner stones, preserving their caps.
+				for ( let row = 0; row < 9; row ++ ) {
+					const y = Y0 - .35 + row * ( 2.6 / 9 );
+					stoneBlock( B, { x0: gx-.38, x1: gx+.38, y0: y+.006, y1: y+2.6/9-.006,
+						back: -T/2-.38, front: -T/2+.38, seed: .71+gx*.13+row*.77, tint: P.gneiss, relief: .5 } );
+					parts.masonry.piers ++;
+				}
+				wallBox( B, 'stationMasonry', gx - 0.44, gx + 0.44, Y0 + 2.25, Y0 + 2.4, - T / 2 - 0.44, - T / 2 + 0.44, { tint: P.ochre, data: PLASTER( 0.77 ) } );
+				B.lathe( 'stationMasonry', gx, Y0 + 2.4, - T / 2, [ [ 0.001, 0 ], [ 0.52, 0 ], [ 0.44, 0.06 ], [ 0.001, 0.4 ] ], { segs: 4, ry: Math.PI / 4, tint: P.ochre, data: PLASTER( 0.79 ) } );
 				const c = B.toWorld( gx, Y0 + 1.2, - T / 2 );
 				colliders.addBox( c, new Vector3( 0.4, 1.3, 0.4 ), ry, { tag: 'wall' } );
 
@@ -1270,16 +1316,28 @@ function landing( ctx, name, L ) {
 
 	const { B, rand, colliders, terrain } = ctx;
 	const [ dx, dz ] = L.dir, ry = Math.atan2( - dz, dx );
-	const concrete = ( s ) => ( { tint: P.concrete, data: PLASTER( s, 0.3 ), v0: 0 } );
+	const concrete = ( s ) => ( { tint: lin( 0x727974 ), data: [ s, 0, 0, 0 ], v0: 0 } );
 	const iron = { tint: P.black, data: IRON( 0.43, 0.55 ) };
 	const head = L.head, pts = L.steps.pts, stageY = L.stage.y;
 	B.pushAt( head.x, 0, head.z, ry ); // local x: seaward along the geo, z across it
 
-	// the stage at the head of the geo, with its bollards and crane
-	wallBox( B, 'stone', - 1.5, 7.5, - 2.5, stageY, - 3.3, 3.3, concrete( 0.11 ) );
+	// Cast landing plinth with clipped corners and a slightly battered sea face.
+	// Its dimensions and fittings are a reconstruction, not a measured dock plan.
+	const plinth = ( x0, x1, z0, z1, bottom, top ) => {
+		const c = 0.28, outline = [ [ x0 + c, z0 ], [ x1 - c, z0 ], [ x1, z0 + c ], [ x1, z1 - c ], [ x1 - c, z1 ], [ x0 + c, z1 ], [ x0, z1 - c ], [ x0, z0 + c ] ];
+		const upper = outline.map( ( [ x, z ] ) => [ x, top, z ] );
+		const lower = outline.map( ( [ x, z ] ) => [ x + ( x > ( x0 + x1 ) / 2 ? 0.16 : -0.16 ), bottom, z + ( z > ( z0 + z1 ) / 2 ? 0.16 : -0.16 ) ] );
+		const uv = p => [ p[0] + p[2] * 0.4, p[1] ];
+		poly( B, 'landingConcrete', upper, uv, { ...concrete( .11 ), face: [ 0, 1, 0 ] } );
+		for ( let i = 0; i < outline.length; i ++ ) {
+			const j = ( i + 1 ) % outline.length;
+			poly( B, 'landingConcrete', [ upper[i], lower[i], lower[j], upper[j] ], uv, { ...concrete( .11 ), face: [ ( outline[i][0] + outline[j][0] - x0 - x1 ), 0, ( outline[i][1] + outline[j][1] - z0 - z1 ) ] } );
+		}
+	};
+	plinth( -1.5, 7.5, -3.3, 3.3, -2.5, stageY );
 	bollard( B, 6.6, stageY, - 2.6, rand.next() );
 	bollard( B, 6.6, stageY, 2.6, rand.next() );
-	derrick( B, 4.2, stageY, 2.45, rand );
+	if ( name === 'east' ) derrick( B, 3.8, stageY, 2.2, rand );
 	colliders.addBox( B.toWorld( 3, stageY - 1.5, 0 ), new Vector3( 4.5, 1.5, 3.3 ), ry, { walkable: true, tag: 'stage' } );
 
 	// the flight: one riser per 0.19 m (or less) of the graded profile, one metre of run per point
@@ -1297,14 +1355,22 @@ function landing( ctx, name, L ) {
 		for ( let k = 1; k <= n; k ++ ) {
 
 			const ta = i - 1 + ( k - 1 ) / n, tb = i - 1 + k / n, y = y0 + dy * k / n;
-			wallBox( B, 'stone', - tb, - ta, y - 0.6, y, - W / 2, W / 2, { ...concrete( 0.13 ), u0: 0 } );
+			wallBox( B, 'landingConcrete', - tb, - ta, y - 0.9, y - 0.018, - W / 2, W / 2, { ...concrete( 0.13 ), u0: 0 } );
+			// Small cast arris rather than a razor-thin luminous edge at each riser.
+			poly( B, 'landingConcrete', [ [ -tb, y, -W/2 ], [ -tb, y, W/2 ], [ -ta-0.018, y, W/2 ], [ -ta-0.018, y, -W/2 ] ], p => [ p[0], p[2] ], { ...concrete(.13), face: [0,1,0] } );
+			poly( B, 'landingConcrete', [ [ -ta-0.018, y, -W/2 ], [ -ta-0.018, y, W/2 ], [ -ta, y-0.018, W/2 ], [ -ta, y-0.018, -W/2 ] ], p => [ p[0], p[2] ], { ...concrete(.13), face: [1,1,0] } );
 			colliders.addBox( B.toWorld( - ( ta + tb ) / 2, y - 0.3, 0 ), new Vector3( ( tb - ta ) / 2, 0.3, W / 2 ), ry, { walkable: true, solid: false, tag: 'steps' } );
 
 		}
 
 	}
 
-	// iron railings on both sides: stanchions every 1.6 m, a handrail and a middle rail
+	// Continuous concrete cheeks support iron sockets and tie the flight to rock.
+	for ( let t = 0; t < pts.length - 1; t ++ ) for ( const side of [ -1, 1 ] ) {
+		const z = side * ( W/2 + 0.19 );
+		B.beam( 'landingConcrete', [ -t, at(t)-0.16, z ], [ -t-1, at(t+1)-0.16, z ], 0.32, 0.38, concrete(.19) );
+	}
+	// Iron stanchions with flanged feet and collars, two restrained horizontal rails.
 	const end = pts.length - 1;
 	for ( const side of [ - 1, 1 ] ) {
 
@@ -1313,7 +1379,10 @@ function landing( ctx, name, L ) {
 		for ( let i = 0; i < posts.length; i ++ ) {
 
 			const [ x, y, z ] = posts[ i ];
+			B.box( 'hard', x, y + 0.03, z, 0.15, 0.055, 0.15, iron );
+			B.cyl( 'hard', x, y + 0.055, z, .036, .045, .08, { segs: 8, ...iron } );
 			B.rod( 'hard', [ x, y - 0.25, z ], [ x, y + 1.0, z ], 0.022, 0.02, { segs: 5, ...iron } );
+			B.cyl( 'hard', x, y + .93, z, .029, .029, .04, { segs: 8, ...iron } );
 			if ( i === 0 ) continue;
 			const [ px, py, pz ] = posts[ i - 1 ];
 			B.rod( 'hard', [ px, py + 1.0, pz ], [ x, y + 1.0, z ], 0.02, 0.02, { segs: 5, ...iron } );
@@ -1321,6 +1390,35 @@ function landing( ctx, name, L ) {
 
 		}
 
+	}
+
+	// Muirhead's report places the WEST crane platform at 70 ft above the sea.
+	// Keep a separate lower boat stage. Platform footprint/connection are inferred.
+	if ( name === 'west' ) {
+		let t = 1; while ( t < end && pts[t][1] < 70 * .3048 ) t ++;
+		const y = at(t), z = 3.7;
+		// Cut a seat for the elevated platform before terrain meshes are derived.
+		for ( let j=0; j<terrain.res; j++ ) for ( let i=0; i<terrain.res; i++ ) {
+			const wx=terrain.origin+(i+.5)*terrain.texel, wz=terrain.origin+(j+.5)*terrain.texel;
+			const along=(wx-head.x)*dx+(wz-head.z)*dz, across=-(wx-head.x)*dz+(wz-head.z)*dx;
+			if ( along < -t-2 || along > -t+3 || across < 1.3 || across > 6.8 ) continue;
+			const k=j*terrain.res+i;
+			terrain.heights[k]=Math.min(terrain.heights[k],y-.35);
+			terrain.rock[k]=1;
+		}
+		plinth( -t-1.5, -t+2.5, .7, 6.4, y-2.4, y );
+		colliders.addBox( B.toWorld(-t+.5,y-1.2,3.55), new Vector3(2,1.2,2.85), ry, { walkable:true, tag:'cranePlatform' } );
+		derrick( B, -t+.8, y, z, rand );
+		for ( const zz of [ 6.05 ] ) {
+			for ( const xx of [ -t-1.2, -t+2.15 ] ) B.rod('hard',[xx,y,zz],[xx,y+1,zz],.025,.022,{segs:6,...iron});
+			B.rod('hard',[-t-1.2,y+1,zz],[-t+2.15,y+1,zz],.023,.023,{segs:6,...iron});
+		}
+	}
+	// Small local working details on the east stage; no modern quay equipment.
+	if ( name === 'east' ) {
+		ropeCoil( B, 2.6, stageY + .015, -2.05, .028, .28, 4, .37 );
+		B.box( 'stationTimber', .1, stageY+.25, 2.45, 1.05, .5, .65, { tint:P.box, data:WOOD(.41,.15,.25,3) } );
+		for ( const x of [ -.27, .47 ] ) B.box( 'hard', x, stageY+.25, 2.45, .045, .52, .67, iron );
 	}
 
 	// the box of ropes and landing gear on the west flight, in a cleft beside the steps 33 m up
@@ -1349,20 +1447,45 @@ function landing( ctx, name, L ) {
 function derrick( B, x, y, z, rand ) {
 
 	const iron = { tint: lin( 0x2a2c2c ), data: IRON( rand.next(), 0.5 ) };
-	B.box( 'hard', x, y + 0.03, z, 0.8, 0.06, 0.8, iron );
+	B.box( 'hard', x, y + 0.06, z, 1.1, 0.12, 1.05, iron );
+	for ( const xx of [ -.4, .4 ] ) for ( const zz of [ -.38, .38 ] ) B.cyl( 'hard', x+xx, y+.12, z+zz, .035, .035, .07, {segs:6,...iron} );
 	const mastTop = [ x, y + 4.4, z ], jibFoot = [ x + 0.1, y + 0.5, z ];
 	const a = 38 * Math.PI / 180, jl = 5.6;
 	const tip = [ x + 0.1 + Math.cos( a ) * jl, y + 0.5 + Math.sin( a ) * jl, z - 0.4 ];
-	B.rod( 'hard', [ x, y, z ], mastTop, 0.11, 0.08, { segs: 8, ...iron } );
-	B.rod( 'hard', jibFoot, tip, 0.09, 0.06, { segs: 8, ...iron } );
+	B.rod( 'hard', [ x, y+.12, z ], mastTop, 0.17, 0.12, { segs: 12, ...iron } );
+	for ( const h of [ .35, .75, 3.95 ] ) B.cyl('hard',x,y+h,z,.20,.20,.1,{segs:12,...iron});
+	// Riveted web and two flanges give the jib a readable iron section.
+	B.beam( 'hard', jibFoot, tip, .055, .28, iron );
+	for ( const h of [ -.14, .14 ] ) B.beam( 'hard', [jibFoot[0],jibFoot[1]+h,jibFoot[2]], [tip[0],tip[1]+h,tip[2]], .24, .045, iron );
+	for ( let i=0; i<=8; i++ ) {
+		const t=i/8, px=lerp(jibFoot[0],tip[0],t), py=lerp(jibFoot[1],tip[1],t), pz=lerp(jibFoot[2],tip[2],t);
+		B.rod('hard',[px,py,pz-.055],[px,py,pz+.055],.024,.024,{segs:6,...iron});
+	}
+	B.torus('hard',tip[0],tip[1],tip[2],.19,.035,{rx:Math.PI/2,radial:6,tubular:20,...iron});
+	B.rod('hard',[tip[0],tip[1],tip[2]-.16],[tip[0],tip[1],tip[2]+.16],.05,.05,{segs:8,...iron});
 	B.tube( 'rope', [ new Vector3( ...mastTop ), new Vector3( ...tip ) ], 0.012, { tint: C.iron, data: [ rand.next(), 0, 0, 0 ] } );
 	B.tube( 'rope', sagPoints( tip, [ tip[ 0 ] + 0.05, y + 1.6, tip[ 2 ] ], 0.02, 3 ), 0.012, { tint: C.iron, data: [ rand.next(), 0, 0, 0 ] } );
-	B.torus( 'hard', tip[ 0 ] + 0.05, y + 1.5, tip[ 2 ], 0.07, 0.016, { rx: Math.PI / 2, radial: 4, tubular: 10, ...iron } );
+	B.torus( 'hard', tip[ 0 ] + 0.05, y + 1.45, tip[ 2 ], 0.12, 0.024, { rx: Math.PI / 2, radial: 6, tubular: 18, arc:Math.PI*1.65, ...iron } );
 	// the winch: two cheeks, the drum, a crank each side
-	for ( const s of [ - 0.3, 0.3 ] ) B.box( 'hard', x - 0.55, y + 0.45, z + s, 0.5, 0.9, 0.05, iron );
-	B.rod( 'hard', [ x - 0.55, y + 0.62, z - 0.3 ], [ x - 0.55, y + 0.62, z + 0.3 ], 0.12, 0.12, { segs: 10, ...iron } );
+	for ( const s of [ - 0.37, 0.37 ] ) {
+		B.box( 'hard', x - 0.62, y + 0.5, z + s, 0.65, 1.0, 0.06, iron );
+		B.rod('hard',[x-.62,y+.65,z+s-.04],[x-.62,y+.65,z+s+.04],.24,.24,{segs:16,...iron});
+	}
+	B.rod( 'hard', [ x - 0.62, y + 0.65, z - 0.32 ], [ x - 0.62, y + 0.65, z + 0.32 ], 0.18, 0.18, { segs: 16, ...iron } );
+	for(let i=0;i<13;i++)B.torus('hard',x-.62,y+.65,z-.29+i*.048,.185,.014,{rx:Math.PI/2,radial:5,tubular:20,...iron});
+	// Handwheel, spokes, coarse gear teeth and crank beside the wire-rope drum.
+	B.torus('hard',x-.62,y+.65,z-.5,.33,.028,{rx:Math.PI/2,radial:6,tubular:24,...iron});
+	for(let i=0;i<6;i++){
+		const a=i*Math.PI/3;
+		B.rod('hard',[x-.62,y+.65,z-.5],[x-.62+Math.cos(a)*.31,y+.65+Math.sin(a)*.31,z-.5],.015,.015,{segs:5,...iron});
+	}
+	for(let i=0;i<16;i++){
+		const a=i*Math.PI/8;
+		B.box('hard',x-.62+Math.cos(a)*.255,y+.65+Math.sin(a)*.255,z+.43,.055,.055,.07,{rz:a,...iron});
+	}
 	B.tube( 'rope', [ new Vector3( x - 0.55, y + 0.74, z ), new Vector3( ...mastTop ), new Vector3( ...tip ) ], 0.012, { tint: C.iron, data: [ rand.next(), 0, 0, 0 ] } );
-	for ( const s of [ - 0.36, 0.36 ] ) B.box( 'hard', x - 0.55, y + 0.47, z + s, 0.05, 0.36, 0.04, iron );
+	B.rod('hard',[x-.62,y+.65,z+.48],[x-.62,y+.95,z+.48],.023,.023,{segs:6,...iron});
+	B.rod('hard',[x-.62,y+.95,z+.48],[x-.62,y+.95,z+.66],.032,.032,{segs:8,...iron});
 
 }
 
@@ -1426,7 +1549,7 @@ function flagstaff( ctx, x, z ) {
 
 	const { B, rand, colliders, terrain } = ctx;
 	const gy = terrain.heightAt( x, z ), h = 9.5;
-	wallBox( B, 'stone', x - 0.55, x + 0.55, gy - 0.4, gy + 0.45, z - 0.55, z + 0.55, { tint: P.white, data: PLASTER( 0.91, 0.1 ) } );
+	wallBox( B, 'stationMasonry', x - 0.55, x + 0.55, gy - 0.4, gy + 0.45, z - 0.55, z + 0.55, { tint: P.white, data: PLASTER( 0.91, 0.1 ) } );
 	B.cyl( 'wood', x, gy + 0.45, z, 0.07, 0.13, h, { segs: 10, tint: P.trim, data: WOOD( rand.next(), 0.5, 0.75 ) } );
 	B.lathe( 'wood', x, gy + 0.45 + h, z, [ [ 0.07, 0 ], [ 0.11, 0.04 ], [ 0.11, 0.12 ], [ 0.001, 0.16 ] ], { segs: 10, tint: P.trim, data: WOOD( rand.next(), 0.5, 0.75 ) } );
 	const yard = gy + 0.45 + h * 0.72;
@@ -1448,53 +1571,62 @@ function flagstaff( ctx, x, z ) {
 function chapel( ctx, village, cx, cz, gy ) {
 
 	const { B, colliders } = ctx;
-	const stone = ( s ) => ( { tint: P.gneiss, data: RUBBLE( s ), v0: gy } );
-	const xw = - 1.95, xi0 = - 1.3, xi1 = 1.2, xe = 2.0, zn = - 1.72, zi0 = - 0.75, zi1 = 0.75, zs = 1.55;
+	const xw = -1.95, xi0 = -1.3, xi1 = 1.2, xe = 2, zn = -1.72, zi0 = -.75, zi1 = .75, zs = 1.55;
 	const eaves = gy + 1.3, ridgeZ = ( zn + zs ) / 2;
-	const ridge = ( x ) => gy + lerp( 2.5, 2.0, ( x - xw ) / ( xe - xw ) );
+	const ridge = x => gy + lerp( 2.5, 2, ( x-xw ) / ( xe-xw ) );
+	const d0 = .02, d1 = .47, dh = gy + .95;
 	B.pushAt( cx, 0, cz );
-	wallBox( B, 'stone', xw, xe, gy - 0.4, eaves, zn, zi0, stone( 0.21 ) );
-	wallBox( B, 'stone', xw, xe, gy - 0.4, eaves, zi1, zs, stone( 0.23 ) );
-	wallBox( B, 'stone', xi1, xe, gy - 0.4, eaves, zi0, zi1, stone( 0.25 ) );
-	// the west wall, cut for the doorway (0.45 x 0.95 m, south of centre)
-	const d0 = 0.02, d1 = 0.47, dh = gy + 0.95;
-	wallBox( B, 'stone', xw, xi0, gy - 0.4, eaves, zi0, d0, stone( 0.27 ) );
-	wallBox( B, 'stone', xw, xi0, gy - 0.4, eaves, d1, zi1, stone( 0.27 ) );
-	wallBox( B, 'stone', xw, xi0, dh, eaves, d0, d1, stone( 0.27 ) );
-	wallBox( B, 'stone', xw - 0.06, xi0 + 0.06, dh, dh + 0.14, d0 - 0.2, d1 + 0.2, stone( 0.29 ) ); // lintel
-	// the dark inside, seen through the doorway
-	poly( B, 'hard', [ [ xi0 + 0.25, gy, d0 ], [ xi0 + 0.25, gy, d1 ], [ xi0 + 0.25, dh, d1 ], [ xi0 + 0.25, dh, d0 ] ], ( q ) => [ q[ 2 ], q[ 1 ] ], { tint: [ 0.008, 0.008, 0.008 ], data: HARD( 0.3, 0, 0, 1 ) } );
-	// the corbelled roof: two stone slopes up to the ridge, the gables filled, rough upstand copes
-	const uv = ( q ) => [ q[ 0 ], Math.hypot( q[ 1 ] - eaves, q[ 2 ] - zn ) ];
-	poly( B, 'stone', [ [ xw, eaves, zn ], [ xw, ridge( xw ), ridgeZ ], [ xe, ridge( xe ), ridgeZ ], [ xe, eaves, zn ] ], uv, stone( 0.33 ) );
-	poly( B, 'stone', [ [ xe, eaves, zs ], [ xe, ridge( xe ), ridgeZ ], [ xw, ridge( xw ), ridgeZ ], [ xw, eaves, zs ] ], uv, stone( 0.35 ) );
-	poly( B, 'stone', [ [ xw, eaves, zs ], [ xw, ridge( xw ), ridgeZ ], [ xw, eaves, zn ] ], ( q ) => [ q[ 2 ], q[ 1 ] - gy ], stone( 0.37 ) );
-	poly( B, 'stone', [ [ xe, eaves, zn ], [ xe, ridge( xe ), ridgeZ ], [ xe, eaves, zs ] ], ( q ) => [ q[ 2 ], q[ 1 ] - gy ], stone( 0.39 ) );
-	for ( const [ x, dx ] of [ [ xw, 1 ], [ xe, - 1 ] ] ) {
-
-		// each half of the gable: a line of upright slabs along the slope, standing 0.1-0.2 m proud
-		for ( const [ za, zb ] of [ [ zn, ridgeZ ], [ ridgeZ, zs ] ] ) {
-
-			const ya = za === zn ? eaves : ridge( x ), yb = za === zn ? ridge( x ) : eaves;
-			const L = Math.hypot( zb - za, yb - ya ), th = - Math.atan2( yb - ya, zb - za );
-			B.pushAt( x + dx * 0.215, ( ya + yb ) / 2, ( za + zb ) / 2, 0, th );
-			for ( let i = 0, n = 4; i < n; i ++ ) {
-
-				const up = 0.1 + 0.08 * ( ( i * 3 + ( dx > 0 ? 1 : 2 ) + ( za === zn ? 0 : 1 ) ) % 3 ) / 2;
-				wallBox( B, 'stone', - 0.235, 0.235, - 0.25, up, - L / 2 + i * L / n, - L / 2 + ( i + 1 ) * L / n - 0.02, stone( 0.41 + i * 0.07 ) );
-
-			}
-
-			B.pop();
-
-		}
-
+	let count = 0;
+	// End walls own the corners. Side-wall stones end against them, avoiding
+	// intersecting decorative skins and keeping the original external footprint.
+	for ( const side of [
+		{ a: [ xi0, zs ], b: [ xi1, zs ], depth: zs-zi1, seed: 1.23 },
+		{ a: [ xi1, zn ], b: [ xi0, zn ], depth: zi0-zn, seed: 1.47 },
+	] ) {
+		const { L, ry } = wallFrame( side.a, side.b );
+		B.pushAt( side.a[0], 0, side.a[1], ry );
+		count += fittedStoneWall( B, { length: L, bottom: gy-.25, top: eaves, depth: side.depth, seed: side.seed, tint: P.gneiss, dry: true } );
+		B.pop();
 	}
-
+	for ( const [ x, west ] of [ [ xw, true ], [ xe, false ] ] ) {
+		const L = zs-zn, high = ridge(x);
+		B.pushAt( x, 0, west ? zn : zs, west ? -Math.PI/2 : Math.PI/2 );
+		const contour = [ [0,gy-.25], [L,gy-.25], [L,eaves], [L/2,high], [0,eaves] ];
+		count += fittedStoneWall( B, { length: L, bottom: gy-.25, top: high, depth: west ? xi0-xw : xe-xi1,
+			seed: west ? 2.71 : 3.19, tint: P.gneiss, dry: true, contour,
+			openings: west ? [ { x0: d0-zn-.008, x1: d1-zn+.008, y0: gy-.3, y1: dh+.14 } ] : [] } );
+		if ( west ) {
+			stoneBlock( B, { x0: d0-zn-.19, x1: d1-zn+.19, y0: dh, y1: dh+.14,
+				back: -(xi0-xw)-.025, front: .045, seed: 7.91, tint: P.gneiss, dry: true, relief: .7 } );
+			count ++;
+		}
+		B.pop();
+	}
+	// The narrow opening remains dark; its existing dimensions are retained.
+	poly( B, 'hard', [ [xi0+.25,gy,d0], [xi0+.25,gy,d1], [xi0+.25,dh,d1], [xi0+.25,dh,d0] ],
+		q => [q[2],q[1]], { tint: [.008,.008,.008], data: HARD(.3,0,0,1) } );
+	// Thin horizontal overlapping slabs form the corbelled slopes themselves.
+	// The roof envelope is retained as a reconstruction; modern rebuilding is
+	// documented in the archaeological record and does not date its 1901 state.
+	for ( const side of [-1,1] ) for ( let course = 0; course < 10; course ++ ) {
+		const f = (course+.5)/10, z = lerp(side<0 ? zn : zs,ridgeZ,f);
+		const random = mulberry32( 517 + course*41 + side*139 );
+		for ( let x = xw-.04, i = 0; x < xe-.005; i ++ ) {
+			const width = Math.min( .32+random()*.57, xe+.04-x );
+			const y = lerp(eaves,ridge(x+width/2),f), thick = .075+random()*.055;
+			B.pushAt( x+width/2, y+.04, z+(random()-.5)*.075, (random()-.5)*.08, -Math.PI/2+(random()-.5)*.07 );
+			stoneBlock( B, { x0: -width/2, x1: width/2, y0: -.235, y1: .235,
+				back: -thick/2, front: thick/2, seed: 12+course*.179+i*.791+side, tint: P.gneiss, dry: true } );
+			B.pop();
+			x += width-.006;
+			count ++;
+		}
+	}
 	B.pop();
-	colliders.addBox( new Vector3( cx + ( xw + xe ) / 2, gy + 1.2, cz + ( zn + zs ) / 2 ), new Vector3( ( xe - xw ) / 2, 1.3, ( zs - zn ) / 2 ), 0, { tag: 'chapel' } );
+	colliders.addBox( new Vector3( cx+(xw+xe)/2,gy+1.2,cz+(zn+zs)/2 ), new Vector3( (xe-xw)/2,1.3,(zs-zn)/2 ), 0, { tag: 'chapel' } );
 	village.footprints.push( { x: cx, z: cz, r: 3.2, kind: 'building' } );
-	village.buildings.push( { name: 'chapel', x: cx, z: cz, floorY: gy, roofTop: gy + 2.5, stilts: false } );
+	village.buildings.push( { name: 'chapel', x: cx, z: cz, floorY: gy, roofTop: gy+2.5, stilts: false } );
+	return count;
 
 }
 
@@ -1504,8 +1636,10 @@ export function buildStation( ctx, village ) {
 
 	if ( village.materials ) {
 
+		village.textures.addStoneGrain();
+		village.textures.addStationSurfaces();
 		const T = village.textures.textures;
-		Object.assign( village.materials, { stationTimber: createStationTimber( T ), stationFloor: createStationTimber( T, true ), stationFlags: createStationFlags( T ) } );
+		Object.assign( village.materials, { stationTimber: createStationTimber( T ), stationFloor: createStationTimber( T, true ), stationFlags: createStationFlags( T ), stationMasonry: createStationMasonry( T ), landingConcrete: createLandingConcrete( T ), hard: createStationIron( T ) } );
 
 	}
 
@@ -1520,6 +1654,9 @@ export function buildStation( ctx, village ) {
 	const westTrack = [ [ wTop.x, wTop.z ], [ - 280, 80 ], [ - 240, 62 ], [ - 200, 46 ], [ - 160, 35 ], [ - 120, 29 ], [ - 80, 27 ], [ - 45, 27.5 ], [ - 22, 27 ], [ sg.x, sg.z + 2.5 ] ];
 	T.addPath( eastTrack, { width: 2.4, grade: 6, mask: 0.85 } );
 	T.addPath( westTrack, { width: 2.4, grade: 8, mask: 0.85 } );
+	const shedY = T.heightAt( HAULING_SHED.x, HAULING_SHED.z );
+	T.flatten( HAULING_SHED.x, HAULING_SHED.z, 3, shedY, 2 );
+	T.addPath( [ [ -160, 35 ], [ -157, 39 ], [ -160, 42.5 ] ], { width: 1.2, mask: 0.75 } );
 	const inEast = [ [ eg.x + 1.5, eg.z ], [ eg.x - 1.5, eg.z ], [ 4.4, eg.z ] ];
 	const inSouth = [ [ sg.x, sg.z + 2.5 ], [ sg.x, sg.z - 2 ], [ sg.x, 11.5 ] ];
 	T.addPath( inEast, { width: 1.8, mask: 0.9 } );
@@ -1535,7 +1672,7 @@ export function buildStation( ctx, village ) {
 
 	// ---- the buildings (and their moving parts: the lens, the doors and gate, the lantern's glass, built
 	// apart and assembled by assembleStation)
-	const parts = { doors: [], glass: new Builder(), lens: null, crank: null, telescope: null, marks: {} };
+	const parts = { doors: [], glass: new Builder(), lens: null, crank: null, telescope: null, marks: {}, masonry: { compound: 0, piers: 0 } };
 	ctx.marks = parts.marks;
 	const light = tower( ctx, parts );
 	const lit = keepersHouse( ctx, village, parts );
@@ -1549,8 +1686,10 @@ export function buildStation( ctx, village ) {
 	tramway( ctx, [ ...eastTrack, ...inEast.slice( 1 ) ] );
 	tramway( ctx, [ ...westTrack, ...inSouth.slice( 1 ) ] );
 	flagstaff( ctx, STATION.flagstaff.x, STATION.flagstaff.z );
-	chapel( ctx, village, ch.x, ch.z, chY );
+	parts.masonry.chapel = chapel( ctx, village, ch.x, ch.z, chY );
+	parts.masonry.loose = islandStoneScatter( ctx.B, T, village.footprints, P.gneiss );
 	parts.marks.chapel = new Vector3( ch.x - 2.1, chY + 0.9, ch.z + 0.25 );
+	haulingShed( ctx, village, parts );
 
 	// a few of the lit windows light the yard at night (those facing it first)
 	lit.sort( ( a, b ) => b.dir.z - a.dir.z );
@@ -1585,7 +1724,7 @@ export function assembleStation( village ) {
 
 		}
 
-		for ( const key of [ 'wood', 'hard', 'stone', 'stationTimber' ] ) {
+		for ( const key of [ 'wood', 'hard', 'stationMasonry', 'stationTimber' ] ) {
 
 			const b = Bd.batches[ key ];
 			if ( ! b || b.vcount === 0 ) continue;
@@ -1659,7 +1798,14 @@ export function assembleStation( village ) {
 	} );
 
 	village.group.add( group );
-	S.moving = { group, lens, crank, doors, glass, lensMaterial, telescope };
+	const smoke = new ChimneySmoke( KITCHEN.chimney );
+	group.add( smoke.group );
+	const haulingChains = {};
+	for ( const [ name, chain ] of Object.entries( parts.haulingChains ) ) {
+		const g = new Group(); for ( const mesh of meshes( chain ) ) g.add( mesh );
+		g.visible = name === 'loose'; haulingChains[ name ] = g; group.add( g );
+	}
+	S.moving = { group, lens, crank, doors, glass, lensMaterial, telescope, smoke, haulingChains };
 	return S.moving;
 
 }

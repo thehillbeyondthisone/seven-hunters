@@ -30,10 +30,11 @@ export class Terrain {
 	// sunShadow: apply the heightfield sun shadow here (pass false if it is applied to every scene
 	// material through SceneLighting.directModulation). renderer: optional (unused: the sun shadow
 	// map is baked from update() into the frame encoder).
-	constructor( { scene, terrainData, terrainGPU, gridSize = 40, rangeFactor = 2.0, sunShadow = true, renderer = null } ) {
+	constructor( { scene, terrainData, terrainGPU, gridSize = 40, rangeFactor = 2.0, sunShadow = true, renderer = null, stoneTexture = null } ) {
 
 		this.data = terrainData;
 		this.gpu = terrainGPU;
+		this.stoneTexture = stoneTexture;
 		const half = terrainData.size / 2;
 
 		this.lod = new CDLOD( {
@@ -42,6 +43,7 @@ export class Terrain {
 			center: { x: - half, z: - half, size: terrainData.size },
 			rangeFactor,
 			prefix: 'terrainLod',
+			stitchEdges: true,
 		} );
 
 		// optional wetness from the shore system: { modules: [ ... ], code: WGSL defining
@@ -66,16 +68,17 @@ export class Terrain {
 				// 1: a treeless northern island in winter (the Flannans): turf everywhere, no forest, no laterite
 				maritime: [ 'f32', 0 ],
 			},
-			attributes: { nodeData: 'vec4f' },
+			attributes: { nodeData: 'vec4f', nodeEdges: 'vec4f' },
 		} );
 		this.params = { wetDarken: mat.uniforms.wetDarken };
 		this.uViewPos = mat.uniforms.viewPos;
 
 		mat.vertex = /* wgsl */`
 	// CDLOD vertex (same lattice snapping and geomorph as the CDLOD module) morphing toward viewPos
-	let snapped = terrainLodSnapped( v.nodeData, v.position.xz );
+	let node = terrainLodEdgeNode( v.nodeData, v.position.xz, v.nodeEdges );
+	let snapped = terrainLodSnapped( node, v.position.xz );
 	let y0 = terrainHeightAt( snapped );
-	let cv = terrainLodMorph( v.nodeData, v.position.xz, mat.viewPos, y0 );
+	let cv = terrainLodMorph( node, v.position.xz, mat.viewPos, y0 );
 	v.useWorld = true;
 	v.worldPos = vec3f( cv.worldXZ.x, terrainHeightAt( cv.worldXZ ), cv.worldXZ.y );
 	v.worldNormal = vec3f( 0.0, 1.0, 0.0 );
@@ -97,7 +100,8 @@ export class Terrain {
 	finalizeMaterial() {
 
 		const mat = this.material;
-		const modules = [ this.gpu.module, terrainShadingModule(), this.lod.module ];
+		const shading = terrainShadingModule( this.stoneTexture );
+		const modules = [ this.gpu.module, shading, this.lod.module ];
 		if ( this.wetness ) {
 
 			modules.push( ...( this.wetness.modules || [] ) );
@@ -105,7 +109,7 @@ export class Terrain {
 
 		}
 
-		modules.push( new ShaderModule( { name: 'terrainMaterial', deps: [ this.gpu.module, terrainShadingModule() ], code: TERRAIN_MATERIAL_WGSL } ) );
+		modules.push( new ShaderModule( { name: 'terrainMaterial', deps: [ this.gpu.module, shading ], code: TERRAIN_MATERIAL_WGSL } ) );
 		mat.modules = modules;
 		mat.defines.HAS_WETNESS = this.wetness ? 1 : 0;
 		mat.defines.MATERIAL_SUN_MODULATION = this.sunShadow ? 1 : 0;
@@ -218,6 +222,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 	// bump height of either path: the surface-gradient bump runs after the branch (its screen-space
 	// derivatives would be undefined in quads that straddle the two paths)
 	var hdOut = 0.0;
+	var stoneSlope = vec3f( 0.0 );
 	if ( seabedPath ) {
 
 		let underW = 1.0;
@@ -293,6 +298,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 		// Around the bare rock a band of scree / dark soil and moss; plants creep over it.
 		let gully = sp.z * smoothstep( -0.5, 0.5, h );
 		var rockAlbedo = vec3f( 0.2 ); var rockRough = 0.8; var rockHd = 0.0;
+		var rockStoneSlope = vec3f( 0.0 );
 		var rockW = 0.0; var screeW = 0.0;
 		let cliffK = smoothstep( 0.28, 0.55, slope );
 		let convex = smoothstep( 0.5, 0.85, nr.w );
@@ -328,7 +334,18 @@ const TERRAIN_SURFACE = /* wgsl */`
 			let fringe = smoothstep( 0.5, 0.58, rv ) * smoothstep( 0.8, 0.6, rv ) * smoothstep( 0.3, 0.6, dM.w + dN.y * 0.4 );
 			let mossK = sat( max( ledgeMoss * 0.75, fringe * 0.8 ) + R.moss * 0.3 + joints * 0.25 );
 			rockAlbedo = mix( basalt, mix( ${ S( 0.12, 0.17, 0.05 ) }, ${ S( 0.22, 0.26, 0.09 ) }, dF.y ), mossK );
-			rockRough = R.rough;
+			// Supplied Flannan photographs: exposed grey fractured faces, short
+			// turf on ledges. Keep the tropical basalt treatment in Tidewater.
+			let fractureAxis = vec3f( 0.17, 0.38, -0.09 );
+			let fractureCoord = dot( p, fractureAxis ) + ( dM.w - 0.5 ) * 0.16;
+			let fractureDist = abs( fract( fractureCoord ) - 0.5 );
+			let fractureAA = max( abs( dot( dpx, fractureAxis ) ) + abs( dot( dpy, fractureAxis ) ), 0.002 );
+			let fracture = 1.0 - clamp( ( fractureDist - 0.012 ) / fractureAA + 0.5, 0.0, 1.0 );
+			let maritimeRock = R.albedo * vec3f( 0.72, 0.76, 0.75 ) * ( 1.0 - stain * 0.16 - fracture * 0.28 );
+			rockAlbedo = mix( rockAlbedo, mix( maritimeRock, rockAlbedo, ledgeMoss * 0.19 ), mat.maritime );
+			let stoneDetail = terrainStoneDetail( p, N0, g );
+			rockRough = mix( R.rough, mix( stoneDetail.rough, .34 + stoneDetail.rough * .13, R.wet ), mat.maritime );
+			rockStoneSlope = stoneDetail.slope;
 			// craggier than the boulders: the big blocks and plates stand out from afar
 			rockHd = R.hd * 2.2 + R.height * 0.6;
 
@@ -429,7 +446,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 		var mt = terrainMeadowTone( macroA, macroB, slope, N0.z, dM.w * 0.65 + dN.w * 0.35, true );
 		// winter turf on a northern island: dull olive grazed sward, tawny dead grass, peaty brown patches
 		let winterK = smoothstep( 0.3, 0.8, macroA * 0.6 + macroB * 0.4 + ( dM.w - 0.5 ) * 0.3 );
-		var winter = mix( ${ S( 0.32, 0.36, 0.21 ) }, ${ S( 0.53, 0.49, 0.32 ) }, winterK );
+		var winter = mix( ${ S( 0.33, 0.38, 0.28 ) }, ${ S( 0.45, 0.45, 0.33 ) }, winterK );
 		winter = mix( winter, ${ S( 0.36, 0.29, 0.19 ) }, smoothstep( 0.62, 0.8, macroB + ( dN.w - 0.5 ) * 0.4 ) * 0.5 );
 		mt.tone = mix( mt.tone, winter, mat.maritime );
 		// clumps (1-3 m) and tussocks, blade-scale grain
@@ -615,6 +632,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 		hd = mix( hd, rockHd, rockW );
 		hd = mix( hd, scarpH, scarpW );
 		hdOut = hd;
+		stoneSlope = rockStoneSlope * rockW * mat.maritime;
 
 		// ---- ambient occlusion: baked horizon + cavity, plus litter / crevices / seagrass canopy
 		let aoDetail = mix( 1.0, dN.y * 0.5 + 0.7, jungleW * ( 1.0 - sandW ) * notRock * landW )
@@ -627,6 +645,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 	}
 
 	outN = terrainPerturbNormal( p, N0, hdOut, 1.0 );
+	outN = terrainStoneNormal( outN, stoneSlope );
 
 	s.albedo = albedoOut;
 	s.roughness = outRough;

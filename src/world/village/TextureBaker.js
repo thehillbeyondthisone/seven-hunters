@@ -3,6 +3,7 @@ import { Texture } from '../../engine/gpu/Texture.js';
 import { ComputeKernel } from '../../engine/gpu/Compute.js';
 import { ShaderModule } from '../../engine/gpu/Shader.js';
 import { generateMipmaps } from '../../engine/gpu/Mipmaps.js';
+import { STATION_SURFACE_FIELDS, STATION_SURFACE_SETS } from '../flannan/StationTextureFields.js';
 
 // GPU-baked, tileable PBR texture sets for the village materials.
 //
@@ -176,6 +177,7 @@ struct VlgOut {
 // X, Y are tile coordinates in [0, 1).
 
 const GENERATORS = {
+	...STATION_SURFACE_FIELDS,
 
 	// WEATHERED WOOD - tile = 2 m along the grain (X) x 1 m across (Y)
 	wood: /* wgsl */`
@@ -424,6 +426,26 @@ fn vlgGen( X: f32, Y: f32 ) -> VlgOut {
 }
 `,
 
+	// Unjointed stone grain for actual stone volumes. Optional Flannan bake;
+	// the old cellular masonry texture remains available for other surfaces.
+	stoneGrain: /* wgsl */`
+fn vlgGen( X: f32, Y: f32 ) -> VlgOut {
+	let mott = vlgPf( X, Y, 8.0, 8.0, 4, 811.0, .55 );
+	let grain = vlgPn( X, Y, 180.0, 180.0, 813.0 );
+	let warp = vlgPf( X, Y, 5.0, 5.0, 3, 815.0, .5 );
+	let layers = vlgPn( X + warp*.015, Y, 12.0, 70.0, 817.0 );
+	let veins = 1.0 - smoothstep( .035, .11, abs( vlgPn( X, Y, 7.0, 23.0, 819.0 ) ) );
+	let fleck = smoothstep( .28, .52, grain );
+	let pits = smoothstep( .2, .48, -grain ) * vlgN01(mott);
+	let fissure = ( 1.0 - smoothstep( .018, .065, abs( layers ) ) ) * smoothstep( .05, .4, mott );
+	let height = .5 + mott*.13 + grain*.055 + layers*.065 - pits*.08 - fissure*.065;
+	var col = vec3f( .92, .98, 1.04 ) * ( .94 + mott*.42 + grain*.3 + layers*.11 );
+	col = mix( col, vec3f(1.18,1.16,1.1), veins*.23 + fleck*.24 );
+	col *= 1.0 - pits*.21;
+	let rough = clamp( .86 + mott*.055 + pits*.1 - fleck*.1 - veins*.035, .7, .98 );
+	return VlgOut( vec4f(height,rough,1.0-pits*.12,0.0), vec4f(col,1.0) );
+}
+`,
 	// WORN METAL / PLASTIC - tile = 1 m x 1 m: rust blooms, pits, scratches, grime
 	hard: /* wgsl */`
 fn vlgGen( X: f32, Y: f32 ) -> VlgOut {
@@ -628,6 +650,33 @@ export class VillageTextures {
 		// village material so the bake ran on first use); the meshes now call bake() themselves
 		this.trigger = null;
 
+	}
+
+	// Flannan-only maps: register before its first render, leaving other scenes' bake intact.
+	addStoneGrain() {
+		if ( this.textures.stoneGrainA ) return;
+		if ( this.baked ) throw new Error( 'Stone grain must be registered before the village texture bake.' );
+		const set = { name: 'stoneGrain', w: 512, h: 512, mx: 1, my: 1, hs: .006, ao: .5, out: 'stoneGrainA', nra: 'stoneGrainN' };
+		const fields = new Texture( { label: 'vlgFields_stoneGrain', width: set.w, height: set.h, format: 'rgba16float', usage: ['sample','storage'] } );
+		const albedo = finalTexture(set.out,set.w,set.h), nra = finalTexture(set.nra,set.w,set.h);
+		this.textures[set.out] = albedo; this.textures[set.nra] = nra;
+		this.jobs.push( { set, fields, albedo, nra } );
+		this._bytes += set.w*set.h*4*4/3*2;
+	}
+
+	// Station-only normal/roughness sets; Tidewater keeps its original finishes.
+	addStationSurfaces() {
+		if ( this.textures.indoorWoodN ) return;
+		if ( this.baked ) throw new Error( 'Station surfaces must be registered before the texture bake.' );
+		for ( const set of STATION_SURFACE_SETS ) {
+			const fields = new Texture( { label: 'vlgFields_' + set.name, width: set.w, height: set.h, format: 'rgba16float', usage: [ 'sample', 'storage' ] } );
+			const albedo = set.out ? finalTexture( set.out, set.w, set.h ) : null;
+			const nra = finalTexture( set.nra, set.w, set.h );
+			if ( albedo ) this.textures[ set.out ] = albedo;
+			this.textures[ set.nra ] = nra;
+			this.jobs.push( { set, fields, albedo, nra } );
+			this._bytes += set.w * set.h * 4 * 4 / 3 * ( albedo ? 2 : 1 );
+		}
 	}
 
 	// approximate GPU memory of the final (mipmapped) maps in bytes

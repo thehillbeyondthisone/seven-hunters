@@ -1,13 +1,16 @@
-import { Group, Mesh, Vector3, Euler, MathUtils } from '../engine/index.js';
-import { Builder } from '../world/village/GeoBuilder.js';
-import { lin, WOOD, HARD, ropeCoil } from '../world/Props.js';
+import { Group, Vector3, Euler, MathUtils } from '../engine/index.js';
+import { G } from '../engine/render/Frame.js';
+import { buildLandingBoat, LANDING_EYE, LANDING_FLOOR, LANDING_PROBES } from '../world/boat/LandingBoat.js';
+import { rowingPose } from './ArrivalRowing.js';
+
 
 export const CROSSING_SECONDS = 90;
-const eye = new Vector3( 0, 1.78, 1.15 ), rotation = new Euler( 0, 0, 0, 'YXZ' );
+export const DEPARTURE_VISIBLE_SECONDS = 480;
+const eye = LANDING_EYE, rotation = new Euler( 0, 0, 0, 'YXZ' );
 const point = new Vector3();
 
 // A period-plausible open landing boat, not a measured model of a Hesperus boat.
-// It shares the station's timber/iron shaders. The diesel fishing boat stays in Tidewater.
+// The diesel fishing boat stays in Tidewater.
 export class BoatArrival {
 
 	constructor( app ) {
@@ -21,107 +24,19 @@ export class BoatArrival {
 		this.elapsed = 0;
 		this.departure = null;
 		this.heave = 0;
-		this.slot = app.query?.allocate( 'arrival', 1 );
-		this._build( app.village.materials );
+		this.slot = app.query?.allocate( 'arrival', LANDING_PROBES.length );
+		this.detailed = !! app.isArrivalAtmosphere;
+		Object.assign( this, buildLandingBoat( this.group, { detailed: this.detailed, textures: app.village?.textures?.textures } ) );
+		this.rowingTime = 0;
+		this.rowingPaused = false;
+		this.motionTime = 0;
+		this.waterHeights = new Float64Array( LANDING_PROBES.length );
+		this.waterVersion = -1;
+		this.waterTime = 0;
+		this.riseSpeed = 0;
+		this.hasWater = false;
 		app.scene?.add( this.group );
 		if ( app.sceneRenderer && this.hullVolume ) app.sceneRenderer.addHullMask( this.hullVolume, this.group );
-
-	}
-
-	_meshes( B, parent, materials ) {
-
-		for ( const [ key, batch ] of Object.entries( B.batches ) ) {
-
-			if ( ! materials?.[ key ] ) continue;
-			const mesh = new Mesh( batch.build(), materials[ key ] );
-			mesh.name = 'arrival-' + key;
-			mesh.castShadow = mesh.receiveShadow = true;
-			parent.add( mesh );
-
-		}
-
-	}
-
-	_build( materials ) {
-
-		const B = new Builder();
-		const timber = { tint: lin( 0x796248 ), data: WOOD( 0.37, 0.28, 0 ) };
-		const paint = { tint: lin( 0x35453f ), data: WOOD( 0.61, 0.2, 0.8 ) };
-		const iron = { tint: lin( 0x282725 ), data: HARD( 0.3, 0.1, 0.7, 0.5 ) };
-		const width = ( z ) => 1.12 * Math.pow( Math.max( 0.02, Math.sin( ( z + 3.5 ) / 7 * Math.PI ) ), 0.6 );
-		// Clinker planks: separate overlapping strakes, with a rising sheer at the bow.
-		for ( let i = 0; i < 28; i ++ ) {
-
-			const z0 = - 3.35 + i * 6.7 / 28, z1 = z0 + 6.7 / 28;
-			for ( const side of [ - 1, 1 ] ) for ( let j = 0; j < 7; j ++ ) {
-
-				const a = j / 7, b = ( j + 1 ) / 7;
-				const at = ( z, t ) => new Vector3( side * width( z ) * ( 0.22 + 0.78 * Math.sin( t * Math.PI / 2 ) ), - 0.38 + t * ( 1.42 + Math.pow( z / 3.5, 4 ) * 0.2 ), z );
-				B.slab( 'wood', [ at( z0, a ), at( z1, a ), at( z1, b ), at( z0, b ) ], 0.042, j < 3 ? paint : timber );
-
-			}
-			for ( const side of [ - 1, 1 ] ) B.beam( 'wood', [ side * width( z0 ), 1.06 + Math.pow( z0 / 3.5, 4 ) * 0.2, z0 ], [ side * width( z1 ), 1.06 + Math.pow( z1 / 3.5, 4 ) * 0.2, z1 ], 0.08, 0.08, timber );
-			// Floorboards stay above the design waterline.
-			B.box( 'wood', 0, 0.24, ( z0 + z1 ) / 2, width( ( z0 + z1 ) / 2 ) * 1.45, 0.07, 6.7 / 28 - 0.004, timber );
-
-		}
-		B.beam( 'wood', [ 0, - 0.32, - 3.4 ], [ 0, - 0.32, 3.4 ], 0.16, 0.16, timber );
-		// Close the ends: a narrow transom aft and planks meeting at the bow stem.
-		const stern = width( - 3.35 ), bow = width( 3.35 );
-		B.slab( 'wood', [ new Vector3( - stern, 1.24, - 3.35 ), new Vector3( stern, 1.24, - 3.35 ), new Vector3( stern * 0.22, - 0.38, - 3.35 ), new Vector3( - stern * 0.22, - 0.38, - 3.35 ) ], 0.045, timber );
-		for ( const side of [ - 1, 1 ] ) {
-
-			B.slab( 'wood', [ new Vector3( side * bow, 1.24, 3.35 ), new Vector3( 0, 1.3, 3.68 ), new Vector3( 0, - 0.38, 3.68 ), new Vector3( side * bow * 0.22, - 0.38, 3.35 ) ], 0.045, timber );
-			B.beam( 'wood', [ side * bow, 1.24, 3.35 ], [ 0, 1.3, 3.68 ], 0.08, 0.08, timber );
-
-		}
-		B.slab( 'wood', [ new Vector3( - bow * 0.72, 0.28, 3.35 ), new Vector3( 0, 0.28, 3.68 ), new Vector3( bow * 0.72, 0.28, 3.35 ) ], 0.07, { ...timber, up: new Vector3( 0, 1, 0 ) } );
-		B.rod( 'wood', [ 0, - 0.4, 3.68 ], [ 0, 1.34, 3.68 ], 0.05, 0.05, timber );
-		// Closed volume for the ocean's hull exclusion pass: waves stay outside the boat.
-		const mask = new Builder(), rim = [];
-		for ( let i = 0; i <= 28; i ++ ) {
-
-			const z = - 3.35 + i * 6.7 / 28;
-			rim.push( new Vector3( width( z ), 1.15, z ) );
-
-		}
-		for ( let i = 28; i >= 0; i -- ) {
-
-			const z = - 3.35 + i * 6.7 / 28;
-			rim.push( new Vector3( - width( z ), 1.15, z ) );
-
-		}
-		mask.slab( 'wood', rim, 1.6, { up: new Vector3( 0, 1, 0 ) } );
-		this.hullVolume = mask.batches.wood.build();
-		for ( const z of [ - 2.3, - 0.2, 1.55 ] ) B.box( 'wood', 0, 0.72, z, width( z ) * 1.92, 0.085, 0.31, timber );
-		B.box( 'wood', 0.35, 0.48, 2.35, 0.64, 0.45, 0.8, { ...timber, tint: lin( 0x837354 ) } );
-		for ( const z of [ 2.05, 2.65 ] ) B.box( 'hard', 0.35, 0.49, z, 0.67, 0.48, 0.035, iron );
-		ropeCoil( B, - 0.4, 0.28, 2.2, 0.018, 0.22, 4, 0.41 );
-		// A spare envelope on the stores beside the forward seat.
-		B.box( 'wood', 0.35, 0.72, 2.35, 0.32, 0.025, 0.23, { tint: lin( 0xd3c6a7 ), data: WOOD( 0.3, 0, 1 ) } );
-		B.box( 'hard', 0.35, 0.74, 2.35, 0.012, 0.008, 0.24, { tint: lin( 0x776444 ), data: HARD( 0.1, 0, 0, 1 ) } );
-		// A rower in wool and oilskins; deliberately modest procedural detail.
-		const coat = { tint: lin( 0x3b403c ), data: HARD( 0.6, 0, 0, 0.94 ) };
-		const skin = { tint: lin( 0x9e7d66 ), data: HARD( 0.2, 0, 0, 0.9 ) };
-		B.lathe( 'hard', 0, 0.75, - 0.15, [ [ 0.23, 0 ], [ 0.29, 0.12 ], [ 0.25, 0.48 ], [ 0.14, 0.6 ] ], { ...coat, segs: 16 } );
-		B.lathe( 'hard', 0, 1.3, - 0.16, [ [ 0.05, 0 ], [ 0.075, 0.025 ], [ 0.105, 0.07 ], [ 0.115, 0.15 ], [ 0.11, 0.22 ], [ 0.07, 0.27 ], [ 0, 0.28 ] ], { ...skin, segs: 20 } );
-		B.cyl( 'hard', 0, 1.44, - 0.265, 0.018, 0.03, 0.045, { ...skin, rx: - Math.PI / 2, segs: 8, capBot: true } );
-		B.lathe( 'hard', 0, 1.5, - 0.16, [ [ 0.14, 0 ], [ 0.14, 0.04 ], [ 0.12, 0.12 ], [ 0.02, 0.14 ] ], { ...coat, segs: 16 } );
-		for ( const side of [ - 1, 1 ] ) {
-
-			B.rod( 'hard', [ side * 0.19, 1.22, - 0.15 ], [ side * 0.4, 0.92, - 0.55 ], 0.1, 0.07, coat );
-			B.rod( 'hard', [ side * 0.4, 0.92, - 0.55 ], [ side * 0.66, 1.02, - 0.3 ], 0.07, 0.045, coat );
-			B.box( 'hard', side * 0.16, 0.46, - 0.77, 0.17, 0.18, 0.55, coat );
-			const oar = new Group(), O = new Builder();
-			oar.position.set( side * 0.93, 1.04, - 0.3 );
-			O.rod( 'wood', [ - side * 0.48, 0, 0 ], [ side * 2.55, - 0.55, 0 ], 0.032, 0.027, timber );
-			O.box( 'wood', side * 2.25, - 0.49, 0, 0.66, 0.055, 0.2, { ...timber, rz: - side * 0.18 } );
-			this._meshes( O, oar, materials );
-			this.group.add( oar );
-			this.oars.push( oar );
-
-		}
-		this._meshes( B, this.group, materials );
 
 	}
 
@@ -131,7 +46,13 @@ export class BoatArrival {
 
 		this.elapsed = MathUtils.clamp( elapsed, 0, CROSSING_SECONDS );
 		this.departure = null;
+		this.rowingTime = 0;
+		this.rowingPaused = false;
 		this.group.visible = true;
+		this.hasWater = false;
+		this.waterVersion = -1;
+		// Conservative initial freeboard until a readback at this location arrives.
+		this.heave = ( G.seaLevel.value || 0 ) + 0.85;
 		this.pose( 0 );
 		const p = this.app.player;
 		p.yaw = Math.atan2( this.group.position.x, this.group.position.z );
@@ -150,25 +71,79 @@ export class BoatArrival {
 		this.group.position.set( L.stage.x + L.dir[ 0 ] * distance, this.heave, L.stage.z + L.dir[ 1 ] * distance );
 		const heading = Math.atan2( - L.dir[ 0 ], - L.dir[ 1 ] );
 		this.group.rotation.y = heading + ( this.departure === null ? 0 : Math.PI * MathUtils.smoothstep( this.departure, 0, 6 ) );
-		const q = this.app.query;
-		if ( q && this.slot !== undefined ) {
-
-			q.setPoint( this.slot, this.group.position.x, this.group.position.z );
-			const h = q.cpuValid ? q.cpu[ this.slot * 4 ] : 0;
-			if ( Number.isFinite( h ) ) this.heave += ( h - this.heave ) * ( 1 - Math.exp( - dt * 1.8 ) );
-
-		}
-		this.group.position.y = this.heave;
-		this.group.rotation.x = Math.sin( this.elapsed * 0.9 + ( this.departure || 0 ) ) * 0.018;
-		this.group.rotation.z = Math.sin( this.elapsed * 1.2 + ( this.departure || 0 ) ) * 0.025;
+		this.motionTime += Math.max( 0, dt );
+		this.float( dt );
+		this.rowingActive = ! this.rowingPaused && this.speed > 0.1;
+		if ( this.rowingActive ) this.rowingTime += Math.max( 0, dt );
+		const stroke = rowingPose( this.rowingTime, this.rowingActive );
 		for ( let i = 0; i < this.oars.length; i ++ ) {
 
-			const phase = ( this.elapsed + ( this.departure || 0 ) ) * 1.7;
-			this.oars[ i ].rotation.y = ( i ? - 1 : 1 ) * Math.sin( phase ) * 0.28;
-			this.oars[ i ].rotation.z = ( i ? 1 : - 1 ) * Math.max( 0, Math.cos( phase ) ) * 0.08;
+			const phase = this.motionTime * 1.7, rowing = this.speed > 0.1 ? 1 : 0;
+			this.oars[ i ].rotation.y = ( i ? - 1 : 1 ) * Math.sin( phase ) * 0.28 * rowing;
+			this.oars[ i ].rotation.z = ( i ? 1 : - 1 ) * ( rowing ? Math.max( 0, Math.cos( phase ) ) * 0.08 : 0.12 );
+			this.arms[ i ].rotation.x = Math.sin( phase ) * 0.16 * rowing;
+			if ( this.detailed ) {
+				const side = i ? 1 : -1;
+				const sea = this.hasWater ? this.waterHeights[ i ? 4 : 3 ] : G.seaLevel.value;
+				const drop = this.oars[ i ].position.y + this.heave - sea + 0.07;
+				const dip = MathUtils.clamp( Math.asin( MathUtils.clamp( drop / 2.78, 0, 0.95 ) ) - 0.159, 0.06, 0.9 );
+				this.oars[ i ].rotation.y = side * stroke.sweep;
+				this.oars[ i ].rotation.z = -side * ( -0.045 + ( dip + 0.045 ) * stroke.immersion );
+				this.arms[ i ].rotation.x = stroke.sweep * 0.42;
+			}
 
 		}
+		if ( this.detailed ) this.rower.rotation.x = stroke.lean;
 		this.group.updateMatrixWorld( true );
+
+	}
+
+	float( dt ) {
+
+		const q = this.app.query, pos = this.group.position;
+		const yaw = this.group.rotation.y, sn = Math.sin( yaw ), cs = Math.cos( yaw );
+		let valid = !! q?.cpuValid && this.slot !== undefined;
+		for ( let i = 0; i < LANDING_PROBES.length; i ++ ) {
+			const [ x, z ] = LANDING_PROBES[ i ], wx = pos.x + x * cs + z * sn, wz = pos.z - x * sn + z * cs;
+			if ( q && this.slot !== undefined ) q.setPoint( this.slot + i, wx, wz );
+			// A readback from the origin / previous crossing / pre-skip route is not this boat.
+			const j = ( this.slot + i ) * 4;
+			if ( ! Number.isFinite( q?.cpu?.[ j ] ) || ( q?.resultInputs && Math.hypot( q.resultInputs[ j ] - wx, q.resultInputs[ j + 1 ] - wz ) > 3 ) ) valid = false;
+		}
+		if ( valid ) {
+			const version = q.version ?? this.motionTime;
+			if ( version !== this.waterVersion ) {
+				let rise = 0;
+				const sampleTime = q.resultTime ?? this.motionTime, span = sampleTime - this.waterTime;
+				for ( let i = 0; i < LANDING_PROBES.length; i ++ ) {
+					const h = q.cpu[ ( this.slot + i ) * 4 ];
+					if ( this.hasWater && span > 0.001 ) rise = Math.max( rise, ( h - this.waterHeights[ i ] ) / span );
+					this.waterHeights[ i ] = h;
+				}
+				this.riseSpeed = MathUtils.clamp( rise, 0, 4 );
+				this.waterTime = sampleTime; this.waterVersion = version; this.hasWater = true;
+			}
+		}
+		const H = this.waterHeights, k = 1 - Math.exp( - Math.max( 0, dt ) * 3.5 );
+		const pitch = this.hasWater ? MathUtils.clamp( Math.atan2( H[ 2 ] - H[ 1 ], 5.6 ), - 0.08, 0.08 ) : 0;
+		const roll = this.hasWater ? MathUtils.clamp( Math.atan2( H[ 4 ] - H[ 3 ], 1.7 ), - 0.09, 0.09 ) : 0;
+		this.group.rotation.x += ( pitch - this.group.rotation.x ) * k;
+		this.group.rotation.z += ( roll - this.group.rotation.z ) * k;
+		if ( this.hasWater ) {
+			let target = -Infinity;
+			const age = MathUtils.clamp( ( G.time.value || this.motionTime ) - this.waterTime, 0, 0.3 );
+			// Dry-floor envelope across the hull, including roll/pitch and readback latency.
+			for ( let i = 0; i < H.length; i ++ ) {
+				const [ x, z ] = LANDING_PROBES[ i ];
+				const floor = LANDING_FLOOR * Math.cos( this.group.rotation.x ) * Math.cos( this.group.rotation.z )
+					+ x * Math.sin( this.group.rotation.z ) * Math.cos( this.group.rotation.x ) - z * Math.sin( this.group.rotation.x );
+				target = Math.max( target, H[ i ] - floor + 0.32 + this.riseSpeed * age );
+			}
+			// Rise immediately to clear crests; settle gently into troughs, never smooth below
+			// the required clearance. A modal pauses the journey, not the floating hull.
+			this.heave = Math.max( target, this.heave + ( target - this.heave ) * k );
+		}
+		pos.y = this.heave;
 
 	}
 
@@ -181,7 +156,9 @@ export class BoatArrival {
 	camera() {
 
 		const p = this.app.player, cam = this.app.camera;
-		cam.position.copy( eye ).applyMatrix4( this.group.matrixWorld );
+		cam.position.copy( eye );
+		if ( this.detailed ) cam.position.y -= 0.24;
+		cam.position.applyMatrix4( this.group.matrixWorld );
 		p.position.copy( cam.position ).add( point.set( 0, - 1.62, 0 ) );
 		p.velocity.set( 0, 0, 0 );
 		p.prompt = null;
@@ -189,13 +166,38 @@ export class BoatArrival {
 
 	}
 
+	reviewCamera() {
+
+		const v = this.reviewView, app = this.app;
+		if ( ! v ) return;
+		if ( v.departure !== undefined ) {
+			app.camera.position.set( ...v.p );
+			point.copy( this.group.position ); point.y += 0.7;
+			app.camera.lookAt( point );
+			app.camera.updateMatrixWorld( true );
+			point.setFromMatrixColumn( app.camera.matrixWorld, 2 ).negate();
+			app.player.yaw = Math.atan2( -point.x, -point.z );
+			app.player.pitch = Math.asin( point.y );
+		} else if ( v.boatEye ) {
+			app.camera.position.set( ...v.boatEye ).applyMatrix4( this.group.matrixWorld );
+			app.camera.lookAt( point.set( ...v.boatAt ).applyMatrix4( this.group.matrixWorld ) );
+			app.camera.updateMatrixWorld( true );
+			point.setFromMatrixColumn( app.camera.matrixWorld, 2 ).negate();
+			app.player.yaw = Math.atan2( - point.x, - point.z );
+			app.player.pitch = Math.asin( point.y );
+		} else this.camera();
+		app.fly?.setPose( app.camera.position.clone(), app.player.yaw, app.player.pitch );
+
+	}
+
 	update( dt, { aboard = false, paused = false } = {} ) {
 
 		if ( ! this.group.visible ) return;
+		this.rowingPaused = paused;
 		if ( aboard ) {
 
 			if ( ! paused ) this.elapsed = Math.min( CROSSING_SECONDS, this.elapsed + dt );
-			this.pose( paused ? 0 : dt );
+			this.pose( dt );
 			if ( this.app.freeCam ) return;
 			const p = this.app.player, inp = this.app.input;
 			const look = inp.consumeLook();
@@ -207,11 +209,13 @@ export class BoatArrival {
 			}
 			this.camera();
 
-		} else if ( this.departure !== null && ! paused ) {
+		} else if ( this.departure !== null ) {
 
-			this.departure += dt;
+			if ( ! paused ) this.departure += dt;
 			this.pose( dt );
-			if ( this.departure > 65 ) this.group.visible = false;
+			// Remain a real departing boat for the stair-crest look back, shrinking
+			// naturally with distance rather than vanishing during the climb.
+			if ( this.departure > DEPARTURE_VISIBLE_SECONDS ) this.group.visible = false;
 
 		}
 

@@ -105,6 +105,7 @@ fn cliffFoamAt( xz: vec2f ) -> f32 {
 			if ( this.lastWaves.has( s ) && wave === this.lastWaves.get( s ) + 1 && phase < 0.13 && d < 340 ) {
 				this.impacts ++;
 				this.audio?.cliffImpact( s, strength * s.exposure );
+				this.onImpact?.( s, strength * s.exposure );
 			}
 			this.lastWaves.set( s, wave );
 			const pulse = cliffPulse( t, s.phase, period ) * strength * s.exposure;

@@ -4,6 +4,16 @@ import { hazeDensityForVisibility } from '../post/AirHaze.js';
 // Named review cameras used to check every change from the same set of angles.
 // window.__view( name ) jumps there; window.__views lists them.
 export const VIEWS = {
+	// The new chapter's rooms and voluntary look back from the west tramway.
+	dKitchen: { p: [ -1.1, 82.67, 6.8 ], at: [ -3.7, 81.95, 9.2 ], fov: 74, time: 10.0 },
+	dKitchenNight: { p: [ -1.1, 82.67, 6.8 ], at: [ -3.7, 81.95, 9.2 ], fov: 74, time: 18.5 },
+	dBerth: { p: [ -1.3, 82.67, 11.4 ], at: [ -3.7, 81.85, 12.9 ], fov: 72, time: 10.0 },
+	dHauling: { p: [ -160, 0, 42.7 ], terrainEye: 1.62, at: [ -160, 0, 39.5 ], terrainTarget: 1.0, fov: 72, time: 12.4 },
+	dReturn: { p: [ -157, 0, 44 ], terrainEye: 1.62, at: [ -2.1, 87, 10.5 ], fov: 62, time: 18.0, vis: 2.5 },
+	// Fitted stonework review, separate from normal player/story state.
+	stoneBoundary: { p: [ 18, 82.1, 18 ], at: [ 13, 80.9, 16 ], fov: 58, time: 12.4 },
+	stoneChapel: { p: [ -12.8, 73.42, 55.7 ], at: [ -8, 72.52, 51 ], fov: 62, time: 12.4 },
+	stoneScatter: { p: [ -3, 73.82, 59 ], at: [ -3.5, 71.5, 55.5 ], fov: 62, time: 12.4 },
 	beach: { p: [ 15, 3.0, - 58 ], yaw: Math.PI, pitch: - 0.08, time: 16.2 },
 	surf: { p: [ 12, 1.7, - 44 ], yaw: Math.PI + 0.25, pitch: - 0.02, time: 16.2 },
 	surfSide: { p: [ 40, 2.2, - 36 ], yaw: Math.PI * 0.62, pitch: - 0.08, time: 10.5 },
@@ -69,6 +79,10 @@ export const VIEWS = {
 	dCrossing: { p: [ 0, 0, 0 ], arrival: 0, time: 13.5 },
 	dBoatPapers: { p: [ 0, 0, 0 ], arrival: 40, arrivalPitch: - 0.55, time: 13.55 },
 	dBoatLanding: { p: [ 0, 0, 0 ], arrival: 90, time: 13.67 },
+	dBoatSide: { p: [ 0, 0, 0 ], arrival: 40, boatEye: [ - 7.5, 3.1, 5.5 ], boatAt: [ 0, 0.6, 0 ], fov: 52, time: 13.55 },
+	dBoatCrew: { p: [ 0, 0, 0 ], arrival: 40, boatEye: [ 0.05, 2.25, 2.8 ], boatAt: [ 0, 1.03, - 0.8 ], fov: 65, time: 13.55 },
+	dBoatDeparting: { p: [ 128, 5.0, 51.5 ], at: [ 207, 0, 75 ], arrival: 90, departure: 25, time: 13.7, fov: 65 },
+	dBoatDistant: { p: [ 128, 5.0, 51.5 ], at: [ 400, 0, 145 ], arrival: 90, departure: 100, time: 13.7, fov: 65 },
 	dYardMoon: { p: [ 8, 82.3, 14 ], at: [ - 10, 83, 2 ], time: 19.0, vis: 60 },
 	dRoomNight: { p: [ 0.4, 82.67, 4.6 ], at: [ - 6.5, 81.6, - 0.6 ], time: 19.0 },
 	// Material review: floor at walking height, both sides of the house door and the tower deck.
@@ -84,6 +98,12 @@ export const VIEWS = {
 
 // a view's own visibility (km, `vis`) and field of view (degrees, `fov`), or the app's
 export function applyViewVisibility( app, v ) {
+	if ( v.terrainEye !== undefined ) v.p[ 1 ] = app.terrainData.heightAt( v.p[ 0 ], v.p[ 2 ] ) +v.terrainEye;
+	if ( v.terrainTarget !== undefined ) v.at[ 1 ] = app.terrainData.heightAt( v.at[ 0 ], v.at[ 2 ] ) +v.terrainTarget;
+	if ( v.terrainEye !== undefined || v.terrainTarget !== undefined ) {
+		const dx = v.at[ 0 ] -v.p[ 0 ], dy = v.at[ 1 ] -v.p[ 1 ], dz = v.at[ 2 ] -v.p[ 2 ];
+		v.yaw = Math.atan2( -dx, -dz ); v.pitch = Math.atan2( dy, Math.hypot( dx, dz ) );
+	}
 
 	const cam = app.camera;
 	if ( cam ) {
@@ -133,11 +153,15 @@ export function installDebugViews( app ) {
 		applyViewVisibility( app, v );
 		if ( app.setFreeCam ) app.setFreeCam( true );
 		app.handInView = !! v.hand;
+		if ( app.arrival ) app.arrival.reviewView = null;
 		if ( v.arrival !== undefined && app.arrival ) {
 
 			app.arrival.begin( v.arrival );
+			if ( v.departure !== undefined ) { app.arrival.departure = v.departure; app.arrival.pose( 0 ); }
 			app.player.pitch = v.arrivalPitch ?? 0.12;
 			app.arrival.camera();
+			app.arrival.reviewView = v;
+			app.arrival.reviewCamera();
 			app.fly.setPose( app.camera.position.clone(), app.player.yaw, app.player.pitch );
 
 		} else {

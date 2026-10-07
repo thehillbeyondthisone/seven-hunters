@@ -63,6 +63,8 @@ export class Player {
 		// eye height easing between modes (critically damped offset from the mode's eye height)
 		this.camOff = 0;
 		this.camOffV = 0;
+		this.groundCamOff = 0;
+		this.groundCamOffV = 0;
 		this._camY = null;
 		this.floating = true; // swimming at the surface (riding the waves) vs. free under water
 		this.slot = query.allocate( 'player', 1 );
@@ -173,6 +175,7 @@ export class Player {
 		}
 
 		const prevMode = this.mode;
+		const prevY = this.position.y, wasGrounded = this.grounded;
 		if ( this.mode === 'walk' ) this.updateWalk( dt );
 		else this.updateSwim( dt );
 
@@ -186,17 +189,30 @@ export class Player {
 			// something else drove the camera since our last frame (free camera, boat): start fresh
 			this.camOff = 0;
 			this.camOffV = 0;
+			this.groundCamOff = 0;
+			this.groundCamOffV = 0;
 
 		} else if ( this.mode !== prevMode ) {
 
 			this.camOff = this._camY - eye.y;
+			this.groundCamOff = 0;
+			this.groundCamOffV = 0;
+
+		} else if ( this.mode === 'walk' && wasGrounded && this.grounded ) {
+
+			// Feet follow the real tread immediately; the eye absorbs its height
+			// change, including steps down, without delaying jumping or falling.
+			this.groundCamOff -= this.position.y - prevY;
 
 		}
 
+		const gw = 20, ge = Math.exp( - gw * dt ), gj = ( this.groundCamOffV + gw * this.groundCamOff ) * dt;
+		this.groundCamOff = ( this.groundCamOff + gj ) * ge;
+		this.groundCamOffV = ( this.groundCamOffV - gw * gj ) * ge;
 		const w = 6, e = Math.exp( - w * dt ), j = ( this.camOffV + w * this.camOff ) * dt;
 		this.camOff = ( this.camOff + j ) * e;
 		this.camOffV = ( this.camOffV - w * j ) * e;
-		eye.y += this.camOff;
+		eye.y += this.camOff + this.groundCamOff;
 		this.camera.position.copy( eye );
 		this._camY = this.camera.position.y;
 		this.camera.quaternion.setFromEuler( _e.set( this.pitch, this.yaw, 0 ) );
@@ -214,14 +230,19 @@ export class Player {
 		if ( inp.down( 'KeyD' ) ) wish.add( _right );
 		if ( inp.down( 'KeyA' ) ) wish.sub( _right );
 		if ( wish.lengthSq() > 0 ) wish.normalize();
+		if ( inp.enabled && inp.move ) {
+			wish.addScaledVector( _fwd, inp.move.y ).addScaledVector( _right, inp.move.x );
+			if ( wish.lengthSq() > 1 ) wish.normalize();
+		}
 
 		const depth = this.waterH - this.position.y; // water depth at the feet
 		const wade = THREE.MathUtils.clamp( depth / 1.2, 0, 1 );
 		this.wade = wade;
-		const sprint = inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' );
+		const sprint = this.canSprint?.() !== false && ( inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' ) );
 		const speed = ( sprint ? 6.2 : 3.0 ) * THREE.MathUtils.lerp( 1, 0.42, wade );
 		const accel = this.grounded ? 14 : 2.5;
 		const k = 1 - Math.exp( - accel * dt );
+		// A planted walker stays put. Water currents belong to swimming.
 		this.velocity.x += ( wish.x * speed - this.velocity.x ) * k;
 		this.velocity.z += ( wish.z * speed - this.velocity.z ) * k;
 
@@ -238,10 +259,13 @@ export class Player {
 
 		const p = this.position;
 		const old = p.clone();
+		const followGround = this.grounded && this.velocity.y <= 0;
 		p.addScaledVector( this.velocity, dt );
 		this.colliders.resolveCapsule( p, RADIUS, HEIGHT, 0.4 );
 		const g = this.groundAt( p.x, p.z, p.y + 0.45 );
-		if ( p.y <= g ) {
+		// Stay planted on small descending treads instead of briefly falling
+		// between each one. Larger drops and jumps retain their normal gravity.
+		if ( p.y <= g || ( followGround && g >= old.y - 0.4 && g <= old.y + 0.45 ) ) {
 
 			p.y = g;
 			if ( this.velocity.y < 0 ) this.velocity.y = 0;
@@ -249,7 +273,7 @@ export class Player {
 
 		} else {
 
-			this.grounded = p.y - g < 0.06;
+			this.grounded = this.velocity.y <= 0 && p.y - g < 0.06;
 
 		}
 
@@ -317,6 +341,10 @@ export class Player {
 		if ( inp.down( 'Space' ) ) wish.y += 1;
 		if ( inp.down( 'KeyC' ) || inp.down( 'ControlLeft' ) ) wish.y -= 1;
 		if ( wish.lengthSq() > 0 ) wish.normalize();
+		if ( inp.enabled && inp.move ) {
+			wish.addScaledVector( _fwd, inp.move.y ).addScaledVector( _right, inp.move.x );
+			if ( wish.lengthSq() > 1 ) wish.normalize();
+		}
 
 		const atSurface = this.floating && p.y > surfaceY - 0.45;
 		// at the surface W along a level view keeps you on top; looking down dives
@@ -325,7 +353,10 @@ export class Player {
 		const sprint = inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' );
 		const speed = sprint ? 2.5 : 1.5;
 		const k = 1 - Math.exp( - dt * 3.0 );
-		this.velocity.lerp( wish.multiplyScalar( speed ), k );
+		wish.multiplyScalar( speed );
+		const drift = inp.enabled && ! this.busy ? this.ambientDrift?.( true ) : null;
+		if ( drift ) { wish.x += drift.x; wish.z += drift.z; }
+		this.velocity.lerp( wish, k );
 
 		// A swimmer at the surface floats with the head riding the waves; one who dives stays where
 		// they swim to (neutral buoyancy, nothing pulls them back up) until they swim up to the

@@ -192,7 +192,8 @@ export class Rocks {
 			for ( let a = 0; a < 6; a ++ ) g = Math.min( g, T.heightAt( x + Math.cos( a ) * size * 0.7, z + Math.sin( a ) * size * 0.7 ) );
 			const y = g - sy * st[ 1 ] * sink;
 			// orientation: random yaw, a random tilt, partly following the ground
-			const q = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), rand() * Math.PI * 2 );
+			const yaw = maritime && style === 2 && h > 8 ? 0.65 + ( rand() - 0.5 ) * 0.24 : rand() * Math.PI * 2;
+			const q = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), yaw );
 			const tq = new THREE.Quaternion().setFromUnitVectors( new THREE.Vector3( 0, 1, 0 ), new THREE.Vector3( 0, 1, 0 ).lerp( n, align ).normalize() );
 			const tt = rand() < tumble ? 2.2 : tilt; // some boulders rolled over: any face may be up
 			const rq = new THREE.Quaternion().setFromEuler( new THREE.Euler( ( rand() - 0.5 ) * tt, 0, ( rand() - 0.5 ) * tt ) );
@@ -276,7 +277,7 @@ export class Rocks {
 					// occasional outcrops breaking through the vegetated slopes
 					if ( u > 0.0016 ) continue;
 					const size = 1.5 + rand() * 3.5;
-					add( jx, jz, size, pick( [ 1, 2, 3, 0.5 ] ), { sink: 0.55, tilt: 0.3, align: 0.9 } );
+					add( jx, jz, size, pick( maritime ? [ 0, 2, 7, 0 ] : [ 1, 2, 3, 0.5 ] ), { sink: 0.55, tilt: 0.3, align: 0.9 } );
 
 				}
 
@@ -288,8 +289,9 @@ export class Rocks {
 		// The pattern is seeded art direction, not surveyed individual stones.
 		if ( maritime ) for ( let z = -160; z < 190; z += 3.2 ) for ( let x = -350; x < 170; x += 3.2 ) {
 			const jx = x + rand() * 3.2, jz = z + rand() * 3.2, h = T.heightAt( jx, jz );
-			if ( h < 9 || h > 90 || slopeAt( jx, jz ) > 0.85 || rand() > 0.16 ) continue;
-			add( jx, jz, 0.25 + rand() * 0.8, pick( [ 1, 4, 3, 0 ] ), { sink: 0.38, tilt: 0.15, align: 0.8 } );
+			const seam = clusterNoise.noise( ( jx + jz * 0.3 ) / 38, ( jz - jx * 0.25 ) / 11 );
+			if ( h < 9 || h > 90 || slopeAt( jx, jz ) > 0.85 || rand() > 0.075 * sstep( -0.25, 0.45, seam ) ) continue;
+			add( jx, jz, 0.6 + rand() * 1.6, pick( [ 0, 1, 8, 0 ] ), { sink: 0.49, tilt: 0.12, align: 0.8 } );
 		}
 
 		// ---- where the beach meets the headlands: a few boulder groups against the rocky ends,
@@ -356,7 +358,7 @@ export class Rocks {
 		const mat = standard( { name: 'Rocks', roughness: 0.8, metalness: 0, uniforms: { maritime: [ 'f32', this.village?.station ? 1 : 0 ] } } );
 		if ( ! gpu ) return mat;
 		// heightfield sun shadow (the former TerrainLightingModel)
-		mat.modules = [ gpu.module, terrainShadingModule(), lodFadeModule, ...( sunShadow ? [ gpu.sunModulationModule ] : [] ) ];
+		mat.modules = [ gpu.module, terrainShadingModule( this.village?.textures?.textures.stoneGrainN ), lodFadeModule, ...( sunShadow ? [ gpu.sunModulationModule ] : [] ) ];
 		if ( sunShadow ) mat.defines.MATERIAL_SUN_MODULATION = 1;
 		mat.attributes = { iLod: 'vec2f', ao: 'f32' };
 		mat.varyings = { vLod: 'vec2f', vCav: 'f32' };
@@ -379,12 +381,14 @@ export class Rocks {
 	let contact = ( 1.0 - smoothstep( 0.0, 0.22, above + ( R.height - 0.5 ) * 0.15 ) ) * smoothstep( -0.2, 0.3, ground );
 	let drift = mix( ${ srgb( 0.33, 0.27, 0.18 ) }, ${ srgb( 0.8, 0.72, 0.56 ) }, sp.x );
 	let nb = terrainPerturbNormal( p, N, R.hd, 1.0 );
+	let detail = terrainStoneDetail( p, N, g );
 	${ lodDiscard }
 	s.albedo = mix( R.albedo, drift, contact * 0.8 );
 	let stone = vec3f( dot( s.albedo, vec3f( 0.2126, 0.7152, 0.0722 ) ) ) * vec3f( 1.04, 1.06, 1.08 );
 	s.albedo = mix( s.albedo, stone * 1.5, mat.maritime * 0.65 );
-	s.roughness = mix( R.rough, 0.9, contact );
-	s.normal = nb;
+	let mineralRough = mix( detail.rough, .34 + detail.rough * .13, R.wet );
+	s.roughness = mix( mix( R.rough, mineralRough, mat.maritime ), 0.9, contact );
+	s.normal = terrainStoneNormal( nb, detail.slope * mat.maritime * ( 1.0 - contact ) );
 	s.ao = sat( in.vs.vCav * ( 1.0 - contact * 0.35 ) * ( smoothstep( 0.0, 0.35, R.height ) * 0.35 + 0.65 ) );
 `;
 		return mat;

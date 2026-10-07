@@ -12,6 +12,7 @@ globalThis.fetch = async ( u ) => new Response( readFileSync( join( DATA, String
 const { loadFlannanData } = await import( '../src/world/flannan/FlannanData.js' );
 const { FlannanTerrainData } = await import( '../src/world/flannan/FlannanTerrain.js' );
 const { buildStation, TOWER, ROOM, STATION } = await import( '../src/world/flannan/Station.js' );
+const { HAULING_SHED } = await import( '../src/world/flannan/NextRooms.js' );
 const { Builder } = await import( '../src/world/village/GeoBuilder.js' );
 const { InstancedProps, Rand } = await import( '../src/world/Props.js' );
 const { Colliders } = await import( '../src/world/Colliders.js' );
@@ -61,6 +62,9 @@ const input = { enabled: true, down: ( c ) => keys.has( c ), hit: () => false, c
 const camera = new E.PerspectiveCamera( 60, 2, 0.1, 5000 );
 const player = new Player( { camera, input, terrain, colliders, query, boat: null } );
 const E0 = st.landings.east;
+const { IntroLessons } = await import( '../src/story/IntroLessons.js' );
+const introStory = { beat: 'climb', flags: { landed: true, islandRevealSeen: true }, app: { player }, station: st, save() {} };
+const introLessons = new IntroLessons( introStory ), introOffered = new Set();
 player.position.set( E0.stage.x, E0.stage.y, E0.stage.z );
 player.position.y = Math.max( terrain.heightAt( E0.stage.x, E0.stage.z ), colliders.groundHeightAt( E0.stage.x, E0.stage.z, E0.stage.y + 1 ) );
 
@@ -91,6 +95,10 @@ function walk( pts, label, { reach = 0.45, expectStuck = false } = {} ) {
 
 			player.yaw = Math.atan2( - dx, - dz );
 			player.update( dt );
+			if ( introStory.beat === 'climb' ) {
+				introLessons.update( dt );
+				for ( const id of [ ...introStory.flags.introLessons.seen, ...introStory.flags.introLessons.pending ] ) introOffered.add( id );
+			}
 			t += dt;
 
 		}
@@ -111,6 +119,9 @@ const eg = STATION.eastGate;
 if ( walk( [ [ E0.steps.from.x, E0.steps.from.z ], ...flight, [ E0.steps.to.x, E0.steps.to.z ], [ 18.5, 7.4 ], [ eg.x + 2, eg.z ] ], 'the east flight' ) ) {
 
 	ok( Math.abs( player.position.y - STATION.yard ) < 1.5, `at the east gate after ${ t.toFixed( 0 ) } s: ${ pos() }` );
+	ok( [ 'landings', 'rails', 'shore' ].every( id => introOffered.has( id ) ), 'the real graded flight encounters the three stair explanations' );
+	ok( ! introOffered.has( 'station' ), 'working-station history waits for the Board letter' );
+	introStory.beat = 'room'; introLessons.update( dt );
 
 }
 
@@ -173,5 +184,26 @@ player.position.set( ...[ at( 1.4, ga )[ 0 ], TOWER.deck, at( 1.4, ga )[ 1 ] ] )
 walk( [ at( 3.0, ga ) ], 'the shut door', { expectStuck: true } );
 ok( Math.hypot( player.position.x, player.position.z ) < 2.2, `the shut lantern door holds you in: r ${ Math.hypot( player.position.x, player.position.z ).toFixed( 2 ) }` );
 
+// Both landing flights changed visually. Exercise the west flight too, including
+// passage past the separate crane platform, rather than relying on the east route.
+const W0 = st.landings.west;
+player.position.set( W0.stage.x, W0.stage.y, W0.stage.z );
+player.velocity.set( 0, 0, 0 );
+const westFlight = W0.steps.pts.filter( ( p, i ) => i % 4 === 0 ).map( p => [ p[0], p[2] ] );
+if ( walk( [ [ W0.steps.from.x, W0.steps.from.z ], ...westFlight, [ W0.steps.to.x, W0.steps.to.z ] ], 'the west flight' ) ) {
+	ok( Math.abs( player.position.y - W0.steps.to.y ) < 0.4, `at the west flight head: ${ pos() }` );
+}
+// The new south rooms: pass both actual thresholds, reach each task and walk back out.
+for ( const d of st.parts.doors ) d.block.solid = false;
+player.position.set( -2.2, TOWER.floor, 4.8 ); player.velocity.set( 0, 0, 0 );
+if ( walk( [ [ -2.2, 6.4 ], [ -2.2, 8 ], [ -3.5, 7.6 ], [ -2.2, 8.9 ], [ -1.2, 9.6 ], [ -2.2, 10 ], [ -2.2, 11.2 ], [ -2.7, 12.5 ] ], 'kitchen and berth' ) ) {
+	ok( Math.abs( player.position.y -TOWER.floor ) < 0.05, `both south rooms have continuous walkable floors: ${ pos() }` );
+}
+if ( walk( [ [ -2.2, 11.2 ], [ -2.2, 10 ], [ -2.2, 6.4 ], [ -2.2, 4.8 ], [ 0.3, 4.6 ], [ 3, 4.6 ], [ 5, 13 ], [ -12, 18.5 ], [ -12, 23 ], [ -22, 27 ], [ -45, 27.5 ], [ -80, 27 ], [ -120, 29 ], [ -160, 35 ], [ -157, 39 ], [ -160, 42.7 ], [ -160, 40.5 ] ], 'west tramway and hauling shed' ) ) {
+	ok( Math.abs( player.position.y -HAULING_SHED.floor ) < 0.12, `the upper hauling shed can be reached entirely on foot: ${ pos() }` );
+}
+if ( walk( [ [ -160, 44 ], [ -155, 44 ], [ -120, 29 ], [ -80, 27 ], [ -45, 27.5 ], [ -22, 27 ], [ -12, 23 ], [ -12, 18.5 ] ], 'return from the hauling shed' ) ) {
+	ok( Math.abs( player.position.y -STATION.yard ) < 1.5, `the return reaches the station yard: ${ pos() }` );
+}
 console.log( fails ? `${ fails } failed` : 'all passed' );
 process.exit( fails ? 1 : 0 );

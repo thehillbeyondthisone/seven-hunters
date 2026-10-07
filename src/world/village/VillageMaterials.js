@@ -456,8 +456,13 @@ export function createHardMaterial( T ) {
 	base = mix( base, vec3f( 0.3, 0.3, 0.29 ), HA.g * mix( 0.55, 0.045, mat.maintenance ) * hasRust * ( 1.0 - rust ) );
 	let rustCol = mix( vec3f( 0.12, 0.045, 0.02 ), vec3f( 0.4, 0.17, 0.06 ), smoothstep( 0.3, 0.9, HA.r ) );
 	let hardCol = mix( base, rustCol, rust ) * mix( 1.0, HN.a, 0.5 );
+#if STATION_IRON
+	let hardRough = mix( clamp( aData.w + ( HN.b - 0.53 ) * 0.8 - HA.g * 0.035 * hasRust, 0.18, 0.92 ), 0.88, rust );
+	let hardS = vlmSlopeOf( HN ) * ( rust * 0.55 + 0.7 );
+#else
 	let hardRough = mix( clamp( aData.w + ( HN.b - 0.5 ) * 0.35 - HA.g * 0.15 * hasRust, 0.04, 1.0 ), 0.88, rust );
 	let hardS = vlmSlopeOf( HN ) * ( rust * 0.8 + 0.25 ) * mix( 1.0, 0.12, mat.maintenance );
+#endif
 
 	// rope: uvs normalised by the circumference so the three strands wrap seamlessly
 	let ropeR = max( aData.w - 2.0, 0.004 );

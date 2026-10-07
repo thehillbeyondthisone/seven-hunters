@@ -245,10 +245,11 @@ ${ T ? '	sunLight *= terrainSunShadowAt( pos );' : '' }
 	// the sheet ends exactly on its analytic leading edge, not on the mesh triangles
 	let groundH = ${ T ? 'terrainHeightAt( pos.xz )' : '-500.0' };
 	var thickness = ${ T ? 'pos.y - groundH' : '10.0' };
+${ T ? '\tif ( waterSurface.coastalSafe > 0.5 && thickness < 0.002 ) { discard; }' : '' }
 	var frontD = 1e3;
 	var swTau = 0.0;
 	var swRt = 0.0;
-${ hasClip ? `	if ( vDepth < 1.0 ) {
+${ hasClip ? `	if ( vDepth < 1.0 ${ S.extremeSea ? '&& extremeSeaP.enabled < 0.5' : '' } ) {
 		let tRaw = thickness;
 		let se = shoreSwashEdge( pos.xz, thickness );
 		thickness = se.x; frontD = se.y; swTau = se.z; swRt = se.w;

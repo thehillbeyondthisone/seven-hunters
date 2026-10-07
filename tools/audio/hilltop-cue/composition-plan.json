@@ -1,0 +1,39 @@
+{
+  "chunks": [
+    {
+      "text": "[Arrival at the crest: instrumental, near-silent bowed breath, a fragile rising fiddle phrase emerging within two seconds; gentle opening into winter sunlight]",
+      "duration_ms": 6000,
+      "positive_styles": ["instrumental cinematic chamber folk", "intimate Scottish coastal atmosphere", "solo fiddle with natural bow texture", "warm bowed cello", "airy small string ensemble", "54 BPM with gentle rubato", "spacious acoustic reverb", "tender awe and homesickness", "soft opening", "three-note rising then falling motif"],
+      "negative_styles": ["vocals", "humming", "choir", "drums", "percussion", "bagpipes", "folk dance", "epic trailer", "horror stings", "environmental sound effects"],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[The sea and the departing boat: instrumental, lift the same fiddle motif into one broad restrained swell; breathtaking beauty opening into the ache of being left alone; the cue's emotional high point]",
+      "duration_ms": 8000,
+      "positive_styles": ["same intimate fiddle and cello ensemble", "broad restrained melodic swell", "warm upper strings", "bittersweet open modal harmony", "awe with homesickness", "expressive unhurried phrasing"],
+      "negative_styles": ["vocals", "choir", "drums", "triumphant climax", "brass fanfare", "horror", "sound effects"],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Turn back toward the lighthouse: instrumental, recede from the swell, thin the upper strings, settle into a quiet measured cello figure beneath the unfinished fiddle melody; responsibility and courage within solitude]",
+      "duration_ms": 7000,
+      "positive_styles": ["same continuous acoustic cue", "quiet measured cello", "thinning string texture", "unfinished fiddle melody", "small human resolve", "gentle decrescendo"],
+      "negative_styles": ["vocals", "percussion", "new musical theme", "heroic march", "ominous bass hit", "abrupt transition"],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Walking toward the station: instrumental, softer echoes of the same three-note motif over the warm cello, with space between phrases and a small trace of hope; keep the arrangement intimate and continue easing down]",
+      "duration_ms": 16000,
+      "positive_styles": ["sparse fiddle motif echoes", "warm cello", "gentle human warmth", "quiet acoustic chamber folk", "air between phrases", "restrained sustained harmony", "gradually decreasing intensity"],
+      "negative_styles": ["vocals", "drums", "second climax", "new section build", "pop chorus", "dramatic tension rise"],
+      "context_adherence": "high"
+    },
+    {
+      "text": "[Natural instrumental ending: instruments fall away, leave a slightly unresolved open interval and its long clear acoustic decay; reach silence at the end]",
+      "duration_ms": 8000,
+      "positive_styles": ["natural final string decay", "slightly unresolved open interval", "quiet sparse acoustic ending", "gradually dissolving into silence"],
+      "negative_styles": ["vocals", "percussion", "final sting", "hard cut", "new melody", "last-minute swell", "sound effects"],
+      "context_adherence": "high"
+    }
+  ]
+}

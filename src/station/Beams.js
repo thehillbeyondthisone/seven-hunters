@@ -25,6 +25,7 @@ const block = new UniformBlock( 'BeamParams', {
 	count: [ 'f32', 0 ], // beams lit (0 or 4)
 	dirs: [ 'vec4f[4]', [ 0, 1, 2, 3 ].map( () => new Vector4() ) ], // xyz axis, w strength
 	color: [ 'vec3f', new Vector3( 1, 0.8, 0.55 ) ],
+	colors: [ 'vec4f[4]', [ 0, 1, 2, 3 ].map( () => new Vector4( 0, 0, 0, 0 ) ) ], // optional per-beam palette; w=0 retains the ordinary light
 	spread: [ 'f32', 0.035 ], // tan of the beam's half width
 	far: [ 'vec4f[4]', [ 0, 1, 2, 3 ].map( () => new Vector4() ) ], // xyz position, w intensity
 	farColor: [ 'vec4f[4]', [ 0, 1, 2, 3 ].map( () => new Vector4( 1, 0.75, 0.45, 0 ) ) ],
@@ -76,7 +77,8 @@ fn beamsInScatter( cam: vec3f, dir: vec3f, dist: f32, density: f32, seaLevel: f3
 		let T = exp( - sigB * ( s + t ) );
 		// (none inside the lantern: the pencil forms beyond the glazing)
 		let formed = smoothstep( 2.0, 6.0, s );
-		out += beamParams.color * beamParams.dirs[ i ].w * sigB * beamsPhase( - b ) * core * across / ( w * w ) * T * formed;
+		let tint = mix( beamParams.color, beamParams.colors[ i ].rgb, beamParams.colors[ i ].w );
+		out += tint * beamParams.dirs[ i ].w * sigB * beamsPhase( - b ) * core * across / ( w * w ) * T * formed;
 	}
 	// far lights
 	for ( var j = 0; j < ${ MAX_FAR }; j++ ) {

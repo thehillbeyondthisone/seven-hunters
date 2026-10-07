@@ -1,0 +1,45 @@
+.sh-debug[hidden],.sh-debug-launch[hidden],.sh-debug [hidden],.weather-preview[hidden] { display:none!important; }
+.sh-debug { position:fixed; z-index:180; right:8px; top:8px; width:248px; max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); overflow:auto; box-sizing:border-box; padding:0 4px 4px; color:#ddd; background:#202020f5; border:1px solid #505050; border-radius:0; font:11px/1.35 Arial,system-ui,sans-serif; overscroll-behavior:contain; touch-action:pan-y; }
+.sh-debug header { position:sticky; top:0; z-index:1; display:flex; justify-content:space-between; align-items:center; min-height:25px; margin:0 -4px; padding:0 5px; background:#111; border-bottom:1px solid #555; }
+.sh-debug header strong { font-size:11px; font-weight:600; }
+.sh-debug header button { width:23px; padding:0; font-size:16px; background:transparent; }
+.sh-debug details { margin:0; border-bottom:1px solid #494949; }
+.sh-debug details details { margin:0 0 3px; }
+.sh-debug summary { cursor:pointer; padding:4px 2px; font-weight:600; background:#252525; }
+.sh-debug button,.sh-debug a,.sh-debug select,.sh-debug input[type=number] { box-sizing:border-box; color:#ddd; background:#424242; border:0; border-radius:0; font:inherit; }
+.sh-debug button,.sh-debug a { display:block; width:100%; min-height:21px; padding:3px 5px; margin:3px 0; cursor:pointer; text-align:center; text-decoration:none; }
+.sh-debug button:hover,.sh-debug a:hover { background:#555; }
+.sh-debug button:disabled,.sh-debug a[aria-disabled=true] { opacity:.4; cursor:default; }
+.sh-debug button:focus-visible,.sh-debug a:focus-visible,.sh-debug input:focus-visible,.sh-debug select:focus-visible,.sh-debug-launch:focus-visible { outline:2px solid #62cacc; outline-offset:1px; }
+.sh-debug-grid { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+.sh-debug-row { display:flex; align-items:center; justify-content:space-between; gap:6px; min-height:25px; padding:2px; }
+.sh-debug-row select { width:158px; height:22px; min-width:0; }
+.sh-debug-row input { width:77px; height:22px; padding:2px 5px; }
+.sh-debug input[type=range] { display:block; width:calc(100% - 4px); height:15px; margin:3px 2px; accent-color:#60c8c9; }
+.sh-debug p { margin:3px 2px 6px; color:#aaa; font-size:10px; }
+.sh-debug output { display:block; padding:5px 2px 2px; color:#aaa; font-size:10px; }
+.sh-debug [data-reveal-clock] { font-variant-numeric:tabular-nums; color:#93d1d2; }
+.sh-debug [data-reveal-controls] .sh-debug-grid .sh-debug-row { gap:3px; }
+.sh-debug [data-reveal-controls] .sh-debug-grid input { width:48px; }
+.sh-debug-launch { position:fixed; z-index:85; right:8px; top:8px; border:1px solid #555; border-radius:0; padding:5px 9px; color:#ddd; background:#222e; font:11px/1.2 Arial,system-ui,sans-serif; cursor:pointer; }
+.keeper-playground-hud { position:fixed; left:22px; bottom:22px; z-index:84; max-width:310px; padding:14px 18px; border:1px solid #5bd9c477; border-radius:5px; background:#111e23e8; color:#e7e1d1; font:12px/1.65 monospace; pointer-events:none; box-shadow:0 8px 24px #0006; }
+.keeper-playground-hud[hidden],.keeper-grab-crosshair[hidden] { display:none!important; }
+.keeper-playground-hud small { display:block; color:#79d5c5; font-size:9px; letter-spacing:1px; }
+.keeper-playground-hud strong { display:block; font-size:20px; font-family:Georgia,serif; margin:3px 0 6px; color:#f2dfb7; }
+.keeper-playground-hud p { margin:7px 0; }
+.keeper-playground-hud em { color:#a5b4b6; font-size:10px; font-style:normal; }
+.keeper-charge { height:3px; margin:9px 0; background:#304248; }
+.keeper-charge i { display:block; height:100%; width:0; background:#ffc76a; }
+.keeper-grab-crosshair { position:fixed; left:50%; top:50%; width:16px; height:16px; transform:translate(-50%,-50%); border:1px solid #ded9b899; border-radius:50%; z-index:83; pointer-events:none; }
+.keeper-grab-crosshair[data-ready=true] { border:2px solid #77ffe0; box-shadow:0 0 12px #48eec688; }
+.sh-debug-touch { width:280px; font-size:14px; }
+.sh-debug-touch summary,.sh-debug-touch button,.sh-debug-touch a { min-height:36px; }
+.sh-debug-touch header button { min-width:36px; }
+.is-mobile .sh-debug-launch { top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); right:auto; min-height:40px; font-size:14px; }
+/* Keep debug beside the original glass settings panel on desktop. */
+@media (min-width:660px) {
+ html:not(.is-mobile):has(.tw-root[data-panel='open']) .sh-debug,
+ html:not(.is-mobile):has(.tw-root[data-panel='open']) .sh-debug-launch {
+  right:calc(var(--tw-panel-w) + 2 * var(--tw-3));
+ }
+}

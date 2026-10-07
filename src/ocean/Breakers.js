@@ -157,6 +157,9 @@ fn breakersSprayShadow( p: vec3f, seedTag: f32 ) -> f32 {
 	}
 
 	update( camera ) {
+		// Flannan's cliffs use standing waves and CliffSurge spray. The beach
+		// lip sheets can stretch across steep geos as long, intersecting shards.
+		if ( this.surface?.coastalSafe?.value > 0.5 ) { this.mesh.visible = false; return; }
 
 		this.cameraPos.value.copy( camera.position );
 		if ( this.surface && this.surface.amplitude ) this.uniforms.fields.amplitude.value = this.surface.amplitude.value;

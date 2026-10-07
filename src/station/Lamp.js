@@ -56,11 +56,11 @@ export class Lamp {
 
 	}
 
-	// add a winding (0..1 of a full winding) and release the brake
-	addWind( amount ) {
+	// Add a winding (0..1); legacy watches also release the brake by default.
+	addWind( amount, { start = true } = {} ) {
 
 		this.wind = Math.min( 1, this.wind + amount );
-		this.running = true;
+		if ( start ) this.running = true;
 		if ( this.wind > WARN ) this.warned = false;
 
 	}
@@ -69,6 +69,10 @@ export class Lamp {
 
 		this.running = false;
 
+	}
+
+	start() {
+		this.running = this.wind > 0;
 	}
 
 	get turning() {

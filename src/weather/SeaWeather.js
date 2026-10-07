@@ -11,9 +11,17 @@ export function stationShelter( p ) {
 }
 
 export class SeaWeather {
-	constructor( app ) {
+	constructor( app, { preset } = {} ) {
 		this.app = app;
-		this.model = new SeaWeatherState( app.qs.get( 'seaWeather' ) || 'gale' );
+		this.active = true;
+		this.original = {
+			local: { ...app.fft.local }, swell: { ...app.fft.swell }, period: app.shore.period.value,
+			wind: G.windSpeed.value, direction: G.windDir.value.clone(), clouds: app.clouds?.coverage.value,
+			cloudWind: app.clouds?.weatherWindSpeed, cloudContinuous: app.clouds?.weatherContinuous,
+			haze: app.haze?.density.value, sun: app.sky.sunDiskIntensity.value,
+			sea: app.surface.amplitude.value, foam: app.surface.foamCoverage.value, surf: app.shore.amplitude.value,
+		};
+		this.model = new SeaWeatherState( preset || app.qs.get( 'seaWeather' ) || 'gale' );
 		this.uniforms = new UniformBlock( 'SeaWeatherParams', { rain: [ 'f32', 0 ], wet: [ 'f32', 0 ] }, { label: 'seaWeather' } );
 		const f = ( x ) => Number( x ).toFixed( 4 );
 		this.module = new ShaderModule( { name: 'seaWeather', deps: [ commonModule ], uniforms: this.uniforms, uniformName: 'seaWeather', code: /* wgsl */`
@@ -88,6 +96,7 @@ fn seaWeatherShelter( p: vec3f ) -> bool {
 		this.rain.renderOrder = 23; this.app.scene.add( this.rain );
 	}
 	update( dt ) {
+		if ( ! this.active ) return;
 		const s = this.model.update( dt ), a = this.app;
 		this.state = s;
 		const gust = 1 + 0.07 * Math.sin( G.time.value * 0.63 ) * Math.sin( G.time.value * 0.19 + 1 );
@@ -103,6 +112,7 @@ fn seaWeatherShelter( p: vec3f ) -> bool {
 		if ( this.onUpdate ) this.onUpdate( s );
 	}
 	applyLighting() {
+		if ( ! this.active ) return;
 		// Broad overcast fills gaps in the broken-cumulus model during the squall. Applied after
 		// the atmosphere readback each frame, so it cannot accumulate or alter the normal night.
 		if ( ! this.app.atmosphere.sunTransmittance ) return;
@@ -110,5 +120,25 @@ fn seaWeatherShelter( p: vec3f ) -> bool {
 		const sun = G.sunColor.value, sky = G.skyIrradiance.value;
 		sun.r *= 1 - storm * 0.97; sun.g *= 1 - storm * 0.96; sun.b *= 1 - storm * 0.95;
 		sky.r *= 1 - storm * 0.36; sky.g *= 1 - storm * 0.25; sky.b *= 1 - storm * 0.12;
+	}
+	select( preset ) {
+		if ( ! this.model.select( preset ) ) return false;
+		if ( ! this.active ) {
+			Object.assign( this.app.fft.local, { windSpeed: 18, fetch: 700, windDirection: - 35 } );
+			Object.assign( this.app.fft.swell, { scale: 0.9, windSpeed: 10, fetch: 2400, windDirection: - 20 } );
+			this.app.fft.updateSpectrumUniforms(); this.app.shore.period.value = 14;
+		}
+		this.active = true; this.rain.visible = true; return true;
+	}
+	reset() {
+		if ( ! this.active ) return;
+		const a = this.app, o = this.original;
+		this.active = false; this.model.cycling = false; this.rain.visible = false;
+		this.uniforms.fields.rain.value = 0; this.uniforms.fields.wet.value = 0;
+		Object.assign( a.fft.local, o.local ); Object.assign( a.fft.swell, o.swell ); a.fft.updateSpectrumUniforms();
+		a.shore.period.value = o.period; G.windSpeed.value = o.wind; G.windDir.value.copy( o.direction );
+		if ( a.clouds ) { a.clouds.coverage.value = o.clouds; a.clouds.weatherWindSpeed = o.cloudWind; a.clouds.weatherContinuous = o.cloudContinuous; }
+		if ( a.haze ) a.haze.density.value = o.haze;
+		a.sky.sunDiskIntensity.value = o.sun; a.surface.amplitude.value = o.sea; a.surface.foamCoverage.value = o.foam; a.shore.amplitude.value = o.surf;
 	}
 }

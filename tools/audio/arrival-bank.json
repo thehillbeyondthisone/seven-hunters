@@ -1,0 +1,136 @@
+{
+  "arrival_stroke": {
+    "bank": {
+      "file": "arrival_stroke.ogg",
+      "slices": [
+        [
+          0.0,
+          1.65
+        ],
+        [
+          1.73,
+          1.65
+        ],
+        [
+          3.46,
+          1.65
+        ],
+        [
+          5.19,
+          1.65
+        ],
+        [
+          6.92,
+          1.65
+        ],
+        [
+          8.65,
+          1.65
+        ]
+      ],
+      "lufs": [
+        -20.9,
+        -22.4,
+        -21.2,
+        -25.7,
+        -24.3,
+        -19.9
+      ]
+    },
+    "excerpts": [
+      {
+        "id": 588307,
+        "start": 9.35,
+        "duration": 1.65,
+        "source": "https://freesound.org/people/Fenodyrie/sounds/588307/",
+        "licence": "http://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      {
+        "id": 588307,
+        "start": 20.55,
+        "duration": 1.65,
+        "source": "https://freesound.org/people/Fenodyrie/sounds/588307/",
+        "licence": "http://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      {
+        "id": 588307,
+        "start": 22.95,
+        "duration": 1.65,
+        "source": "https://freesound.org/people/Fenodyrie/sounds/588307/",
+        "licence": "http://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      {
+        "id": 588307,
+        "start": 32.65,
+        "duration": 1.65,
+        "source": "https://freesound.org/people/Fenodyrie/sounds/588307/",
+        "licence": "http://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      {
+        "id": 588307,
+        "start": 37.25,
+        "duration": 1.65,
+        "source": "https://freesound.org/people/Fenodyrie/sounds/588307/",
+        "licence": "http://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      {
+        "id": 588307,
+        "start": 43.75,
+        "duration": 1.65,
+        "source": "https://freesound.org/people/Fenodyrie/sounds/588307/",
+        "licence": "http://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    ],
+    "duration": 10.38,
+    "peakDbFS": -3.0
+  },
+  "arrival_creak": {
+    "bank": {
+      "file": "arrival_creak.ogg",
+      "slices": [
+        [
+          0.0,
+          0.97
+        ],
+        [
+          1.05,
+          1.16
+        ],
+        [
+          2.29,
+          1.57
+        ]
+      ],
+      "lufs": [
+        -27.3,
+        -26.1,
+        -16.7
+      ]
+    },
+    "excerpts": [
+      {
+        "id": 502505,
+        "start": 0.0,
+        "duration": 0.97,
+        "source": "https://freesound.org/people/Rudmer_Rotteveel/sounds/502505/",
+        "licence": "http://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      {
+        "id": 502511,
+        "start": 0.0,
+        "duration": 1.16,
+        "source": "https://freesound.org/people/Rudmer_Rotteveel/sounds/502511/",
+        "licence": "http://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      {
+        "id": 506662,
+        "start": 0.0,
+        "duration": 1.57,
+        "source": "https://freesound.org/people/Rudmer_Rotteveel/sounds/506662/",
+        "licence": "http://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    ],
+    "duration": 3.94,
+    "peakDbFS": -3.0
+  }
+}

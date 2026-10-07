@@ -1,0 +1,78 @@
+// Render the actual island/ocean/query/plume through the native WebGPU engine.
+import './headless.mjs';
+import assert from 'node:assert/strict';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { installBrowser } from '../tools/shots/browser.mjs';
+import { bgraShot, writePNG } from '../tools/shots/png.mjs';
+import { GPU } from '../src/engine/gpu/GPU.js';
+
+const W = 960, H = 540, out = resolve( 'artifacts/extreme-sea' ), images = new Map();
+mkdirSync( out, { recursive: true } );
+installBrowser( { search: '?simulation&seaWeather=settled&bench&noAudio', width: W, height: H, root: resolve( 'public' ), onPost: async ( url, body ) => {
+	const name = decodeURIComponent( url.split( '/' ).pop() ).replace( /\.bgra$/, '' );
+	const shot = bgraShot( Buffer.from( body.buffer, body.byteOffset, body.byteLength ) ); images.set( name, shot );
+	writePNG( `${ out }/${ name }.png`, shot.w, shot.h, shot.rgba );
+} } );
+await import( '../src/core/BenchSeed.js' );
+const { App } = await import( '../src/App.js' );
+const { Bench } = await import( '../src/core/Bench.js' );
+const { VIEWS } = await import( '../src/core/DebugViews.js' );
+VIEWS.seaCleanupAbove = { p: [ -420, 340, 520 ], yaw: Math.atan2( -390, 480 ), pitch: Math.atan2( -275, Math.hypot( 390, 480 ) ), fov: 66, time: 12.4 };
+const errors = [], init = GPU.init.bind( GPU );
+GPU.init = async options => {
+	const result = await init( options ); GPU.device.addEventListener( 'uncapturederror', e => errors.push( e.error.message ) );
+	GPU.device.pushErrorScope( 'validation' ); return result;
+};
+const app = new App();
+let stage = '';
+await app.init( ( p, text ) => { if ( text !== stage ) console.log( `${ Math.round( p * 100 ) }% ${ stage = text }` ); } );
+assert.equal( app.story, undefined, 'lab does not construct a watch or load its save' );
+const bench = new Bench( app ); app.post.autoExposure.snap.value = 1;
+await bench.shots( [ 'fCliffGale' ], { tag: 'baseline', frames: 3, dt: 0.016, width: W, height: H, time: 12.4 } );
+app.extremeSea.launch( 'tsunami' );
+for ( let i = 0; i < 70; i ++ ) app.extremeSea.update( 0.1 );
+await bench.shots( [ 'fCliffGale' ], { tag: 'tsunami', frames: 3, dt: 0.016, width: W, height: H, time: 12.4 } );
+assert.ok( app.query.heightModule.code.includes( 'extremeSeaSample' ), 'boat/swimmer water queries share event displacement' );
+assert.ok( app.surface.module.code.includes( 'extremeSeaNormal' ) );
+assert.ok( app.extremeSea.solver.field.every( Number.isFinite ) );
+window.__view( 'fWestWatch' ); app.extremeSea.launch( 'blast' );
+for ( let i = 0; i < 8; i ++ ) app.extremeSea.update( 0.1 );
+await bench.shots( [ 'fWestWatch' ], { tag: 'blast', frames: 3, dt: 0.016, width: W, height: H, time: 12.4 } );
+assert.ok( app.extremeSea.plume.visible && app.extremeSea.plume.geometry.instanceCount === 1800 );
+const original = app.seaWeather.original;
+app.seaWeather.select( 'hurricane' ); app.seaWeather.update( 0.1 ); app.seaWeather.reset(); app.extremeSea.reset();
+assert.equal( app.fft.local.windSpeed, original.local.windSpeed );
+assert.equal( app.surface.amplitude.value, original.sea );
+assert.equal( app.sky.sunDiskIntensity.value, original.sun );
+assert.equal( app.seaWeather.uniforms.fields.wet.value, 0 );
+assert.equal( app.extremeSea.params.fields.enabled.value, 0 );
+await bench.shots( [ 'fCliffGale' ], { tag: 'reset', frames: 3, dt: 0.016, width: W, height: H, time: 12.4 } );
+app.seaWeather.select( 'hurricane' );
+for ( let i = 0; i < 1200; i ++ ) app.seaWeather.update( 0.1 );
+await bench.shots( [ 'fCliffGale', 'fWestWatch' ], { tag: 'stable-hurricane', frames: 8, dt: 0.016, width: W, height: H, time: 12.4 } );
+assert.equal( app.breakers.mesh.visible, false, 'island disables the beach lip shards while retaining cliff surf' );
+app.seaWeather.select( 'settled' );
+for ( let i = 0; i < 1200; i ++ ) app.seaWeather.update( 0.1 );
+await bench.shots( [ 'seaCleanupAbove' ], { tag: 'dry-island', frames: 8, dt: 0.016, width: W, height: H, time: 12.4 } );
+app.extremeSea.launch( 'tsunami', { height:250 } );
+for ( let i = 0; i < 120; i ++ ) app.extremeSea.update( 0.1 );
+const solver = app.extremeSea.solver;
+assert.ok( solver.h.every( ( h, i ) => solver.bed[ i ] <= 1 || h > 0.1 ), 'actual game maximum tsunami floods all island land cells simultaneously' );
+await bench.shots( [ 'seaCleanupAbove' ], { tag: 'flooded-island', frames: 8, dt: 0, width: W, height: H, time: 12.4 } );
+assert.ok( solver.field.every( Number.isFinite ) );
+app.extremeSea.reset();
+await GPU.pipelinesReady(); await GPU.queue.onSubmittedWorkDone();
+const validation = await GPU.device.popErrorScope(); assert.equal( validation, null, validation?.message ); assert.deepEqual( errors, [] );
+const before = images.get( 'baseline-fCliffGale' ).rgba, after = images.get( 'tsunami-fCliffGale' ).rgba;
+let changed = 0; for ( let i = 0; i < before.length; i ++ ) changed += Math.abs( before[ i ] - after[ i ] );
+assert.ok( changed > W * H * 0.2, 'tsunami changes the rendered island/sea' );
+assert.ok( images.has( 'blast-fWestWatch' ), 'blast is rendered from the seaward-facing review camera' );
+for ( const name of [ 'dry-island-seaCleanupAbove', 'flooded-island-seaCleanupAbove' ] ) {
+	const rgba = images.get( name ).rgba;
+	let lit = 0; for ( let i = 0; i < rgba.length; i += 4 ) if ( rgba[ i ] + rgba[ i + 1 ] + rgba[ i + 2 ] > 15 ) lit ++;
+	assert.ok( lit > W * H * 0.5, `${ name } contains a visible scene, not a blank render` );
+}
+writeFileSync( `${ out }/verification.json`, JSON.stringify( { validationErrors: [], checks: [ 'full ocean displacement/normals/foam', 'water query integration', 'blast plume', 'finite solver state', 'weather and event restoration', 'hurricane coast without beach lip shards', 'maximum tsunami floods every island land cell', 'dry/flooded island rendered comparison' ], physicalDeviceTested: false }, null, 2 ) );
+console.log( 'PASS full native WebGPU island: tsunami, blast, shared water queries, plume and reset with no shader/validation errors. Images: artifacts/extreme-sea.' );
+process.exit( 0 );

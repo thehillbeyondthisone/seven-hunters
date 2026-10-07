@@ -1,9 +1,13 @@
 // Keyboard / mouse input with pointer lock support.
 export class Input {
 
-	constructor( dom ) {
+	constructor( dom, { touch = false } = {} ) {
 
 		this.dom = dom;
+		this.touchMode = touch;
+		this.touchKeys = new Set();
+		this.touchPressed = new Set();
+		this.move = { x: 0, y: 0 };
 		this.keys = new Set();
 		this.pressed = new Set();
 		this.look = { x: 0, y: 0 };
@@ -22,9 +26,11 @@ export class Input {
 
 		} );
 		window.addEventListener( 'keyup', ( e ) => this.keys.delete( e.code ) );
-		window.addEventListener( 'blur', () => this.keys.clear() );
+		window.addEventListener( 'blur', () => this.reset() );
+		document.addEventListener( 'visibilitychange', () => { if ( document.hidden ) this.reset(); } );
 
 		dom.addEventListener( 'mousedown', ( e ) => {
+			if ( this.touchMode ) return;
 
 			if ( e.button === 0 ) this.mouseDown = true;
 			if ( e.button === 2 ) this.rightDown = true;
@@ -38,6 +44,7 @@ export class Input {
 		} );
 		dom.addEventListener( 'contextmenu', ( e ) => e.preventDefault() );
 		window.addEventListener( 'mousemove', ( e ) => {
+			if ( this.touchMode ) return;
 
 			if ( this.locked || this.mouseDown || this.rightDown ) {
 
@@ -64,20 +71,21 @@ export class Input {
 
 	requestLock() {
 
+		if ( this.touchMode ) return;
 		if ( ! this.locked ) this.dom.requestPointerLock?.()?.catch?.( () => {} );
 
 	}
 
 	down( code ) {
 
-		return this.enabled && this.keys.has( code );
+		return this.enabled && ( this.keys.has( code ) || this.touchKeys.has( code ) );
 
 	}
 
 	// true once per physical key press
 	hit( code ) {
 
-		return this.enabled && this.pressed.has( code );
+		return this.enabled && ( this.pressed.has( code ) || this.touchPressed.has( code ) );
 
 	}
 
@@ -101,7 +109,45 @@ export class Input {
 	endFrame() {
 
 		this.pressed.clear();
+		this.touchPressed.clear();
 
+	}
+
+	get enabled() { return this._enabled; }
+	set enabled( value ) {
+		this._enabled = !! value;
+		if ( ! value ) this.resetTouch();
+	}
+
+	get rightDown() { return !! ( this._rightDown || this.touchScope ); }
+	set rightDown( value ) { this._rightDown = value; }
+
+	setTouchKey( code, held ) {
+		if ( ! held ) { this.touchKeys.delete( code ); return; }
+		if ( ! this.enabled ) return;
+		if ( ! this.touchKeys.has( code ) ) this.touchPressed.add( code );
+		this.touchKeys.add( code );
+	}
+
+	tapKey( code ) { if ( this.enabled ) this.touchPressed.add( code ); }
+
+	setTouchMove( x, y ) {
+		this.move.x = this.enabled ? x : 0;
+		this.move.y = this.enabled ? y : 0;
+	}
+
+	resetTouch() {
+		this.touchKeys?.clear();
+		this.touchPressed?.clear();
+		if ( this.move ) this.move.x = this.move.y = 0;
+		this.touchScope = false;
+		if ( this.look ) this.look.x = this.look.y = 0;
+	}
+
+	reset() {
+		this.keys.clear(); this.pressed.clear();
+		this.mouseDown = this.rightDown = false;
+		this.resetTouch();
 	}
 
 }

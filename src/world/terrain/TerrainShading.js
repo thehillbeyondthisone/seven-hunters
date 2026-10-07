@@ -272,6 +272,7 @@ fn terrainMeadowTone( mA: f32, mB: f32, slope: f32, south: f32, detail: f32, has
 `;
 
 let _module = null;
+const _stoneModules = new WeakMap();
 let _detailSpec = null;
 
 // the binding spec of the shared detail texture (terrain, rocks, debris, vegetation), bound under
@@ -282,15 +283,49 @@ export function detailBinding() {
 
 }
 
-export function terrainShadingModule() {
+// The Flannan variant reuses the station's unjointed mineral-grain map. No
+// extra texture is allocated for cliffs and no tangent UV mesh is required.
+function stoneDetailCode( enabled ) {
+	return /* wgsl */`
+struct StoneDetail { slope: vec3f, rough: f32 };
+fn terrainStoneSlope( n: vec4f ) -> vec2f {
+	let xy = n.xy * 2.0 - 1.0;
+	// The bake's Sobel Y is image-up; convert it to the world projection's Y.
+	return xy * vec2f( 1.0, -1.0 ) / sqrt( max( 1.0 - dot( xy, xy ), .04 ) );
+}
+fn terrainStoneDetail( p: vec3f, N: vec3f, g: RockGrad ) -> StoneDetail {
+${ enabled ? /* wgsl */`
+	let w = terrainTriWeights( N );
+	let scale = 1.3;
+	let x = textureSampleGrad( maritimeStoneN, smpAniso4Repeat, p.zy * scale, g.dpdx.zy * scale, g.dpdy.zy * scale );
+	let y = textureSampleGrad( maritimeStoneN, smpAniso4Repeat, p.xz * scale + .37, g.dpdx.xz * scale, g.dpdy.xz * scale );
+	let z = textureSampleGrad( maritimeStoneN, smpAniso4Repeat, p.xy * scale + .71, g.dpdx.xy * scale, g.dpdy.xy * scale );
+	let sx = terrainStoneSlope( x ); let sy = terrainStoneSlope( y ); let sz = terrainStoneSlope( z );
+	let slope = vec3f( 0.0, sx.y, sx.x ) * w.x + vec3f( sy.x, 0.0, sy.y ) * w.y + vec3f( sz.x, sz.y, 0.0 ) * w.z;
+	// Fine relief fades with the pixel footprint; roughness retains its broad variation.
+	let footprint = max( length( g.dpdx ), length( g.dpdy ) );
+	let fade = 1.0 - smoothstep( .008, .055, footprint );
+	return StoneDetail( slope * .8 * fade, x.b * w.x + y.b * w.y + z.b * w.z );
+` : '\treturn StoneDetail( vec3f( 0.0 ), .86 );' }
+}
+fn terrainStoneNormal( N: vec3f, slope: vec3f ) -> vec3f {
+	return normalize( N + slope - N * dot( N, slope ) );
+}
+`;
+}
 
-	if ( _module ) return _module;
-	_module = new ShaderModule( {
+export function terrainShadingModule( stoneTexture = null ) {
+
+	if ( stoneTexture && _stoneModules.has( stoneTexture ) ) return _stoneModules.get( stoneTexture );
+	if ( ! stoneTexture && _module ) return _module;
+	const module = new ShaderModule( {
 		name: 'terrainShading',
 		deps: [ commonModule ],
-		bindings: { terrainDetailTex: detailBinding() },
-		code: SHADING_WGSL,
+		bindings: { terrainDetailTex: detailBinding(), ...( stoneTexture ? { maritimeStoneN: { texture: stoneTexture } } : {} ) },
+		code: SHADING_WGSL + stoneDetailCode( !! stoneTexture ),
 	} );
-	return _module;
+	if ( stoneTexture ) _stoneModules.set( stoneTexture, module );
+	else _module = module;
+	return module;
 
 }

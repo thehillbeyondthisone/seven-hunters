@@ -62,6 +62,15 @@ export function routeGuidance( p, target, zone ) {
 	const r = Math.hypot( p.x, p.z );
 	const inRoom = p.x > ROOM.x0 && p.x < ROOM.x1 + 0.4 && p.z > ROOM.z0 && p.z < ROOM.z1 && r > TOWER.rIn;
 	const above = p.y > TOWER.floor + 0.65 && r < 4.2;
+	if ( zone === 'weight' ) {
+		if ( p.y >= TOWER.deck - .3 ) {
+			if ( r > 2.35 ) return galleryDoor();
+			const H = TOWER.hatch;
+			return marker( v( Math.cos( H.angle ) * H.r - Math.sin( H.angle ) * H.run, TOWER.deck + .3, Math.sin( H.angle ) * H.r + Math.cos( H.angle ) * H.run ), 'Down to the driving weight', 'hatch' );
+		}
+		if ( r > TOWER.rIn + .12 ) return inRoom ? towerDoor() : houseDoor();
+		return Math.abs( p.y + 1.55 - target.at.y ) > 1.35 ? stair( p, p.y + 1.55 < target.at.y ) : target;
+	}
 	if ( zone === 'room' || zone === 'yard' ) {
 
 		if ( above ) {
@@ -95,7 +104,10 @@ export function routeGuidance( p, target, zone ) {
 export function storyGuidance( story ) {
 
 	const s = story, p = s.app.player.position, L = s.lamp, W = s.watcher, b = s.beat;
-	if ( b === 'intro' || b === 'crossing' || b === 'end' || s.signal || s.tel > 0.6 || s.paused || s.ui.open || s.app.freeCam || s.app.ui?.ui?.photoMode || s.app.settings.guidance === false ) return null;
+	if ( b === 'intro' || b === 'crossing' || b === 'end' || s.signal || s.tel > 0.6 || s.paused || s.ui.open || s.app.devMenu?.open || s.app.freeCam || s.app.ui?.ui?.photoMode || s.app.settings.guidance === false ) return null;
+	if ( s.next?.active ) return s.next.guidance();
+	const keeper = s.keeper?.guidance();
+	if ( keeper ) return routeGuidance( p, marker( keeper.at, keeper.label, 'keeperDuty' ), keeper.zone );
 	let target, zone;
 	const item = ( id, label, region ) => {
 

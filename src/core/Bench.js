@@ -237,6 +237,11 @@ export class Bench {
 		}
 
 		const v = VIEWS[ name ];
+		// A preceding boat shot must not keep overriding later island cameras.
+		if ( app.arrival ) {
+			app.arrival.reviewView = null;
+			if ( ! app.story ) app.arrival.group.visible = false;
+		}
 		if ( v.time !== undefined ) app.settings.timeOfDay = v.time;
 		applyViewVisibility( app, v );
 		app.setFreeCam( true );

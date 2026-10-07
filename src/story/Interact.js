@@ -118,7 +118,7 @@ export class Interact {
 			}
 
 			// (progress(): an item that shows its own, the machine's winding)
-			p.prompt = { key: it.key, text, progress: it.progress ? it.progress() : this.held / it.hold, hold: true };
+			p.prompt = { key: it.key, text, progress: it.progress ? it.progress() : this.held / it.hold, hold: true, hideProgress: !! it.hideProgress };
 
 		} else {
 

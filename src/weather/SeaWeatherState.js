@@ -5,6 +5,8 @@ export const SEA_WEATHER = {
 	fresh: { label: 'Rising sea', wind: 12, clouds: 0.68, vis: 22, rain: 0.18, sea: 0.72, surf: 0.58 },
 	gale: { label: 'Atlantic gale', wind: 21, clouds: 0.92, vis: 4.5, rain: 0.85, sea: 1.3, surf: 1 },
 	easing: { label: 'After the squall', wind: 9, clouds: 0.62, vis: 30, rain: 0.04, sea: 0.86, surf: 0.66 },
+	storm: { label: 'Violent storm · force 11', wind: 30, clouds: 0.98, vis: 1.5, rain: 0.95, sea: 2.1, surf: 1.5 },
+	hurricane: { label: 'Hurricane force · force 12', wind: 38, clouds: 1, vis: 0.65, rain: 1, sea: 3.1, surf: 2.2 },
 };
 const clamp = ( x, a = 0, b = 1 ) => Math.max( a, Math.min( b, x ) );
 const smooth = ( x ) => { x = clamp( x ); return x * x * ( 3 - 2 * x ); };
@@ -12,7 +14,7 @@ const KEYS = [ [ 0, 'settled' ], [ 35, 'fresh' ], [ 95, 'gale' ], [ 155, 'gale' 
 export const WEATHER_CYCLE_SECONDS = 260;
 
 export function configureSeaPreview( qs ) {
-	if ( ! qs.has( 'weatherPreview' ) || qs.has( 'vr' ) ) return false;
+	if ( ! ( qs.has( 'weatherPreview' ) || qs.has( 'simulation' ) || qs.has( 'seaDread' ) ) || qs.has( 'vr' ) ) return false;
 	qs.set( 'setting', 'flannan' );
 	qs.set( 'nostory', '' );
 	qs.set( 'lamp', '' );

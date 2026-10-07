@@ -4,6 +4,9 @@
 // momentary loudness; sprites: each slice's maximum momentary loudness) - the mixer turns its target
 // levels into gains with it.
 export const BANK = {
+	arrival_stroke: {"file":"arrival_stroke.ogg","slices":[[0,1.65],[1.73,1.65],[3.46,1.65],[5.19,1.65],[6.92,1.65],[8.65,1.65]],"lufs":[-20.9,-22.4,-21.2,-25.7,-24.3,-19.9]},
+	arrival_creak: {"file":"arrival_creak.ogg","slices":[[0,0.97],[1.05,1.16],[2.29,1.57]],"lufs":[-27.3,-26.1,-16.7]},
+	arrival_water: { file: 'pier_lap.ogg', loop: true, lufs: -30.7 },
 	surf_far: { file: 'surf_far.ogg', loop: true, lufs: -23 },
 	wind: { file: 'wind.ogg', loop: true, lufs: -23.6 },
 	palms: { file: 'palms.ogg', loop: true, lufs: -23.3 },

@@ -28,6 +28,7 @@ export class CDLOD {
 		heightBounds = null, // optional (x0,z0,x1,z1) => [minY,maxY]
 		center = null, // optional fixed world bounds for root grid { x, z, size }
 		prefix = 'cdlod', // WGSL name prefix of this instance's module
+		stitchEdges = false, // expose neighboring LODs for heightfields with steep relief
 	} = {} ) {
 
 		this.G = gridSize;
@@ -37,6 +38,7 @@ export class CDLOD {
 		this.maxY = maxY;
 		this.heightBounds = heightBounds;
 		this.fixedRoot = center;
+		this.stitchEdges = stitchEdges;
 
 		this.ranges = [];
 		const morph = [];
@@ -75,6 +77,18 @@ fn ${ P }Snapped( node: vec4f, grid: vec2f ) -> vec2f {
 	let h = ${ P }.morph[ i32( node.w ) ].z;
 	let p = node.xy + grid * node.z;
 	return floor( p / h + 1e-3 ) * h;
+}
+
+// At a shared edge, evaluate every vertex on the coarser neighbor's lattice and
+// morph range. Height-dependent distances can otherwise leave the fine edge
+// only partly collapsed on steep cliffs, opening a T-junction through the hill.
+fn ${ P }EdgeNode( node: vec4f, grid: vec2f, edges: vec4f ) -> vec4f {
+	var lod = node.w;
+	if ( grid.x < 1e-5 ) { lod = max( lod, edges.x ); }
+	if ( grid.x > 1.0 - 1e-5 ) { lod = max( lod, edges.y ); }
+	if ( grid.y < 1e-5 ) { lod = max( lod, edges.z ); }
+	if ( grid.y > 1.0 - 1e-5 ) { lod = max( lod, edges.w ); }
+	return vec4f( node.xyz, lod );
 }
 
 fn ${ P }Morph( node: vec4f, grid: vec2f, viewPos: vec3f, y0: f32 ) -> ${ Cap }Vertex {
@@ -150,6 +164,13 @@ fn ${ P }Morph( node: vec4f, grid: vec2f, viewPos: vec3f, y0: f32 ) -> ${ Cap }V
 		this.nodeArray = new Float32Array( maxInstances * 4 );
 		this.nodeAttr = new InstancedBufferAttribute( this.nodeArray, 4 );
 		geo.setAttribute( 'nodeData', this.nodeAttr );
+		if ( stitchEdges ) {
+
+			this.edgeArray = new Float32Array( maxInstances * 4 );
+			this.edgeAttr = new InstancedBufferAttribute( this.edgeArray, 4 );
+			geo.setAttribute( 'nodeEdges', this.edgeAttr );
+
+		}
 		geo.instanceCount = 0;
 		geo.boundingSphere = new Sphere( new Vector3(), 1e7 );
 		geo.boundingBox = new Box3( new Vector3( - 1e7, - 1e7, - 1e7 ), new Vector3( 1e7, 1e7, 1e7 ) );
@@ -239,6 +260,38 @@ fn ${ P }Morph( node: vec4f, grid: vec2f, viewPos: vec3f, y0: f32 ) -> ${ Cap }V
 		this.nodeAttr.clearUpdateRanges();
 		this.nodeAttr.addUpdateRange( 0, this.count * 4 );
 		this.nodeAttr.needsUpdate = true;
+		if ( this.stitchEdges ) this._updateEdges();
+
+	}
+
+	_updateEdges() {
+
+		const a = this.nodeArray, e = this.edgeArray, n = this.count;
+		for ( let i = 0; i < n; i ++ ) e.fill( a[ i * 4 + 3 ], i * 4, i * 4 + 4 );
+		for ( let i = 0; i < n; i ++ ) for ( let j = i + 1; j < n; j ++ ) {
+
+			const p = i * 4, q = j * 4;
+			const ax = a[ p ], az = a[ p + 1 ], as = a[ p + 2 ], al = a[ p + 3 ];
+			const bx = a[ q ], bz = a[ q + 1 ], bs = a[ q + 2 ], bl = a[ q + 3 ];
+			if ( al === bl ) continue;
+			const meet = ( ae, be ) => { e[ p + ae ] = Math.max( e[ p + ae ], bl ); e[ q + be ] = Math.max( e[ q + be ], al ); };
+			if ( Math.max( az, bz ) < Math.min( az + as, bz + bs ) ) {
+
+				if ( ax + as === bx ) meet( 1, 0 );
+				else if ( bx + bs === ax ) meet( 0, 1 );
+
+			}
+			if ( Math.max( ax, bx ) < Math.min( ax + as, bx + bs ) ) {
+
+				if ( az + as === bz ) meet( 3, 2 );
+				else if ( bz + bs === az ) meet( 2, 3 );
+
+			}
+
+		}
+		this.edgeAttr.clearUpdateRanges();
+		this.edgeAttr.addUpdateRange( 0, n * 4 );
+		this.edgeAttr.needsUpdate = true;
 
 	}
 

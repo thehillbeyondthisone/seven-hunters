@@ -1,8 +1,22 @@
 # Audio credits
 
-Every sound in this folder is a real recording from [Freesound](https://freesound.org), released under
+The environmental sound recordings listed below come from [Freesound](https://freesound.org), released under
 **Creative Commons 0** (public domain dedication — no attribution required; credited here anyway).
-Nothing is synthesised. Source: each sound's Freesound high-quality preview.
+These recordings are not synthesised. Source: each sound's Freesound high-quality preview.
+
+The separate hilltop music track, `the-three-note-reach.mp3`, was generated with Suno and supplied and selected by the user for the local game. It is not a Freesound recording or covered by the CC0 attribution above.
+
+Arrival study additions (`tools/audio/build-arrival.py`): six mono rowing excerpts from
+[rowing boat from inside.wav](https://freesound.org/people/Fenodyrie/sounds/588307/) by Fenodyrie,
+and three timber creaks from [V1](https://freesound.org/people/Rudmer_Rotteveel/sounds/502505/),
+[V3](https://freesound.org/people/Rudmer_Rotteveel/sounds/502511/), and
+[V7](https://freesound.org/people/Rudmer_Rotteveel/sounds/506662/) by Rudmer_Rotteveel.
+All four pages and downloaded metadata identify CC0 1.0. The timber recordings are floorboard
+Foley used for boat weight shifts, not recordings of the historical landing boat.
+`arrival_stroke.ogg` and `arrival_creak.ogg` are resampled, faded and peak-normalised to -3 dBFS.
+Their excerpt times and measured loudness are in `tools/audio/arrival-bank.json`.
+The arrival water layer reuses the existing `pier_lap.ogg` dock-water recording as an exterior
+lapping proxy; the fibreglass hull recordings are suppressed in this preview.
 
 Processing (scratch build script): excerpt, high-pass (some), trim, fades, equal-power crossfade at the
 loop point, loudness normalisation (loops ≈ −23 LUFS integrated; one-shot slices peak-normalised to

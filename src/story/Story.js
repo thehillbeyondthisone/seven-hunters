@@ -1,16 +1,20 @@
 import { Vector3, MathUtils } from '../engine/math/index.js';
 import { Interact } from './Interact.js';
 import { StoryUI } from './StoryUI.js';
-import { BoatArrival, CROSSING_SECONDS } from './BoatArrival.js';
+import { BoatArrival, CROSSING_SECONDS, DEPARTURE_VISIBLE_SECONDS } from './BoatArrival.js';
+import { IslandReveal } from './IslandReveal.js';
+import { IntroLessons, INTRO_PAPERS } from './IntroLessons.js';
+import { KeeperDuties, KEEPER_PAPER } from './KeeperDuties.js';
+import { NextWatch } from './NextWatch.js';
 import { storyGuidance } from './Guidance.js';
-import { Watcher, morseText } from './Watcher.js';
+import { Watcher } from './Watcher.js';
 import * as S from './Script.js';
 import { WARN } from '../station/Lamp.js';
 import { Beams, hazeTransmittance } from '../station/Beams.js';
 import { hazeDensityForVisibility } from '../post/AirHaze.js';
 import { STATION, TOWER, ROOM, updateDoor } from '../world/flannan/Station.js';
 
-// The first night (docs/PLAN.md §3, the demo): Thursday 3rd January 1901, from the landing at 13.40 to the
+// The first night (docs/PLAN.md §3), continued by NextWatch: Thursday 3rd January 1901, from the landing at 13.40 to the
 // journal written after sunrise. It keeps the game's clock, the weather (clear at dusk, the haar from the
 // west at night), the beats and their objectives, the interactions, the Watcher, the eerie beats, the
 // journal, and a save in the browser.
@@ -60,7 +64,7 @@ export class Story {
 	constructor( app ) {
 
 		this.app = app;
-		this.saveKey = app.qs?.has( 'arrivalPreview' ) ? 'sevenhunters.arrival-preview.v1' : SAVE_KEY;
+		this.saveKey = app.isArrivalAtmosphere ? 'sevenhunters.arrival-atmosphere-preview.v1' : app.qs?.has( 'keeperPreview' ) ? 'sevenhunters.keeper-duty-preview.v1' : app.qs?.has( 'islandRevealPreview' ) ? 'sevenhunters.island-reveal-preview.v1' : app.qs?.has( 'chapterPreview' ) ? `sevenhunters.chapter-preview.${ app.qs.get( 'chapterPreview' ) || 'kitchen' }.v1` : app.qs?.has( 'arrivalPreview' ) ? 'sevenhunters.arrival-preview.v1' : SAVE_KEY;
 		const st = app.village.station;
 		this.station = st;
 		this.moving = st.moving;
@@ -96,6 +100,8 @@ export class Story {
 		this.saveT = 0;
 		this.baseFov = app.camera.fov;
 		this.arrival = app.arrival || new BoatArrival( { ...app, query: app.query || app.player.query } );
+		this.islandReveal = new IslandReveal( this );
+		app.player.canSprint = () => ! this.islandReveal.quietWalk;
 		this.hand = app.handLamp; // the storm lantern: on the keepers' room table until taken
 		this.hand.carried = false;
 		this.hand.lit = false;
@@ -120,7 +126,13 @@ export class Story {
 		this.signalLight = app.signalLight;
 		this._keys = ( e ) => this._key( e );
 		window.addEventListener( 'keydown', this._keys, true );
+		document.addEventListener( 'visibilitychange', () => { if ( document.hidden ) this.islandReveal.music.stop(); } );
 		this._items();
+		this.next = new NextWatch( this );
+		this.next.install();
+		this.keeper = app.qs?.has( 'keeperPreview' ) ? new KeeperDuties( this ) : null;
+		this.keeper?.install();
+		this.intro = new IntroLessons( this );
 
 	}
 
@@ -152,7 +164,9 @@ export class Story {
 
 	dayText() {
 
-		return this.h < 24 ? 'Thursday 3rd January 1901' : 'Friday 4th January 1901';
+		const date = new Date( Date.UTC( 1901, 0, 3 + Math.floor( this.h / 24 ) ) );
+		const day = date.getUTCDate(), suffix = day === 1 || day === 21 || day === 31 ? 'st' : day === 2 || day === 22 ? 'nd' : day === 3 || day === 23 ? 'rd' : 'th';
+		return `${ [ 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday' ][ date.getUTCDay() ] } ${ day }${ suffix } January 1901`;
 
 	}
 
@@ -165,8 +179,8 @@ export class Story {
 
 			const v = await this.ui.choose( {
 				title: S.TITLE,
-				intro: `Your night is saved at ${ clockText( saved.h ) }.`,
-				options: [ { label: 'Continue the night', value: 'continue' }, { label: 'Begin again', value: 'new' } ],
+				intro: `Your watch is saved at ${ clockText( saved.h ) } on ${ 3 + Math.floor( saved.h / 24 ) } January.`,
+				options: [ { label: 'Continue the watch', value: 'continue' }, { label: 'Begin again', value: 'new' } ],
 				cancel: null,
 			} );
 			if ( v !== 'new' ) {
@@ -181,6 +195,9 @@ export class Story {
 
 		}
 
+		if ( this.keeper ) { await this._previewKeeper(); return; }
+		if ( this.app.qs?.has( 'islandRevealPreview' ) ) { await this._previewIslandReveal(); return; }
+		if ( this.app.qs?.has( 'chapterPreview' ) ) { await this.next.preview( this.app.qs.get( 'chapterPreview' ) || 'kitchen' ); return; }
 		this.h = START - 10 / 60;
 		this.arrival.begin();
 		this._applyClock();
@@ -196,11 +213,47 @@ export class Story {
 
 	}
 
+	async _previewKeeper() {
+		const app = this.app, p = app.player, T = TOWER;
+		this.h = S.SUNSET - .5;
+		this.flags.landed = this.flags.islandRevealSeen = true;
+		this.flags.introLessons = { seen: [], pending: [], active: null, gap: 0, yard: true, done: true };
+		this.arrival.group.visible = false;
+		this.lamp.extinguish(); this.lamp.stop(); this.lamp.wind = this.lamp.glow = this.lamp.speed = 0;
+		p.position.set( Math.cos( T.crankAngle ) * 1.95, T.deck, Math.sin( T.crankAngle ) * 1.95 );
+		p.mode = 'walk'; p.grounded = true; p.velocity.set( 0, 0, 0 ); p.bob = 0;
+		p.yaw = Math.atan2( p.position.x, p.position.z ); p.pitch = .15; p._camY = null; p.update( 0 );
+		this.hand.carried = this.hand.lit = true;
+		this._applyClock(); app.cameraCut?.();
+		await this.ui.card( [ 'The previous watch has prepared the apparatus.', 'Examine it, raise the driving weight, and show the evening light.' ], { kicker: 'Keeper’s duties · first-lighting study', title: 'The evening light' } );
+		this.setBeat( 'light' ); this.paused = false;
+	}
+
+	_placeAtRevealCrest() {
+		const app = this.app, p = app.player, L = this.station.landings.east, top = L.top;
+		this.h = START; this.flags.landed = true;
+		this.arrival.elapsed = CROSSING_SECONDS; this.arrival.departure = 45; this.arrival.group.visible = true;
+		this.arrival.pose( 0 );
+		p.position.set( top.x - L.dir[ 0 ] * 0.1, L.steps.to.y, top.z - L.dir[ 1 ] * 0.1 );
+		p.position.y = Math.max( app.terrainData.heightAt( p.position.x, p.position.z ), app.colliders.groundHeightAt( p.position.x, p.position.z, L.steps.to.y + 1 ) );
+		p.mode = 'walk'; p.grounded = true; p.velocity.set( 0, 0, 0 ); p.bob = 0;
+		p.yaw = Math.atan2( p.position.x, p.position.z );
+		p.pitch = Math.atan2( this.station.focal - p.position.y - 1.62, Math.hypot( p.position.x, p.position.z ) );
+		p._camY = null; p.update( 0 );
+		this._applyClock(); app.cameraCut?.();
+	}
+
+	async _previewIslandReveal() {
+		this._placeAtRevealCrest();
+		await this.ui.card( [ 'At the head of the east steps', 'The island opens out before you.' ], { kicker: S.TITLE, title: 'The first look back' } );
+		this.setBeat( 'climb' ); this.paused = false;
+	}
+
 	async _readPapers() {
 
 		if ( this.ui.open || this.paused ) return;
 		const read = this.flags.papersRead || ( this.flags.papersRead = [] );
-		await this.ui.packet( S.CROSSING_PAPERS, read, ( id ) => {
+		await this.ui.packet( [ ...S.CROSSING_PAPERS, ...INTRO_PAPERS, ...( this.keeper ? [ KEEPER_PAPER ] : [] ) ], read, ( id ) => {
 
 			if ( ! read.includes( id ) ) read.push( id );
 			this.save();
@@ -221,7 +274,7 @@ export class Story {
 		this.flags.landed = true;
 		this.setBeat( 'climb' );
 		this.paused = false;
-		this.toast( '“Keep her lit. We’ll be back within the fortnight.”  ·  B reads your papers.', 7000 );
+		this.toast( this.app.isMobile ? '“Keep her lit. We’ll be back within the fortnight.”  ·  Your papers are in Tools.' : '“Keep her lit. We’ll be back within the fortnight.”  ·  B reads your papers.', 7000 );
 
 	}
 
@@ -257,10 +310,14 @@ export class Story {
 
 	// the most pressing thing to do now
 	goal() {
+		const keeperGoal = this.keeper?.goal();
+		if ( keeperGoal ) return keeperGoal;
 
+		if ( this.next?.active ) return this.next.goal();
 		const b = this.beat;
 		if ( b === 'intro' || b === 'end' ) return '';
-		if ( b === 'crossing' ) return this.arrival.ready ? 'Enter · Step ashore. E · Read your papers.' : S.GOALS.crossing;
+		if ( b === 'crossing' && this.app.isMobile ) return this.arrival.ready ? 'Tap Step ashore to leave the boat.' : 'Read your papers, or tap Go to landing.';
+		if ( b === 'crossing' ) return this.arrival.ready ? 'Enter · Step ashore. B · Read your papers.' : S.GOALS.crossing;
 		if ( this.lamp.lit && this.lamp.wind < WARN && this.lamp.running ) return S.GOALS.bell;
 		if ( this.lamp.lit && this.lamp.wind <= 0 ) return S.GOALS.bell;
 		if ( b === 'gate' ) return S.GOALS.gate;
@@ -283,6 +340,7 @@ export class Story {
 
 	_obsDue() {
 
+		if ( this.next?.active ) return 0;
 		for ( const at of [ 18, 21 ] ) if ( this.h >= at - 0.1 && ! this.obs[ at ] && this.h < at + 2.5 && this.lamp.lit ) return at;
 		return 0;
 
@@ -311,6 +369,7 @@ export class Story {
 			if ( this.beat === 'letter' || this.beat === 'room' ) {
 
 				this.setBeat( 'light' );
+				this.intro.afterBoardLetter();
 				this.toast( `Sunset at ${ clockText( S.SUNSET ) }` );
 
 			}
@@ -327,7 +386,7 @@ export class Story {
 		I.add( { id: 'handLamp', at: () => _v.copy( this.hand.rest.position ).setY( this.hand.rest.position.y + 0.15 ), size: 0.22, when: () => ! this.hand.carried, text: 'Take the storm lantern', use: () => {
 
 			this.hand.carried = true;
-			this.toast( 'L lights the lantern and puts it out.', 5000 );
+			this.toast( this.app.isMobile ? 'Open Tools and tap Lantern to light it or put it out.' : 'L lights the lantern and puts it out.', 5000 );
 			this.save();
 
 		} } );
@@ -350,7 +409,7 @@ export class Story {
 
 			this.hasTelescope = true;
 			this.moving.telescope.visible = false;
-			this.toast( 'Hold the right mouse button to look through the telescope.', 5000 );
+			this.toast( this.app.isMobile ? 'Open Tools and tap Telescope to look through it. Tap Telescope again to lower it.' : 'Hold the right mouse button to look through the telescope.', 5000 );
 			this.save();
 
 		} } );
@@ -379,11 +438,17 @@ export class Story {
 			this.setBeat( 'night' );
 
 		}
+		this.save();
 
 	}
 
 	_lensText() {
+		if ( this.keeper?.active ) {
+			const text = this.keeper.lensText();
+			if ( text ) return text;
+		}
 
+		if ( this.next?.active ) return this.next.lensText();
 		const L = this.lamp, h = this.h;
 		if ( this.beat === 'end' ) return '';
 		if ( ! L.lit && h < 24 ) {
@@ -400,7 +465,9 @@ export class Story {
 	}
 
 	async _useLens() {
+		if ( this.keeper?.active && await this.keeper.useLens() ) return;
 
+		if ( this.next?.active ) return this.next.useLens();
 		const L = this.lamp, h = this.h;
 		if ( ! L.lit && h < 24 ) {
 
@@ -451,6 +518,7 @@ export class Story {
 	}
 
 	_wind( dt ) {
+		if ( this.keeper?.active ) { this.keeper.wind( dt ); return; }
 
 		const L = this.lamp;
 		if ( L.wind >= 0.999 ) {
@@ -463,6 +531,7 @@ export class Story {
 		const was = L.wind;
 		L.addWind( dt / 5 );
 		if ( this.sound ) this.sound.ratchet( true );
+		if ( this.next?.active ) { this.next.onWind(); return; }
 		if ( was < WARN && L.wind >= WARN && this.beat !== 'machine' ) this.row( this.h, this.flags.stoppedAt ? `Machine going again: the light shown fixed from ${ clockText( this.flags.stoppedAt ) }.` : 'Machine wound.' );
 		if ( was < WARN ) this.flags.stoppedAt = 0;
 		if ( this.beat === 'machine' && L.wind > 0.5 ) {
@@ -525,6 +594,7 @@ export class Story {
 	_watchText() {
 
 		if ( this.watcher.talking || this.signal ) return '';
+		if ( this.next?.active ) return this.next.watchText();
 		const b = this.beat;
 		if ( b === 'night' ) return 'Keep the watch until dawn';
 		if ( b === 'dawn' && this.h < S.SUNRISE + 24 - 0.25 ) return 'Keep the watch until sunrise';
@@ -541,6 +611,7 @@ export class Story {
 
 	async _keepWatch() {
 
+		if ( this.next?.active ) return this.next.keepWatch();
 		const b = this.beat;
 		if ( b === 'night' ) {
 
@@ -620,6 +691,12 @@ export class Story {
 	}
 
 	_key( e ) {
+		if ( this.app.devMenu?.open ) return;
+
+		if ( this.islandReveal.active ) {
+			if ( e.code === 'Escape' && ! e.repeat ) { e.preventDefault(); this.islandReveal.skip(); }
+			return;
+		}
 
 		if ( e.code === 'KeyB' && ! e.repeat && ! e.ctrlKey && ! e.metaKey && ! e.altKey && this.beat !== 'intro' && this.beat !== 'end' && ! this.signal && ! this.ui.open ) {
 
@@ -646,16 +723,35 @@ export class Story {
 
 	}
 
+	mobileCommand( command ) {
+		if ( this.islandReveal?.active ) return;
+		if ( this.ui.open || this.paused || this.app.mobile?.paused || this.beat === 'intro' || this.beat === 'end' ) return;
+		if ( command === 'papers' && ! this.signal ) return this._readPapers();
+		if ( command === 'landing' && this.beat === 'crossing' ) return this._advanceArrival();
+		if ( command === 'leave' && this.signal ) this._leaveSignal();
+		if ( command === 'read' && this.signal ) this._hurry = true;
+	}
+
+	_advanceArrival() {
+		if ( this.beat !== 'crossing' || this.paused || this.ui.open || this.app.mobile?.paused || this.app.freeCam || this.app.ui?.ui?.photoMode ) return;
+		if ( this.arrival.ready ) return this._disembark();
+		this.arrival.elapsed = CROSSING_SECONDS;
+		this.arrival.pose( 0 );
+		this.arrival.camera();
+		this.app.cameraCut?.();
+		this.save();
+	}
+
 	async _choose() {
 
 		const w = this.watcher;
 		this._choosing = true;
 		const v = await this.ui.choose( {
-			title: 'The code book',
-			intro: `Gallan Head: ${ w.node.her.replace( / K$/, '' ) }\nChoose a reply below. The signal lamp sends it for you.`,
+			title: S.SIGNAL_UI.title,
+			intro: `Gallan Head: ${ w.node.her.replace( / K$/, '' ) }\n\n${ S.SIGNAL_UI.replyInstruction }`,
 			options: w.options.map( ( o, i ) => ( {
 				label: o.code ? `${ o.code } · ${ o.text }` : o.text,
-				sub: o.code ? `The Board's code: about ${ o.minutes } minutes` : `Spelled out letter by letter: about ${ o.minutes } minutes`,
+				sub: `${ o.code ? 'Station signal' : 'Spelled out' } · about ${ o.minutes } ${ o.minutes === 1 ? 'minute' : 'minutes' }`,
 				value: i,
 			} ) ),
 			cancel: 'Step away from the lamp',
@@ -685,7 +781,7 @@ export class Story {
 		}
 
 		if ( w.state === 'steady' && this.h >= HER_CALL && this.lamp.lit ) w.call();
-		if ( this.flags.late && w.script.nodes.hello && ! this._lateSet ) {
+		if ( ! this.next?.active && this.flags.late && w.script.nodes.hello && ! this._lateSet ) {
 
 			this._lateSet = true;
 			w.script = { ...w.script, nodes: { ...w.script.nodes, hello: { ...w.script.nodes.hello, her: 'GALLAN HEAD TO FLANNAN. YOUR LIGHT WAS LATE. K' } } };
@@ -725,7 +821,7 @@ export class Story {
 
 			this.flags.talked = true;
 			this.flags.talkedAt = this.h;
-			if ( w.flags.saidName ) {
+			if ( w.flags.saidName && ! this.next?.active ) {
 
 				this.saidName = true;
 				this.haar = Math.min( this.haar, this.h + 0.5 );
@@ -746,22 +842,22 @@ export class Story {
 		// the strip
 		if ( this.signal ) {
 
-			if ( w.state === 'sending' ) this.ui.strip( { from: 'Gallan Head', text: w.text, cursor: true, hint: visible ? 'Space: read on' : 'Her light is lost in the haze', morse: morseText( w.text.slice( - 12 ) ) } );
-			else if ( w.state === 'replying' ) this.ui.strip( { from: 'You', text: w.log[ w.log.length - 1 ].text, morse: morseText( w.log[ w.log.length - 1 ].text ) } );
+			if ( w.state === 'sending' ) this.ui.strip( { from: 'Gallan Head', text: w.text, cursor: true, hint: visible ? ( this.app.isMobile ? 'Tap Read on to read faster' : 'Space: read on' ) : 'Her light is lost in the haze', morse: w.rawMorse.slice( -100 ), translation: w.translation, language: w.node.language } );
+			else if ( w.state === 'replying' ) this.ui.strip( { from: 'You', text: w.log[ w.log.length - 1 ].text, morse: w.rawMorse.slice( -100 ) } );
 			else if ( w.state === 'waiting' ) {
 
-				this.ui.strip( { from: 'Gallan Head', text: w.node.her.replace( / K$/, '' ), hint: 'K: over to you' } );
+				this.ui.strip( { from: 'Gallan Head', text: w.node.her.replace( / K$/, '' ), hint: S.SIGNAL_UI.replyHint, morse: w.rawMorse.slice( -100 ), translation: w.translation, language: w.node.language } );
 				if ( ! this._choosing ) this._choose();
 
-			} else if ( w.state === 'done' ) this.ui.strip( { from: 'Gallan Head', text: 'GOOD NIGHT', hint: '' } );
+			} else if ( w.state === 'done' ) this.ui.strip( { from: 'Gallan Head', text: w.node?.her.replace( / K$/, '' ) || 'GOOD NIGHT', hint: '', morse: w.rawMorse.slice( -100 ), translation: w.translation, language: w.node?.language } );
 
 		} else if ( watched && w.state === 'sending' ) {
 
-			this.ui.strip( { from: 'Gallan Head, through the telescope', text: w.text, cursor: true, hint: 'Answer her at the signal lamp on the walkway' } );
+			this.ui.strip( { from: 'Gallan Head, through the telescope', text: w.text, cursor: true, hint: S.SIGNAL_UI.readingHint, morse: w.rawMorse.slice( -100 ), translation: w.translation, language: w.node.language } );
 
 		} else if ( watched && w.state === 'calling' ) {
 
-			this.ui.strip( { from: 'Gallan Head, through the telescope', text: 'FLANNAN FLANNAN K', hint: 'She is calling you. Answer at the signal lamp on the walkway.' } );
+			this.ui.strip( { from: 'Gallan Head, through the telescope', text: S.CALL, hint: S.SIGNAL_UI.callHint } );
 
 		} else this.ui.strip( null );
 
@@ -828,15 +924,8 @@ export class Story {
 		if ( chosen.islet ) this.row( this.flags.isletSeen, S.REMARKS.islet.yes.replace( '{t}', clockText( this.flags.isletSeen ) ) );
 		if ( chosen.gate ) this.row( this.flags.gateMoved, S.REMARKS.gate.yes.replace( '{t}', clockText( this.flags.gateMoved ) ).replace( 'standing open', this.flags.gateWas === 'open' ? 'standing open' : 'shut' ) );
 		if ( ! this.flags.talked ) this.row( 23.9, S.REMARKS.gallan.no );
-		this.setBeat( 'end' );
-		this.clearSave();
-		this.ui.setObjective( '' );
-		this.ui.end( {
-			heading: 'Flannan Islands. Thursday 3rd January 1901',
-			rows: this._journalRows(),
-			lines: S.ENDING,
-			credits: 'Seven Hunters, a demo. Made on the Tidewater WebGPU engine by Daniel Greenheck. The Flannan Isles from the Copernicus DEM. The keepers lost in December 1900, and the record of it, are real; Walter Innes and Ceit Macleod are not.',
-		} );
+		this.flags.firstNightComplete = this.h;
+		await this.next.begin();
 
 	}
 
@@ -859,6 +948,7 @@ export class Story {
 
 	toast( text, ms = 3200 ) {
 
+		if ( this.app.isMobile ) text = text.replace( 'B reads your papers.', 'Tools holds your papers.' ).replace( 'L lights your lantern.', 'Tools · Lamp lights your lantern.' );
 		if ( this.app.ui ) this.app.ui.ui.toast( text, ms );
 
 	}
@@ -866,8 +956,9 @@ export class Story {
 	update( dt ) {
 
 		const app = this.app;
-		const modal = this.ui.open;
-		this.arrival.update( dt, { aboard: this.aboard, paused: this.paused || modal || app.freeCam || !! app.ui?.ui?.photoMode } );
+		const modal = this.ui.open || !! this.app.mobile?.paused || !! app.devMenu?.open;
+		if ( app.mobile?.paused ) { this.islandReveal?.update( 0 ); return; }
+		this.arrival.update( dt, { aboard: this.aboard, paused: this.paused || modal || app.freeCam || !! app.ui?.ui?.photoMode || !! globalThis.document?.hidden } );
 		if ( this.beat === 'crossing' ) {
 
 			// Only the approach owns time here; reading and waiting to step ashore cost no daylight.
@@ -877,27 +968,15 @@ export class Story {
 			if ( app.haze ) app.haze.density.value = hazeDensityForVisibility( w.vis );
 			if ( app.clouds?.coverage ) app.clouds.coverage.value = w.clouds;
 			const line = S.CROSSING_LINES.find( ( l ) => this.arrival.elapsed >= l.at && this.arrival.elapsed < l.until );
-			this.ui.arrival( line, this.arrival.ready ? 'E · Papers     Enter · Step ashore' : 'E · Papers     Enter · Bring the landing closer' );
+			const hide = modal || this.paused || app.freeCam || app.ui?.ui?.photoMode || globalThis.document?.hidden;
+			const hint = app.isMobile ? 'Read papers · Go to landing · Step ashore' : this.arrival.ready ? 'B · Papers     Enter · Step ashore' : 'B · Papers     Enter · Bring the landing closer';
+			this.ui.arrival( hide ? null : line, hide ? '' : hint );
 			this.ui.setClock( `${ clockText( this.h ) } · ${ this.dayText() }` );
 			this.ui.setObjective( this.goal() );
 			this.ui.guidance( null, app.camera );
 			if ( ! modal && ! this.paused && ! app.freeCam && ! app.ui?.ui?.photoMode ) {
 
-				if ( app.input.hit( 'KeyE' ) ) this._readPapers();
-				else if ( app.input.hit( 'Enter' ) ) {
-
-					if ( this.arrival.ready ) this._disembark();
-					else {
-
-						this.arrival.elapsed = CROSSING_SECONDS;
-						this.arrival.pose( 0 );
-						this.arrival.camera();
-						app.cameraCut?.();
-						this.save();
-
-					}
-
-				}
+				if ( app.input.hit( 'Enter' ) ) this._advanceArrival();
 
 			}
 			this.saveT += dt;
@@ -905,7 +984,15 @@ export class Story {
 			return;
 
 		}
-		this.ui.arrival( null );
+		if ( this.islandReveal.update( app.devMenu?.open ? 0 : dt ) ) {
+			this.ui.arrival( null );
+			// Hold story time and prompts while the sea, clouds, birds and boat carry on.
+			this.lamp.update( dt, 0 );
+			this.saveT += dt;
+			if ( this.saveT > 5 && ! modal ) this.save();
+			return;
+		}
+		if ( this.next.active ) { this.ui.arrival( null ); this.next.update( dt, modal ); return; }
 		if ( ! this.paused && ! modal && this.beat !== 'end' ) {
 
 			// (her messages come slowly by lamp; the night's clock slows with them)
@@ -935,7 +1022,7 @@ export class Story {
 		if ( ! this.flags.lanternHint && this.beat !== 'intro' && this.h > S.SUNSET + 0.25 && ! this.hand.lit && ! modal ) {
 
 			this.flags.lanternHint = true;
-			this.toast( this.hand.carried ? 'It is getting dark. L lights your lantern.' : 'It is getting dark. There is a storm lantern on the table in the keepers\' room.', 5000 );
+			this.toast( this.hand.carried ? this.app.isMobile ? 'It is getting dark. Open Tools and tap Lantern.' : 'It is getting dark. L lights your lantern.' : 'It is getting dark. There is a storm lantern on the table in the keepers\' room.', 5000 );
 
 		}
 
@@ -988,6 +1075,9 @@ export class Story {
 		this.ui.setClock( `${ clockText( this.h ) } · ${ this.dayText() }` );
 		this.ui.setObjective( this.beat === 'intro' ? '' : this.goal() );
 		this.ui.guidance( storyGuidance( this ), app.camera, !! app.player.prompt );
+		const introLine = this.intro.update( dt, { blocked: this.paused || modal || app.freeCam || app.ui?.ui?.photoMode || !! globalThis.document?.hidden } );
+		const keeperLine = this.keeper?.update( dt, { blocked: this.paused || modal || app.freeCam || app.ui?.ui?.photoMode || !! globalThis.document?.hidden } );
+		this.ui.arrival( keeperLine || introLine );
 
 		this.saveT += dt;
 		if ( this.saveT > 20 && ! modal && this.beat !== 'intro' && this.beat !== 'end' ) this.save();
@@ -1005,9 +1095,11 @@ export class Story {
 			v: 1, h: this.h, beat: this.beat, flags: this.flags, rows: this.rows, obs: this.obs, tel: this.hasTelescope, haar: this.haar, saidName: this.saidName,
 			lamp: this.lamp.save(), watcher: this.watcher.save(), hand: this.hand.save(),
 			doors: this.moving.doors.map( ( d ) => d.target ),
+			doorStates: Object.fromEntries( Object.entries( this.doors ).map( ( [ name, ds ] ) => [ name, ds.map( d => d.target ) ] ) ),
 			pos: [ p.position.x, p.position.y, p.position.z ], yaw: p.yaw,
 			islet: this.islet,
 			voyage: { elapsed: this.arrival.elapsed, departure: this.arrival.departure }, pitch: p.pitch,
+			islandReveal: this.islandReveal.save(),
 		};
 		try {
 
@@ -1046,13 +1138,16 @@ export class Story {
 
 		Object.assign( this, { h: s.h, beat: s.beat, flags: s.flags || {}, rows: s.rows || [], obs: s.obs || {}, hasTelescope: !! s.tel, haar: s.haar || HAAR, saidName: !! s.saidName, islet: s.islet || null } );
 		this.lamp.load( s.lamp );
-		this.watcher.load( s.watcher );
+		if ( this.next.active ) this.next.restore( s.watcher ); else this.watcher.load( s.watcher );
 		// (a night saved before the lantern: it is in your hand)
 		this.hand.load( s.hand || { carried: true } );
-		if ( this.watcher.state === 'sending' || this.watcher.state === 'waiting' || this.watcher.state === 'replying' ) this.watcher.state = 'steady';
+		if ( ! this.next.active && ( this.watcher.state === 'sending' || this.watcher.state === 'waiting' || this.watcher.state === 'replying' ) ) this.watcher.state = 'steady';
+		const legacyDoors = this.moving.doors.filter( d => ! [ 'kitchen', 'berth' ].includes( d.name ) );
 		this.moving.doors.forEach( ( d, i ) => {
 
-			d.target = d.open = s.doors ? s.doors[ i ] || 0 : 0;
+			const named = s.doorStates?.[ d.name ]?.[ this.doors[ d.name ].indexOf( d ) ];
+			const index = s.doors?.length === this.moving.doors.length ? i : legacyDoors.indexOf( d );
+			d.target = d.open = named ?? ( index >= 0 ? s.doors?.[ index ] || 0 : 0 );
 
 		} );
 		if ( this.hasTelescope ) this.moving.telescope.visible = false;
@@ -1072,7 +1167,7 @@ export class Story {
 		} else {
 
 			this.arrival.group.visible = false;
-			if ( Number.isFinite( s.voyage?.departure ) && s.voyage.departure < 65 ) {
+			if ( Number.isFinite( s.voyage?.departure ) && s.voyage.departure <= DEPARTURE_VISIBLE_SECONDS ) {
 
 				this.arrival.elapsed = CROSSING_SECONDS;
 				this.arrival.departure = s.voyage.departure;
@@ -1082,6 +1177,7 @@ export class Story {
 			}
 
 		}
+		this.islandReveal.restore( s.islandReveal );
 		this._applyClock();
 		if ( this.app.cameraCut ) this.app.cameraCut();
 

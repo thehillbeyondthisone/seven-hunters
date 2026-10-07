@@ -4,6 +4,8 @@
 
 A first-person narrative exploration game set on a remote Scottish lighthouse island in January 1901. Arrive by boat, learn the keeper's routine, and reach a stranger across the sea by signal lamp as the weather closes in.
 
+The game now continues after the first journal through 6 January: a kitchen and sleeping berth, a daylight hauling-shed round, Cate's report of a light while you slept, and an unsettling walk home. Signals show received Morse beside decoded words, with familiar shortcuts and occasional Gaelic with English. See [the fixed story and playable continuation](docs/STORY-CONTINUATION.md). Open `/next-watch.html` to start day two or review later scenes in separate save slots. The later storm and relief are still planned chapters.
+
 **[▶ Play in your browser](https://thehillbeyondthisone.github.io/seven-hunters/)** · [Report a problem](https://github.com/thehillbeyondthisone/seven-hunters/issues) · [Historical sources](#history-and-fiction)
 
 [![Deploy to GitHub Pages](https://github.com/thehillbeyondthisone/seven-hunters/actions/workflows/deploy.yml/badge.svg)](https://github.com/thehillbeyondthisone/seven-hunters/actions/workflows/deploy.yml)
@@ -12,12 +14,17 @@ A first-person narrative exploration game set on a remote Scottish lighthouse is
 
 *Eilean Mòr, the Flannan Isles. A winter afternoon is already giving way to night.*
 
+The local [surface comparison](http://127.0.0.1:5189/artifacts/surface-pass/index.html)
+shows the new timber, limewash, paint, iron and stone normal/roughness maps in
+matched daylight and lantern-lit views. Run `start.bat` to inspect or play them.
+See [surface details and validation](docs/SURFACES.md).
+
 | | |
 |---|---|
 | **What it is** | An atmospheric story about isolation, responsibility, and a voice across the water |
-| **Current release** | A playable first-night demo, from the boat approach to the following morning |
+| **Current release** | A playable story from the boat approach through the watches of 6 January |
 | **Play time** | Allow roughly 20–30 minutes, depending on how much you explore and read |
-| **How to play** | Desktop browser, keyboard and mouse; no download or account required |
+| **How to play** | Desktop keyboard and mouse, or phone/tablet touch controls; no download or account required |
 | **Mood** | Quiet, eerie, and grounded in the sea and weather |
 
 ## Your posting
@@ -37,7 +44,7 @@ Across the water, a watcher on the coast of Lewis looks for your light. On clear
 - **Make landfall.** Look around during the crossing, read your papers, and climb from the east landing to the station.
 - **Keep the light.** Find the lamp, light it at sunset, and wind the clockwork that turns its great lens. Listen for the bell when the machine needs attention.
 - **Keep the record.** Observe the weather and chalk your readings on the station slate.
-- **Find someone out there.** Use a telescope to read the Watcher's flashes and reply from the signal lamp. Preset replies mean you do not need to know Morse code; you can also compose your own messages.
+- **Find someone out there.** Use a telescope to read the Watcher's flashes and reply from the signal lamp. Choose a brief station signal or a personal reply; the lamp sends it for you. You do not need to know Morse code.
 - **Keep the watch.** Explore the house, tower, landings, and island as daylight fades. Carry a storm lantern when the rooms and paths grow dark.
 - **Decide what to write.** After sunrise, finish the night's journal. Your observations—and what you choose to leave out—become the record.
 
@@ -59,15 +66,25 @@ The game takes inspiration from *Firewatch*: a solitary job, a distant companion
 
 ## Getting started
 
-1. Open **[Play Seven Hunters](https://thehillbeyondthisone.github.io/seven-hunters/)** in a desktop browser with WebGPU enabled. Recent Chrome or Edge is a useful starting point.
+1. Open **[Play Seven Hunters](https://thehillbeyondthisone.github.io/seven-hunters/)** in a browser with WebGPU enabled. Phones and tablets automatically show touch controls; landscape gives you the clearest view.
 2. Let the first load finish. The renderer compiles hundreds of shaders; this can take a minute or more on some machines. Keep the tab open while it prepares the scene.
-3. Click to begin, then follow the opening cards. On the boat, **E** opens your papers. Reading pauses the approach. **Enter** brings the landing closer; press it again when the boat is ready to step ashore.
+3. Tap or click to begin, then follow the opening cards. On mobile, **Read papers** opens your packet; **Go to landing** finishes the crossing, then **Step ashore** leaves the boat. On desktop, **B** opens papers and **Enter** advances the approach and steps ashore. Reading pauses the approach.
 4. Follow the path up to the station and read the Board's letter in the keepers' room. Small objective markers help you find the next task; arrows point toward it when it is off screen.
-5. Face an object and use **E** when its prompt appears. Lighting the lamp and winding the machine require you to **hold E**.
+5. Look at an object and tap its named action button on mobile, or use **E** on desktop. Hold the action button (or **E**) for tasks that ask you to keep it pressed.
 
 You can disable objective markers in **H → Camera → Keeping the watch**. The night saves automatically in this browser; returning offers to continue or begin again. Reading pages pauses the story clock, and some prompts let you wait until the next event.
 
-### Controls
+### Touch controls
+
+- **Drag on the left** to walk; **drag on the right** to look. Use both thumbs together.
+- **Read papers → Go to landing → Step ashore** gets you from the boat to the island. Reading is optional, and you can wait for the boat to arrive naturally.
+- **Tools** opens your Lantern, Telescope, Papers, Hurry and Jump. Equipment becomes available when collected.
+- **Pause** stops the watch and opens sound and graphics settings. The settings panel includes **Touch controls** help.
+- Touch buttons use large period lettering, prevent accidental text selection, and work while another finger is walking or looking.
+
+See [mobile controls and local phone setup](docs/MOBILE.md). For a forced touch view, use [the mobile link](https://thehillbeyondthisone.github.io/seven-hunters/?mobile).
+
+### Keyboard and mouse
 
 | Input | Action |
 |---|---|
@@ -86,11 +103,18 @@ You can disable objective markers in **H → Camera → Keeping the watch**. The
 | **M** | Mute sound |
 | **P** | Photo mode |
 | **F1** or **?** | Show all controls |
+| **Backtick (`)** | Desktop simulation debug menu: minigun, extreme weather, tsunami and underwater blast |
 
 ### Requirements and troubleshooting
 
+The game has **mobile touch controls**: a floating left
+thumbstick, right-side drag to look, contextual actions and a Tools drawer.
+Double-click `start-mobile.bat` for an HTTPS link to open on a phone on the same
+Wi-Fi. See [mobile controls and setup](docs/MOBILE.md). Phone performance and
+physical touch/audio still need device testing; browser checks verify the interface and game flow.
+
 - **WebGPU support is required.** Browser version, operating system, GPU, and driver all affect availability. Hardware acceleration should be enabled. WebGPU-enabled Safari may also work; support is not certified across all browser/device combinations.
-- **Use a keyboard and mouse.** The main demo is designed for desktop play. Touch controls and mobile performance are not established.
+- **Desktop uses keyboard and mouse.** Phones and tablets select touch controls automatically. Sustained mobile performance is not established.
 - **A capable GPU helps.** Dynamic resolution can reduce rendering resolution on slower machines. Use **H** to adjust graphics settings if play is sluggish.
 - **If loading fails,** check the displayed error, update the browser and graphics driver, and try Chrome or Edge with hardware acceleration enabled. If reporting a bug, include the browser, GPU, error text, and where it occurred.
 - **Saves are local to your browser.** Clearing site storage can erase them; private browsing and another computer may not retain the same progress.
@@ -101,7 +125,9 @@ The disappearance of **James Ducat, Thomas Marshall, and Donald MacArthur** in D
 
 The game uses the real island and terrain data, the lighthouse station, and period sources as its foundation. It does not claim to be a measured reconstruction of every room, furnishing, or piece of equipment.
 
-**Your keeper, Walter Innes, the Watcher, Ceit Macleod, their conversations, the home letter, and the posting are fictional.** The historical use of an observer on Lewis is documented, but the game's relationship and signal exchanges are invented. The boat, interiors, and several visual details are provisional reconstructions.
+**Your keeper, Walter Innes, the Watcher, Ceit “Cate” Macleod, their conversations, the home letter, and the posting are fictional.** The historical use of an observer on Lewis is documented. The game's two-way Morse lamp link, numbered signal groups and relationship are invented. The boat, interiors, and several visual details are provisional reconstructions.
+
+Routine lamp messages are brief, usually five to fifteen words, with shorter acknowledgements and goodbyes. Longer thoughts take more than one exchange. In the game's chosen convention, **K** asks for an answer; it does not end a conversation. The real Flannan station's ball or disc signals are a possible later addition and are not yet implemented.
 
 Famous embellishments such as ominous diary entries, an untouched meal, and an overturned chair are not established facts of the official record. The game treats the documented tragedy and later stories as different things.
 
@@ -114,7 +140,7 @@ Start with these sources:
 
 ## What is included today
 
-The main release is **one playable night**, not the complete planned game. The boat opening, station exploration, lighthouse duties, weather observations, signal conversations, fog, morning journal, save/resume, objective guidance, and photo mode are implemented.
+The main release continues **through 6 January**, with the boat opening, station exploration, lighthouse duties, weather observations, signal conversations, fog, journals, kitchen and berth, and hauling-shed rounds. Save/resume, objective guidance and desktop photo mode are implemented. The later storm and relief remain planned chapters.
 
 There are also separate exploration and development routes:
 
@@ -126,6 +152,14 @@ There are also separate exploration and development routes:
 | [Tidewater](https://thehillbeyondthisone.github.io/seven-hunters/?setting=tidewater) | The original island fishing game retained in the codebase |
 
 An experimental WebXR exploration preview is documented in [VR-PREVIEW.md](docs/VR-PREVIEW.md). It has not been certified for physical headset performance, controls, or comfort. The weather and VR previews are separate from the main story demo; they do not imply that the longer game's planned storm sequence is complete.
+
+The desktop build has a [simulation room](docs/SIMULATION-ROOM.md), opened with **backtick** or the **Debug** button. It exposes the minigun (the existing F8 shortcut still works), Force 11/12 storms, a travelling tsunami surge and an underwater blast. Open `/simulation.html` for a separate, save-free lab at the west landing. These events are experiments, separate from the authored story. Waypoints now briefly ping with expanding rings and a label when their destination changes, then settle to the small marker; reduced-motion settings use a static highlight.
+
+The local [Keeper’s Playground](docs/KEEPER-PLAYGROUND.md) adds a bespoke brass
+gravity grabber and a lighthouse disco. Run `start-playground.bat` or choose it
+from Experiences: click to grab a buoy/crate, charge a throw with right click,
+and press **J** for colored beams, a mirror ball and optional synth music. This
+desktop toybox opens no watch save and remains separate from the authored story.
 
 ## Run it locally
 

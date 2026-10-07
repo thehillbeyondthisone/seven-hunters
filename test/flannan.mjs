@@ -79,6 +79,8 @@ for ( const k in B.batches ) {
 ok( finite && tris > 20000, `station geometry: ${ tris } triangles, all finite` );
 ok( [ 'house', 'tower', 'store', 'chapel' ].every( ( n ) => village.buildings.some( ( b ) => b.name === n ) ), 'house, tower, store and chapel registered' );
 ok( colliders.boxes.filter( ( b ) => b.tag === 'steps' && b.walkable ).length > 300, 'walkable steps on both flights' );
+const westCrane = colliders.boxes.find( b => b.tag === 'cranePlatform' );
+ok( westCrane?.walkable && Math.abs( westCrane.top - 70 * .3048 ) < 1, 'west crane platform near the reported 70 ft elevation, separate from boat stage' );
 ok( lights.some( ( l ) => l.kind === 'lantern' && l.position.y > 95 ), 'the lamp in the lantern' );
 ok( Math.abs( T.heightAt( - 12, 10 ) - STATION.yard ) < 0.05, 'the yard is level' );
 const ch = STATION.chapel;
