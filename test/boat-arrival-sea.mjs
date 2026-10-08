@@ -8,7 +8,8 @@ import { installBrowser } from '../tools/shots/browser.mjs';
 import { bgraShot, writePNG, writeSheet } from '../tools/shots/png.mjs';
 
 const detailed = process.argv.includes( '--atmosphere' );
-const out = resolve( detailed ? 'artifacts/arrival-atmosphere/sea-check' : 'artifacts/boat-visual-pass/final' ), images = [];
+const outputArg = process.argv.find( arg => arg.startsWith( '--out=' ) );
+const out = resolve( outputArg ? outputArg.slice(6) : detailed ? 'artifacts/arrival-atmosphere/sea-check' : 'artifacts/boat-visual-pass/final' ), images = [];
 mkdirSync( out, { recursive: true } );
 installBrowser( { search: '?bench&noAudio&setting=flannan&arrivalPreview' + ( detailed ? '&arrivalAtmospherePreview' : '' ), width: 640, height: 360, root: resolve( 'public' ),
 	onPost: async ( url, bytes ) => {

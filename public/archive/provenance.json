@@ -1,0 +1,30 @@
+{
+  "recorded": "2026-10-07",
+  "assets": {
+    "flannan-chart-1898.jpg": {
+      "downloadSource": "https://9001.lt/1900/img/1898_map.jpg",
+      "date": "1898",
+      "record": "https://commons.wikimedia.org/wiki/File:Flannan_isles.jpg",
+      "sha256": "886a3d73734be6d4b710f7a831ede971fe60a7053fd09c220ae6aa18c8bd8798",
+      "bytes": 453123
+    },
+    "lantern-sheet-1.jpg": {
+      "downloadSource": "https://9001.lt/1900/img/1895_01.jpg",
+      "date": "1895 according to download source; precise archive accession unverified",
+      "record": "https://www.trove.scot/place/171215",
+      "sha256": "9729bfad6ef8b5e6458b624dc2120e6411149e61698e80636d10f39b05e20f2a",
+      "bytes": 273390
+    },
+    "lantern-sheet-4.jpg": {
+      "downloadSource": "https://9001.lt/1900/img/1895_04.jpg",
+      "date": "1895 according to download source; precise archive accession unverified",
+      "record": "https://www.trove.scot/place/171215",
+      "sha256": "f48e166aafb430560b369f712956c8117e18a2fcdc905a2bfa2864e21d404da0",
+      "bytes": 285569
+    }
+  },
+  "reader": "Original JPEG bytes, without retouching or generated content.",
+  "textures": "RGBA PNG conversions. Map downsampled to 1536 pixels wide; drawings keep source resolution. In-world shader applies a warm paper tint; reader shows original pixels.",
+  "story": "The historical documents predate the game. Copies being kept at these specific places are fictional reconstruction.",
+  "roomReferences": "The later-service photographs are study material in docs/references/flannan-interior, not runtime textures. Exact 1901 domestic layout, paint colours and furnishings remain unverified."
+}

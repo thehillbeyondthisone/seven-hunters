@@ -57,6 +57,14 @@ export function introRouteProgress( p, points ) {
 }
 
 export class IntroLessons {
+	enterRoom() {
+		const state = this.story.flags.introLessons;
+		if ( ! state ) return;
+		state.seen = [ ...new Set( [ ...state.seen, 'yard' ] ) ];
+		state.pending = state.pending.filter( id => id !== 'yard' );
+		if ( state.active?.id === 'yard' ) state.active = null;
+		state.gap = Math.max( state.gap, 6 );
+	}
 	// The crest closes the stair passages, including any unread backlog. Full
 	// explanations remain in Papers; the next passage belongs to the station.
 	finishClimb() {

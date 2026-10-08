@@ -23,6 +23,8 @@ export class StationSound {
 		this.ready = false;
 		this._tick = 0;
 		this._tickSide = 0;
+		this._roomTick = 0;
+		this._roomTickSide = 0;
 		this._boomT = 4;
 		this._ratchet = false;
 		this._ratchetT = 0;
@@ -39,11 +41,24 @@ export class StationSound {
 		const n = c.sampleRate * 2, buf = c.createBuffer( 1, n, c.sampleRate ), d = buf.getChannelData( 0 );
 		for ( let i = 0; i < n; i ++ ) d[ i ] = Math.random() * 2 - 1;
 		this.noise = buf;
-		const pan = ( ref = 1.5, roll = 1.2 ) => s._panner( s.aboveOut, ref, roll );
+		// Bounded early reflections on the dry station bus. Outside sound still
+		// passes through SoundScape's shelter filters, while nearby clockwork is clear.
+		const bus = () => {
+			const input = c.createGain(), filter = c.createBiquadFilter(), gain = c.createGain();
+			filter.type = 'lowpass'; filter.frequency.value = 6000;
+			input.connect( filter ).connect( gain ).connect( s.aboveOut );
+			const delay = c.createDelay( .3 ), echoFilter = c.createBiquadFilter(), echo = c.createGain();
+			delay.delayTime.value = .085; echoFilter.type = 'lowpass'; echoFilter.frequency.value = 1500; echo.gain.value = 0;
+			gain.connect( delay ).connect( echoFilter ).connect( echo ).connect( s.aboveOut );
+			return { input, filter, gain, echo };
+		};
+		this.machineBus = bus(); this.clockBus = bus();
+		const pan = ( ref = 1.5, roll = 1.2, dest = s.aboveOut ) => s._panner( dest, ref, roll );
 		// the machine, at the pedestal
-		this.machine = pan( 1, 1.4 );
+		this.machine = pan( 1, 1.15, this.machineBus.input );
+		this.roomClock = pan( .8, 1.2, this.clockBus.input );
 		// the burner: a looping roar, at the lens
-		this.burnerPan = pan( 1.2, 1.3 );
+		this.burnerPan = pan( 1.2, 1.3, this.machineBus.input );
 		this.burnerGain = c.createGain();
 		this.burnerGain.gain.value = 0;
 		const roar = this._loop( this.burnerGain );
@@ -59,9 +74,10 @@ export class StationSound {
 		this.whistleBP = c.createBiquadFilter();
 		this.whistleBP.type = 'bandpass';
 		this.whistleBP.frequency.value = 900;
-		this.whistleBP.Q.value = 18;
+		this.whistleBP.Q.value = 8;
 		const wsrc = this._loop( this.whistleBP );
-		this.whistleBP.connect( this.whistleGain ).connect( s.aboveOut );
+		this.glazingPan = pan( 2, .8 );
+		this.whistleBP.connect( this.whistleGain ).connect( this.glazingPan );
 		this._wsrc = wsrc;
 		// Rain on the surrounding stone/glazing, following the weather's current precipitation.
 		this.rainGain = c.createGain(); this.rainGain.gain.value = 0;
@@ -258,10 +274,30 @@ export class StationSound {
 		const c = this.c, now = c.currentTime, T = this.tower, L = st.listener;
 		const toLens = Math.hypot( L.x, L.z ), above = L.y - T.deck;
 		const nearLens = toLens < 5 && above > - 3 && above < 6 ? 1 : 0;
+		const shaft = st.shaft || 0, lantern = st.lantern ?? Number( st.inLantern ), walkway = st.walkway ?? Number( st.onWalkway );
+		const machineAudibility = st.machineAudibility ?? nearLens, clockAudibility = st.clockAudibility ?? Number( st.inRoom );
+		this.s._ramp( this.machineBus.gain.gain, machineAudibility, .22 );
+		this.s._ramp( this.machineBus.filter.frequency, 6000 - 4300 * shaft, .25 );
+		this.s._ramp( this.machineBus.echo.gain, .14 * shaft + .035 * lantern, .3 );
+		this.s._ramp( this.clockBus.gain.gain, clockAudibility, .22 );
+		this.s._ramp( this.clockBus.filter.frequency, 5200 - 3700 * shaft, .25 );
+		this.s._ramp( this.clockBus.echo.gain, .025 * Number( st.inRoom ) + .09 * shaft, .3 );
+		// A quiet wall clock is the first human-scale sound inside the house.
+		// It is on the dry station bus, so shutting the door muffles the sea,
+		// rather than muffling the room's own clock and the player's footsteps.
+		if ( clockAudibility > .004 && st.roomClock ) {
+			this._at( this.roomClock, st.roomClock.x, st.roomClock.y, st.roomClock.z );
+			this._roomTick -= dt;
+			if ( this._roomTick <= 0 ) {
+				this._roomTick = .8;
+				this._roomTickSide ^= 1;
+				this._burst( this.roomClock, now + .01, .005, 'bandpass', this._roomTickSide ? 1700 : 1250, 3, .065, .025 );
+			}
+		} else this._roomTick = 0;
 
 		// the escapement: tick... tock while the lens turns, heard in the lantern and faintly down the hatch
 		this._at( this.machine, T.crank.x, T.crank.y, T.crank.z );
-		if ( st.lensTurning && nearLens ) {
+		if ( st.lensTurning && machineAudibility > .004 ) {
 
 			this._tick -= dt;
 			if ( this._tick <= 0 ) {
@@ -290,12 +326,13 @@ export class StationSound {
 
 		// the burner
 		this._at( this.burnerPan, 0, T.deck + 2.9, 0 );
-		this.s._ramp( this.burnerGain.gain, 0.5 * st.lampGlow * nearLens, 0.3 );
+		this.s._ramp( this.burnerGain.gain, .32 * st.lampGlow, .3 );
 
 		// the wind in the glazing (the lantern and the walkway), with the gusts
 		const g = clamp( st.windGust ?? 0.5, 0, 1 );
-		this.s._ramp( this.rainGain.gain, ( st.rain || 0 ) * ( st.indoor || st.inLantern ? 0.035 : 0.1 ), 0.4 );
-		const exposed = st.inLantern ? 0.7 : st.onWalkway ? 1 : 0;
+		this.s._ramp( this.rainGain.gain, ( st.rain || 0 ) * ( .1 - .065 * ( st.shelter ?? st.indoor ?? 0 ) ), .4 );
+		this._at( this.glazingPan, Math.cos( T.galleryDoor ) * 2.2, T.deck + 2.2, Math.sin( T.galleryDoor ) * 2.2 );
+		const exposed = .48 * lantern + walkway + .035 * shaft;
 		this.s._ramp( this.whistleGain.gain, 0.05 * exposed * ( 0.2 + g ) * clamp( ( st.wind ?? 9 ) / 9, 0.3, 2 ), 0.6 );
 		this.s._ramp( this.whistleBP.frequency, 700 + 500 * g + 120 * Math.sin( now * 0.7 ), 0.8 );
 

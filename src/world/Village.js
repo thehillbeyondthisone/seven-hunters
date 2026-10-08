@@ -537,7 +537,7 @@ export class Village {
 		// range to cover everything during the shadow passes (1 shadow draw per cascade).
 		const opaque = new Batch();
 		const ranges = {};
-		for ( const key of [ 'wood', 'hard', 'roofMetal', 'thatch', 'stone', 'stationTimber', 'stationFloor', 'stationFlags', 'stationMasonry', 'landingConcrete' ] ) {
+		for ( const key of [ 'wood', 'hard', 'roofMetal', 'thatch', 'stone', 'stationTimber', 'stationFloor', 'stationFlags', 'stationMasonry', 'landingConcrete', 'landingRock' ] ) {
 
 			const b = B.batches[ key ];
 			if ( ! b || b.vcount === 0 ) continue;
@@ -803,3 +803,4 @@ export class Village {
 	}
 
 }
+

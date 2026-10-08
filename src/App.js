@@ -33,6 +33,8 @@ import { FlannanTerrainData } from './world/flannan/FlannanTerrain.js';
 import { FlannanSward } from './world/flannan/Sward.js';
 import { buildStation, assembleStation, STATION, TOWER, ROOM } from './world/flannan/Station.js';
 import { KITCHEN, BERTH } from './world/flannan/NextRooms.js';
+import { loadInteriorArchive } from './world/flannan/InteriorArchive.js';
+import { loadWeatherInstruments } from './world/flannan/WeatherInstruments.js';
 import { Lamp } from './station/Lamp.js';
 import { HandLamp } from './station/HandLamp.js';
 import { Beams } from './station/Beams.js';
@@ -85,6 +87,8 @@ import { WakeSim } from './ocean/WakeSim.js';
 import { Vegetation } from './world/Vegetation.js';
 import { SoundScape } from './audio/SoundScape.js';
 import { StationSound } from './audio/StationSound.js';
+import { stationAcoustics } from './world/flannan/StationAcoustics.js';
+import { stationLightBounds } from './world/flannan/StationLighting.js';
 import { updateCameraVelocity, useStaticVelocity } from './post/CameraVelocity.js';
 
 const _up = new Vector3( 0, 1, 0 );
@@ -103,6 +107,8 @@ export class App {
 			guidance: true,
 		};
 		this.qs = new URLSearchParams( location.search );
+		if ( this.qs.has( 'weatherObservationsPreview' ) ) this.qs.set( 'setting', 'flannan' );
+		if ( this.qs.has( 'interiorPreview' ) ) { this.qs.set( 'setting', 'flannan' ); this.qs.set( 'chapterPreview', 'kitchen' ); }
 		this.isArrivalAtmosphere = this.qs.has( 'arrivalAtmospherePreview' );
 		if ( this.isArrivalAtmosphere ) {
 			this.qs.set( 'arrivalPreview', '' );
@@ -198,9 +204,11 @@ export class App {
 		// the village flattens building pads into the heightmap: build it before any terrain
 		// data is derived (shore field, GPU textures, meshes). The station grades its yard and tracks.
 		await progress( 0.12, this.flannan ? 'Building the light station…' : 'Building the village…' );
-		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, build: this.flannan ? ( ctx, village ) => buildStation( { ...ctx, keeperStudy: this.qs.has( 'keeperPreview' ) }, village ) : null } );
+		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, build: this.flannan ? ( ctx, village ) => buildStation( { ...ctx, keeperStudy: true }, village ) : null } );
 		// the lens, the doors and gate, the lantern's glass (they move: meshes of their own)
 		if ( this.flannan ) assembleStation( this.village );
+		if ( this.flannan ) this.stationInterior = await loadInteriorArchive( this.village );
+		if ( this.flannan ) this.weatherInstruments = await loadWeatherInstruments( this.village );
 		if ( this.flannan && this.isArrivalAtmosphere ) this.village.materials.landingConcrete.uniforms.arrivalDetail.value = 1;
 		if ( this.flannan && ! qs.has( 'noVeg' ) ) this.sward = new FlannanSward( { scene, terrain: this.terrainData, village: this.village } );
 		if ( ! qs.has( 'noVeg' ) && ! this.flannan ) {
@@ -327,9 +335,9 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		// (the station's tower and keepers' room are dark inside: their ambient light is cut)
 		const interiors = this.flannan ? [
-			[ { cyl: [ 0, 0, TOWER.rIn + 0.3, TOWER.floor - 0.5, TOWER.deck - 0.05 ] }, 0.22 ],
-			[ { box: [ ROOM.x0 - 0.3, TOWER.floor - 0.5, ROOM.z0 - 0.3, ROOM.x1 + 0.3, ROOM.ceiling + 0.3, ROOM.z1 + 0.3 ] }, 0.12 ],
-			...[ KITCHEN, BERTH ].map( R => [ { box: [ R.x0 -0.3, TOWER.floor -0.5, R.z0 -0.3, R.x1 +0.3, ROOM.ceiling +0.3, R.z1 +0.3 ] }, 0.12 ] ),
+			[ { cyl: [ 0, 0, TOWER.rIn + 0.3, TOWER.floor - 0.5, TOWER.deck - 0.05 ] }, 0.14 ],
+			[ { box: [ ROOM.x0 - 0.3, TOWER.floor - 0.5, ROOM.z0 - 0.3, ROOM.x1 + 0.3, ROOM.ceiling + 0.3, ROOM.z1 + 0.3 ] }, 0.09 ],
+			...[ KITCHEN, BERTH ].map( R => [ { box: [ R.x0 -0.3, TOWER.floor -0.5, R.z0 -0.3, R.x1 +0.3, ROOM.ceiling +0.3, R.z1 +0.3 ] }, 0.09 ] ),
 		] : [];
 		this.underwaterLighting = installUnderwaterLighting( {
 			fft: this.fft, caustics: this.caustics, clouds: this.clouds, terrain: this.terrainGPU,
@@ -356,12 +364,14 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			if ( src ) {
 
 				src.range = 6;
+				src.intensity = 8;
 				src.flicker = 0.03;
+				src.always = true; // Burner state, rather than the sky, controls this visible flame.
 				src.scale = 0;
 
 			}
 
-			this.lamp = new Lamp( { lens: this.village.station.moving.lens, lensMaterial: this.village.station.moving.lensMaterial, light: src, origin: new Vector3( 0, this.village.station.focal, 0 ) } );
+			this.lamp = new Lamp( { lens: this.village.station.moving.lens, lensMaterial: this.village.station.moving.lensMaterial, burnerMaterial: this.village.station.moving.burnerMaterial, light: src, origin: new Vector3( 0, this.village.station.focal, 0 ) } );
 			const sp = TOWER.signal, sd = new Vector3( sp.x, 0, sp.z ).normalize();
 			this.signalLight = this.localLights.add( { position: sp.clone().addScaledVector( sd, 0.15 ), dir: sd, cosInner: 0.9, cosOuter: 0.5, color: new Color( 1, 0.82, 0.55 ), intensity: 9, range: 9, kind: 'signal', scale: 0 } );
 			this.curvature = CURVATURE;
@@ -370,6 +380,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 				const a = deg * Math.PI / 180, n = new Vector3( - Math.cos( a ), - 0.25, - Math.sin( a ) ).normalize();
 				this.localLights.add( { position: new Vector3( Math.cos( a ) * ( TOWER.rIn - 0.15 ), STATION.yard + h + 0.3, Math.sin( a ) * ( TOWER.rIn - 0.15 ) ), dir: n, cosInner: 0.3, cosOuter: - 0.4, color: new Color( 0.82, 0.88, 1.0 ), intensity: 2.2, range: 7, kind: 'daylight', day: true } );
+				this.localLights.add( { position: new Vector3( Math.cos( a ) * ( TOWER.rIn - .15 ), STATION.yard + h + .3, Math.sin( a ) * ( TOWER.rIn - .15 ) ), dir: n, cosInner: .2, cosOuter: -.35, color: new Color( .53, .66, .83 ), intensity: .22, range: 5, kind: 'windowBounce' } );
 
 			}
 
@@ -382,11 +393,12 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			// oil lamps do the reading light. Keep the stair dark enough for the
 			// carried lantern to matter, with a little bounce at its thresholds.
 			for ( const [ x, y, z, nx, nz, intensity, range ] of [
-				[ - 6.5, TOWER.floor + 1.7, ROOM.z0 + 0.2, 0, 1, 0.7, 5.5 ],
-				[ - 7.6, TOWER.floor + 1.7, ROOM.z1 - 0.2, 0, - 1, 0.55, 5 ],
-				[ 0, STATION.yard + 10, - 2.25, 0, 1, 0.85, 7 ],
-				[ - 1.8, TOWER.floor + 1.2, 1.8, 1, - 1, 0.9, 4.5 ],
+				[ - 6.5, TOWER.floor + 1.7, ROOM.z0 + 0.2, 0, 1, 0.28, 5.5 ],
+				[ - 7.6, TOWER.floor + 1.7, ROOM.z1 - 0.2, 0, - 1, 0.22, 5 ],
 			] ) this.localLights.add( { position: new Vector3( x, y, z ), dir: new Vector3( nx, - 0.3, nz ).normalize(), cosInner: 0.1, cosOuter: - 0.7, color: new Color( 0.53, 0.66, 0.83 ), intensity, range, kind: 'windowBounce' } );
+			for ( const light of this.localLights.sources ) {
+				if ( [ 'lamp', 'kitchenLamp', 'kitchenFire', 'daylight', 'windowBounce' ].includes( light.kind ) ) light.bounds = stationLightBounds( light.position );
+			}
 			// a 1900 keeper's storm lantern, not a torch: carried at your side, lighting all round it
 			// (src/station/HandLamp.js). It starts in your hand; the story stands it on the keepers' room
 			// table for you to take. ?handlamp: carried and lit (the review shots)
@@ -398,8 +410,8 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			scene.add( this.handLamp.group );
 			const fl = this.localLights.flashlight;
 			fl.color.setRGB( 1.0, 0.6, 0.3 );
-			fl.intensity = 30;
-			fl.range = 18;
+			fl.intensity = 10;
+			fl.range = 8;
 			fl.cosInner = - 1.5; // a point light (dir.w < -1)
 			fl.cosOuter = - 2;
 			fl.at = this.handLamp.lightPosition;
@@ -992,6 +1004,8 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.debris.update( this.camera );
 		if ( this.reef ) this.reef.update( dt, this.camera.position );
 		this.village.update( dt );
+		this.stationInterior?.update( this.settings.timeOfDay );
+		this.weatherInstruments?.update( this.story?.h ?? this.settings.timeOfDay );
 		if ( this.vegetation ) this.vegetation.update( dt, this.camera );
 		if ( this.whale ) this.whale.update( dt, this.camera );
 		this.boat.update( dt );
@@ -1008,6 +1022,10 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			const fl = this.localLights.flashlight;
 			fl.on = this.handLamp.glow > 0.002;
 			fl.scale = this.handLamp.glow * this.handLamp.flicker;
+			if ( this.flannan ) {
+				fl.bounds = stationLightBounds( this.handLamp.lightPosition );
+				fl.boost = fl.bounds ? 1 : 0;
+			}
 
 		}
 
@@ -1073,26 +1091,24 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		const h = this.cameraWaterHeight ?? 0;
 		const coast = this.terrainData.coastDistance( p.x, p.z ).d;
 		// the station: indoors (the tower's shaft, the keepers' room), in the lantern, on the walkway
-		let indoor = 0, inLantern = false, onWalkway = false;
+		let indoor = 0, inLantern = false, onWalkway = false, inRoom = false, acoustic = null;
 		if ( this.flannan ) {
 
-			const r = Math.hypot( p.x, p.z ), T = TOWER;
-			if ( r < T.rIn && p.y < T.deck - 0.1 ) indoor = 1;
-			if ( p.x > ROOM.x0 && p.x < ROOM.x1 && p.z > ROOM.z0 && p.z < ROOM.z1 && p.y < ROOM.ceiling ) indoor = 1;
-			inLantern = r < 2.2 && p.y > T.deck - 0.3 && p.y < T.deck + 4.5;
-			onWalkway = r >= 2.2 && r < 3.9 && Math.abs( p.y - T.deck - 1.6 ) < 1.5;
-			// the hand lamp at full strength indoors, day or night
-			this.localLights.flashlight.boost = indoor;
+			const house = this.village.station.moving.doors.find( door => door.name === 'house' );
+			const gallery = this.village.station.moving.doors.find( door => door.name === 'gallery' );
+			acoustic = stationAcoustics( p, house?.open || 0, gallery?.open || 0 );
+			( { indoor, inLantern, onWalkway, inRoom } = acoustic );
 			if ( this.stationSound ) this.stationSound.update( dt, {
+				...acoustic,
 				listener: p, lampGlow: this.lamp ? this.lamp.glow : 0, lensTurning: !! this.lamp && this.lamp.speed > 0.2,
-				indoor, inLantern, onWalkway, windGust: this.audio._gust ? this.audio._gust.v : 0.5, wind: G.windSpeed.value,
+				indoor, inLantern, onWalkway, inRoom, roomClock: ROOM.clock, windGust: this.audio._gust ? this.audio._gust.v : 0.5, wind: G.windSpeed.value,
 				cliffSynced: !! this.cliffSurge, rain: this.seaWeather?.state.rain || 0,
 			} );
 
 		}
 
 		this.audio.update( dt, {
-			indoor,
+			indoor: acoustic?.shelter ?? indoor,
 			listener: { position: p, forward: f.fwd, up: f.up },
 			underwater: p.y < h ? 1 : 0,
 			depthBelowSurface: Math.max( 0, h - p.y ),

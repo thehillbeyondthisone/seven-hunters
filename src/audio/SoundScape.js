@@ -298,7 +298,8 @@ export class SoundScape {
 	footstep( surface ) {
 
 		const [ bank, trim ] = STEP[ surface ] || STEP.sand;
-		this._shot( bank, 'step', this.foot, MIX.step + trim + ( Math.random() - 0.5 ) * 3, 0.94 + Math.random() * 0.12 );
+		const shelter = this.flannan ? 5 * this.env.indoor : 0;
+		this._shot( bank, 'step', this.foot, MIX.step + trim + shelter + ( Math.random() - 0.5 ) * 3, 0.94 + Math.random() * 0.12 );
 
 	}
 
@@ -1048,8 +1049,8 @@ export class SoundScape {
 		// underwater: steep low-pass on everything above the surface, the reef bed faded in
 		// indoors (the tower, the keepers' room): the wind and the sea through stone walls
 		const f = Math.min( Math.exp( lerp( Math.log( 20000 ), Math.log( lerp( 520, 260, deep ) ), u ) ), Math.exp( lerp( Math.log( 20000 ), Math.log( 700 ), e.indoor ) ) );
-		this._ramp( this.muffle[ 0 ].frequency, f, 0.04 );
-		this._ramp( this.muffle[ 1 ].frequency, Math.min( 20000, f * 1.4 ), 0.04 );
+		this._ramp( this.muffle[ 0 ].frequency, f, this.flannan && ! u ? .18 : .04 );
+		this._ramp( this.muffle[ 1 ].frequency, Math.min( 20000, f * 1.4 ), this.flannan && ! u ? .18 : .04 );
 		this._ramp( this.aboveOut.gain, lerp( 1, 0.4 / ( 1 + e.depth / 5 ), u ), 0.05 );
 		this._ramp( this.under.gain, u, 0.06 );
 		const wantUnder = u > 0 || ( ! e.onLand && e.ly < 2.5 );

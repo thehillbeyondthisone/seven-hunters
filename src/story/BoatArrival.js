@@ -67,7 +67,9 @@ export class BoatArrival {
 		const L = this.app.village.station.landings.east;
 		const t = this.elapsed / CROSSING_SECONDS;
 		// The last seconds slow as the bow comes under the cliff. The stage is kept clear.
-		const distance = 14 + 235 * Math.pow( 1 - t, 1.25 ) + ( this.departure || 0 ) * 2.8;
+		// 8.2 m from stage centre leaves the bow clear of the sea face and the
+		// lowered access steps; the old 14 m stop felt detached from the shore.
+		const distance = 8.2 + 240.8 * Math.pow( 1 - t, 1.25 ) + ( this.departure || 0 ) * 2.8;
 		this.group.position.set( L.stage.x + L.dir[ 0 ] * distance, this.heave, L.stage.z + L.dir[ 1 ] * distance );
 		const heading = Math.atan2( - L.dir[ 0 ], - L.dir[ 1 ] );
 		this.group.rotation.y = heading + ( this.departure === null ? 0 : Math.PI * MathUtils.smoothstep( this.departure, 0, 6 ) );
@@ -149,7 +151,7 @@ export class BoatArrival {
 
 	get speed() {
 
-		return this.departure !== null ? 2.8 : this.ready ? 0 : 235 * 1.25 / CROSSING_SECONDS * Math.pow( 1 - this.elapsed / CROSSING_SECONDS, 0.25 );
+		return this.departure !== null ? 2.8 : this.ready ? 0 : 240.8 * 1.25 / CROSSING_SECONDS * Math.pow( 1 - this.elapsed / CROSSING_SECONDS, 0.25 );
 
 	}
 

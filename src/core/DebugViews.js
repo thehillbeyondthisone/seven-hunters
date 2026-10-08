@@ -4,6 +4,15 @@ import { hazeDensityForVisibility } from '../post/AirHaze.js';
 // Named review cameras used to check every change from the same set of angles.
 // window.__view( name ) jumps there; window.__views lists them.
 export const VIEWS = {
+	// Interior craft and original documents, at the same human-scale positions in each review.
+	iRoom: { p:[-1.6,82.67,4.3],at:[-6.4,82.4,1.1],fov:72,time:14.2 },
+	iRoomNight: { p:[-1.6,82.67,4.3],at:[-6.4,82.4,1.1],fov:72,time:19 },
+	iMap: { p:[-4.6,82.67,3.9],at:[-5,82.9,5.36],fov:54,time:14.2 },
+	iBerthNight: { p:[-1.3,82.67,11.4],at:[-3.7,81.85,12.9],fov:72,time:19 },
+	iLantern: { p:[1.95,100.35,.44],at:[0,100.55,0],fov:90,time:14.2 },
+	iOptic: { p:[1.95,100.8,.44],at:[0,101.0,0],fov:90,time:14.2 },
+	iOpticNight: { p:[1.95,100.8,.44],at:[0,101.0,0],fov:90,time:19 },
+	iDrawings: { p:[-.83,99.83,.35],at:[-1.73,99.01,1.14],fov:60,time:14.2 },
 	// The new chapter's rooms and voluntary look back from the west tramway.
 	dKitchen: { p: [ -1.1, 82.67, 6.8 ], at: [ -3.7, 81.95, 9.2 ], fov: 74, time: 10.0 },
 	dKitchenNight: { p: [ -1.1, 82.67, 6.8 ], at: [ -3.7, 81.95, 9.2 ], fov: 74, time: 18.5 },
@@ -76,6 +85,9 @@ export const VIEWS = {
 	dBeamsClear: { p: [ - 14, 82.3, 16 ], at: [ 0, 104, - 3 ], time: 18.5, vis: 60 },
 	dWalkway: { p: [ 2.55, 99.83, 1.75 ], at: [ 32503, 60, 5435 ], time: 16.8, vis: 60 },
 	dLanding: { p: [ 128, 5.0, 51.5 ], at: [ 70, 50, 28 ], time: 13.7 },
+	dLandingStage: { p: [ 130.89, 4.82, 51.64 ], at: [ 122.85, 5.3, 49.64 ], fov: 70, time: 13.67 },
+	dLandingRungs: { p: [ 136.02, 2.7, 58.41 ], at: [ 132.62, 2.4, 54.81 ], fov: 62, time: 13.67 },
+	dLandingOblique: { p: [ 159, 7, 41.59 ], at: [ 121.46, 10, 49.07 ], fov: 68, time: 13.67 },
 	dCrossing: { p: [ 0, 0, 0 ], arrival: 0, time: 13.5 },
 	dBoatPapers: { p: [ 0, 0, 0 ], arrival: 40, arrivalPitch: - 0.55, time: 13.55 },
 	dBoatLanding: { p: [ 0, 0, 0 ], arrival: 90, time: 13.67 },
@@ -92,6 +104,9 @@ export const VIEWS = {
 	dTowerFloor: { p: [ - 1.5, 82.67, - 0.8 ], at: [ - 0.1, 81.05, 0.9 ], fov: 65, time: 14.2 },
 	dDeck: { p: [ 1.8, 99.83, - 0.7 ], at: [ 0.1, 98.25, 0.5 ], fov: 72, time: 14.2 },
 	// the storm lantern in your hand (hand: shown in the free camera; ?handlamp lights it), looking down
+	dFirstRoom: { p: [ .6, 82.67, 4.6 ], at: [ -5.5, 82.05, 1.1 ], fov: 65, time: 14.1 },
+	dFirstDesk: { p: [ -5.0, 82.67, .35 ], at: [ -6.7, 81.84, -.6 ], fov: 62, time: 19.0 },
+	dFirstBag: { p: [ -2.1, 82.67, 3.65 ], at: [ -.8, 81.45, 5.07 ], fov: 58, time: 14.1 },
 	dHandRoom: { p: [ - 1.6, 82.67, 4.3 ], yaw: 1.32, pitch: - 0.85, time: 19.0, hand: true },
 	dHandYard: { p: [ 6, 82.3, 12 ], yaw: 0.9, pitch: - 0.5, time: 19.0, vis: 60, hand: true },
 };

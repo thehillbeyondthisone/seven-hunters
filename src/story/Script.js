@@ -2,6 +2,8 @@
 // messages and your answers. Fiction on a real record: the keepers lost in December 1900 appear only
 // through what the record says (§2.7); Walter Innes and Ceit Macleod are invented.
 
+import { pressureAt } from '../weather/WeatherReadings.js';
+
 export const TITLE = 'Seven Hunters';
 
 export const DAY = {
@@ -119,6 +121,7 @@ export const NOTES = {
 	slate: { title: 'The slate', body: [ 'Wiped clean, the chalk on its ledge.' ] },
 	oilskins: { title: 'The oilskins', body: [ 'One set of oilskins on the pegs. Two pegs empty.', 'There are places for three men to hang their things.' ] },
 	stove: { title: 'The stove', body: [ 'Cold. There is coal in the scuttle.' ] },
+	bag: { title: 'Your bag', body: [ 'The thick stockings are at the bottom, where Mary said she put them.', 'You can unpack after the light is burning.' ] },
 	westDoor: { title: 'The bedrooms', body: [ 'The beds are beyond this door. First, the light.' ] },
 	kitchenDoor: { title: 'The kitchen', body: [ 'Your crate and the bread are in there. They can wait until the light is burning.' ] },
 	chapel: { title: 'Teampull Beannachadh', body: [ 'St Flannan\'s chapel: a cell of dry stone with a doorway you would have to stoop through.', 'The fowlers who came here once a year took off their caps when they reached the top of the island, and turned sunwise, and never called the island by its name.' ] },
@@ -128,7 +131,7 @@ export const NOTES = {
 // the barometer: by the hour of the night (it falls as the haar comes in)
 export function barometer( h ) {
 
-	const v = h < 19 ? 29.94 : h < 23 ? 29.86 : 29.81;
+	const v = pressureAt( h );
 	return `${ v.toFixed( 2 ) } inches, ${ h < 19 ? 'steady' : 'falling a little' }.`;
 
 }

@@ -1,6 +1,7 @@
 import { Color, Vector3 } from '../../engine/index.js';
 import { lin, WOOD, HARD, ropeCoil } from '../Props.js';
 import { deskOilLamp } from './InteriorDressing.js';
+import { keeperTable, keeperChair, rangeDetails, berthBedding, clothSurface } from './InteriorCraft.js';
 import { Builder } from '../village/GeoBuilder.js';
 
 // Playable reconstruction, not a recovered station plan or inventory.
@@ -21,7 +22,9 @@ export function nextRooms( ctx, parts, floor, ceiling, palette, makeDoor ) {
 	const block = ( x0, z0, x1, z1, tag = 'wall' ) => colliders.addBox( new Vector3( ( x0 + x1 ) / 2, ( F + ceiling ) / 2, ( z0 + z1 ) / 2 ), new Vector3( ( x1 - x0 ) / 2, ( ceiling - F ) / 2, ( z1 - z0 ) / 2 ), 0, { tag } );
 	for ( const R of [ KITCHEN, BERTH ] ) {
 		B.box( 'stationFloor', ( R.x0 + R.x1 ) / 2, F - 0.04, ( R.z0 + R.z1 ) / 2, R.x1 - R.x0, 0.08, R.z1 - R.z0, { grain: 0, ...wood } );
-		B.box( 'stationMasonry', ( R.x0 + R.x1 ) / 2, ceiling, ( R.z0 + R.z1 ) / 2, R.x1 - R.x0, 0.08, R.z1 - R.z0, plaster );
+		B.box( 'stationTimber', ( R.x0 + R.x1 ) / 2, ceiling, ( R.z0 + R.z1 ) / 2, R.x1 - R.x0, 0.08, R.z1 - R.z0, {grain:2,tint:lin(0xcfcbbb),data:WOOD(.54,.015,1)} );
+		// Restrained skirting and a narrow ceiling trim; the exterior openings stay clear.
+		for(const x of [R.x0+.03,R.x1-.03]) for(const [y,h] of [[.1,.18],[3.49,.07]]) B.box('stationTimber',x,F+y,(R.z0+R.z1)/2,.05,h,R.z1-R.z0,{grain:2,...wood});
 		colliders.addBox( new Vector3( ( R.x0 + R.x1 ) / 2, F - 0.2, ( R.z0 + R.z1 ) / 2 ), new Vector3( ( R.x1 - R.x0 ) / 2, 0.2, ( R.z1 - R.z0 ) / 2 ), 0, { walkable: true, solid: false, tag: 'floor' } );
 	}
 	// The existing kitchen door becomes a real opening; the second leads to Walter's berth.
@@ -45,8 +48,7 @@ export function nextRooms( ctx, parts, floor, ceiling, palette, makeDoor ) {
 	// The existing thick exterior walls already have inside faces and cut windows.
 	// Keep those openings clear so both rooms really look onto the island.
 	const table = ( x, z, w, d, h ) => {
-		B.box( 'stationTimber', x, F + h, z, w, 0.065, d, { grain: 0, ...wood } );
-		for ( const sx of [ -1, 1 ] ) for ( const sz of [ -1, 1 ] ) B.box( 'stationTimber', x + sx * ( w / 2 - 0.08 ), F + h / 2, z + sz * ( d / 2 - 0.08 ), 0.07, h, 0.07, { grain: 1, ...wood } );
+		keeperTable( B, x, F, z, w, d, h+.03, 0, .63, true );
 		colliders.addBox( new Vector3( x, F + h / 2, z ), new Vector3( w / 2, h / 2, d / 2 ), 0, { tag: 'furniture' } );
 	};
 	// A range, kettle and coal scuttle, sharing the south-wing chimney.
@@ -59,6 +61,13 @@ export function nextRooms( ctx, parts, floor, ceiling, palette, makeDoor ) {
 	B.cyl( 'hard', -4.75, F, 8.45, 0.18, 0.14, 0.33, { segs: 16, ...iron } );
 	colliders.addBox( new Vector3( -4.65, F + 0.45, 7.6 ), new Vector3( 0.5, 0.45, 0.42 ), 0, { tag: 'furniture' } );
 	KITCHEN.stove = new Vector3( -4.12, F + 0.45, 7.6 );
+	rangeDetails( B, -4.65, F, 7.6, .95, .74 );
+	// Heat shield, stove tools and a hanging cloth belong to ordinary daily work.
+	B.box('hard',-5.32,F+.67,7.6,.035,1.3,1.28,{tint:lin(0xbcb9aa),data:HARD(.44,0,0,.92)});
+	for(const z of [7.2,7.32]) {
+		B.rod('hard',[-5.15,F+.02,z],[-5.15,F+.95,z],.007,.008,{segs:8,...iron});
+		B.torus('hard',-5.15,F+1.01,z,.045,.006,{ry:Math.PI/2,radial:6,tubular:18,...iron});
+	}
 	KITCHEN.chimney = new Vector3( -2.1, F + 5.52, 10.5 );
 	// Table, bread, mugs and Walter's crate. Keep the centre aisle unobstructed.
 	table( -3.8, 9.65, 1.8, 0.65, 0.76 );
@@ -66,27 +75,52 @@ export function nextRooms( ctx, parts, floor, ceiling, palette, makeDoor ) {
 	B.lathe( 'hard', -3.9, F + 0.84, 9.65, [ [ 0, 0 ], [ 0.1, 0 ], [ 0.13, 0.09 ], [ 0, 0.13 ] ], { segs: 18, sx: 1.5, tint: lin( 0xa77b3e ), data: HARD( 0.55, 0, 0, 0.95 ) } );
 	for ( const x of [ -3.38, -4.35 ] ) B.cyl( 'hard', x, F + 0.81, 9.6, 0.045, 0.04, 0.09, { segs: 14, ...cream } );
 	for ( let i = 0; i < 3; i ++ ) B.box( 'stationTimber', 0.82, F + 0.72 + i * 0.52, 8.2, 0.58, 0.055, 2.7, { grain: 2, ...wood } );
-	for ( const z of [ 7.3, 7.7, 8.1, 8.6, 9.1 ] ) B.cyl( 'hard', 0.85, F + 0.77, z, 0.09, 0.09, 0.23, { segs: 12, ...cream } );
+	// Backboards, shelf brackets and a cabinet base give the stores a built form.
+	for(let i=0;i<11;i++) B.box('stationTimber',1.155,F+1.13,6.85+(i+.5)*2.7/11,.025,1.63,2.7/11-.003,{grain:1,...wood});
+	B.box('stationTimber',.82,F+.30,8.2,.58,.56,2.7,{grain:2,...wood});
+	for(const z of [7.3,8.2,9.1]) {
+		B.box('stationTimber',.513,F+.31,z,.018,.43,.78,{grain:1,tint:lin(0x526352),data:WOOD(.51,.02,1)});
+		B.cyl('hard',.495,F+.38,z+.19,.014,.014,.017,{rz:Math.PI/2,segs:10,tint:lin(0x967e4c),data:HARD(.5,0,.7,.42)});
+		for(const y of [1.24,1.76]) B.beam('stationTimber',[1.12,F+y-.26,z],[.61,F+y-.04,z],.03,.055,wood);
+	}
+	for ( const z of [ 7.3, 8.1, 9.1 ] ) B.lathe( 'hard', .85, F+.77, z, [[.08,0],[.095,.06],[.09,.22],[.065,.25],[0,.25]], {segs:20,...cream} );
+	for(let i=0;i<5;i++) B.lathe('hard',.82,F+1.28+i*.015,7.3,[[0,0],[.12,0],[.17,.019],[.16,.025],[0,.025]],{segs:24,...cream});
+	B.lathe('hard',.82,F+1.28,8.25,[[.09,0],[.11,.1],[.09,.26],[.045,.30],[.04,.36],[0,.36]],{segs:24,...cream});
+	for(const z of [8.9,9.17]) B.lathe('hard',.82,F+1.8,z,[[.075,0],[.077,.24],[.07,.26],[0,.26]],{segs:16,tint:lin(0x747b70),data:HARD(.6,.01,.6,.55)});
+	B.rod('stationTimber',[.5,F+1.05,8.7],[.5,F+1.05,9.25],.018,.018,{segs:12,...wood});
+	clothSurface(B,(u,v)=>[.48+.014*Math.cos(u*35),F+1.04-v*.53,8.8+u*.33],cream);
+	keeperChair(B,-3.75,F,8.94,Math.PI,.61);
 	B.box( 'stationTimber', -0.25, F + 0.29, 9.65, 0.92, 0.58, 0.66, { grain: 0, ...wood } );
 	for ( const x of [ -0.58, 0.08 ] ) B.box( 'stationTimber', x, F + 0.3, 9.3, 0.1, 0.62, 0.03, { grain: 1, ...wood } );
 	B.box( 'stationTimber', -0.25, F + 0.59, 9.65, 0.22, 0.008, 0.29, { grain: 0, tint: lin( 0xe8dec5 ), data: WOOD( 0.66, 0, 1 ) } );
 	colliders.addBox( new Vector3( -0.25, F + 0.3, 9.65 ), new Vector3( 0.48, 0.3, 0.35 ), 0, { tag: 'furniture' } );
 	KITCHEN.crate = new Vector3( -0.25, F + 0.61, 9.65 );
 	const flame = deskOilLamp( B, -3.0, F + 0.8, 9.6, 0.65 );
-	lights.push( { position: flame, color: new Color( 1, 0.72, 0.43 ), intensity: 5, range: 7, kind: 'kitchenLamp' } );
+	lights.push( { position: flame, dir: new Vector3( 0, -1, 0 ), cosInner: .1, cosOuter: -.8, color: new Color( 1, 0.72, 0.43 ), intensity: 3.6, range: 5.2, kind: 'kitchenLamp', flicker: .025 } );
 	lights.push( { position: KITCHEN.stove.clone(), color: new Color( 1, 0.4, 0.12 ), intensity: 2, range: 4, kind: 'kitchenFire' } );
 	lights.push( { position: new Vector3( 0.95, F + 1.55, 9.55 ), dir: new Vector3( -1, -0.2, 0 ).normalize(), color: new Color( 0.8, 0.88, 1 ), intensity: 2, range: 7, kind: 'daylight', day: true } );
 	// A spare berth: bedding, bag, washstand and the letter already in your coat.
 	B.box( 'stationTimber', -4.05, F + 0.3, 12.5, 1.6, 0.16, 2.1, { grain: 2, ...wood } );
 	B.box( 'hard', -4.05, F + 0.46, 12.5, 1.52, 0.22, 2.02, { tint: lin( 0xa2a394 ), data: HARD( 0.55, 0, 0, 1 ) } );
-	B.box( 'hard', -4.05, F + 0.6, 13.13, 0.95, 0.12, 0.47, cream );
-	for ( const z of [ 11.47, 13.53 ] ) B.box( 'stationTimber', -4.05, F + 0.6, z, 1.65, 0.85, 0.075, { grain: 0, ...wood } );
+	for ( const z of [ 11.47, 13.53 ] ) B.box( 'stationTimber', -4.05, F + 0.65, z, 1.65, 0.60, 0.075, { grain: 0, ...wood } );
+	berthBedding( B, F );
 	colliders.addBox( new Vector3( -4.05, F + 0.43, 12.5 ), new Vector3( 0.85, 0.43, 1.1 ), 0, { tag: 'furniture' } );
 	BERTH.bed = new Vector3( -3.14, F + 0.53, 12.5 );
 	table( 0.6, 13.55, 0.78, 0.65, 0.72 );
 	BERTH.lantern = new Vector3( 0.6, F +0.76, 13.25 );
 	B.lathe( 'hard', 0.6, F + 0.76, 13.55, [ [ 0, 0 ], [ 0.14, 0 ], [ 0.23, 0.08 ], [ 0.23, 0.11 ], [ 0.2, 0.09 ], [ 0.12, 0.03 ], [ 0, 0.03 ] ], { segs: 24, ...cream } );
+	B.lathe('hard',.71,F+.76,13.78,[[.068,0],[.10,.06],[.09,.22],[.055,.29],[.06,.34],[.043,.34],[.039,.28]],{segs:24,...cream});
+	B.torus('hard',.815,F+1.01,13.78,.065,.011,{ry:Math.PI/2,radial:6,tubular:24,...cream});
+	B.box('stationTimber',.62,F+1.61,14.23,.66,.82,.055,{grain:0,...wood});
+	B.box('hard',.62,F+1.61,14.191,.57,.73,.006,{tint:lin(0x789088),data:HARD(.1,0,1,.13)});
+	B.box('stationTimber',.6,F+.27,13.55,.71,.03,.55,{grain:0,...wood});
+	B.cyl('hard',.6,F+.29,13.55,.16,.14,.31,{segs:20,tint:lin(0x68716a),data:HARD(.4,.02,.6,.52)});
+	B.rod('stationTimber',[-.05,F+1.05,14.17],[.48,F+1.05,14.17],.016,.016,{segs:10,...wood});
+	clothSurface(B,(u,v)=>[.02+u*.32,F+.54+v*.50,14.15+.012*Math.sin(u*40)],cream);
 	B.box( 'stationTimber', -0.25, F + 0.2, 12.1, 0.7, 0.4, 0.42, { grain: 0, tint: lin( 0x68513a ), data: WOOD( 0.77, 0.12 ) } );
+	for(const x of [-.51,.01]) B.box('hard',x,F+.22,12.1,.04,.4,.435,{tint:lin(0x303733),data:HARD(.3,.01,.7,.58)});
+	B.box('hard',-.25,F+.29,11.882,.09,.11,.015,iron);
+	B.torus('hard',-.25,F+.20,11.87,.023,.005,{rx:Math.PI/2,radial:6,tubular:16,...iron});
 	lights.push( { position: new Vector3( -2.1, F + 1.6, 14.1 ), dir: new Vector3( 0, -0.2, -1 ).normalize(), color: new Color( 0.8, 0.88, 1 ), intensity: 1.8, range: 6, kind: 'daylight', day: true } );
 
 }

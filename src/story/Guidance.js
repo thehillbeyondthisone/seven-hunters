@@ -119,8 +119,13 @@ export function storyGuidance( story ) {
 	};
 	if ( L.lit && ( L.wind <= 0 || L.running && L.wind < WARN ) ) item( 'crank', 'Wind the machine · hold E', 'lantern' );
 	else if ( b === 'gate' ) item( 'gate', 'See to the gate · E', 'yard' );
-	else if ( s._obsDue() && b !== 'dawn' && b !== 'journal' ) item( 'slate', 'Observations · E', 'room' );
+	else if ( s._obsDue() && b !== 'dawn' && b !== 'journal' ) {
+		const weather = s.weatherObservations?.guidance();
+		if ( weather ) return routeGuidance( p, marker( weather.at, weather.label, weather.id ), weather.zone );
+		item( 'slate', 'Observations · E', 'room' );
+	}
 	else if ( [ 'calling', 'waiting' ].includes( W.state ) || W.state === 'steady' && L.lit ) item( s.hasTelescope ? 'signal' : 'telescope', s.hasTelescope ? 'Signal lamp · E' : 'Take the telescope · E', s.hasTelescope ? 'gallery' : 'lantern' );
+	else if ( s.unpacking?.pending ) { target = s.unpacking.guidance(); zone = 'room'; }
 	else if ( b === 'climb' ) { target = marker( v( STATION.eastGate.x - 0.25, STATION.yard + 0.8, STATION.eastGate.z ), 'Light station', 'station' ); zone = 'yard'; }
 	else if ( b === 'room' ) { target = houseDoor(); zone = 'room'; }
 	else if ( b === 'letter' ) item( 'letter', 'Board’s letter · E', 'room' );

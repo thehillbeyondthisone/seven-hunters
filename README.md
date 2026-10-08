@@ -19,6 +19,11 @@ shows the new timber, limewash, paint, iron and stone normal/roughness maps in
 matched daylight and lantern-lit views. Run `start.bat` to inspect or play them.
 See [surface details and validation](docs/SURFACES.md).
 
+The local [weather observation study](http://127.0.0.1:5189/weather-observations.html)
+starts either evening round with a separate save. Read graduated instruments,
+observe the roof vane, watch the sea and check landmark bearings before chalking
+the slate. See [controls, reconstruction boundaries and validation](docs/WEATHER-OBSERVATIONS.md).
+
 | | |
 |---|---|
 | **What it is** | An atmospheric story about isolation, responsibility, and a voice across the water |
@@ -43,6 +48,7 @@ Across the water, a watcher on the coast of Lewis looks for your light. On clear
 
 - **Make landfall.** Look around during the crossing, read your papers, and climb from the east landing to the station.
 - **Keep the light.** Find the lamp, light it at sunset, and wind the clockwork that turns its great lens. Listen for the bell when the machine needs attention.
+- **Unpack your things.** Once the light is working, open your bag and discover the Brownie Mary sent. Its one roll holds six pictures to bring home; this scene introduces the camera before photography arrives in a later chapter. [Local scene review](public/unpacking.html).
 - **Keep the record.** Observe the weather and chalk your readings on the station slate.
 - **Find someone out there.** Use a telescope to read the Watcher's flashes and reply from the signal lamp. Choose a brief station signal or a personal reply; the lamp sends it for you. You do not need to know Morse code.
 - **Keep the watch.** Explore the house, tower, landings, and island as daylight fades. Carry a storm lantern when the rooms and paths grow dark.

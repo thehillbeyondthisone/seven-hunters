@@ -311,7 +311,16 @@ export class FlannanTerrainData extends TerrainData {
 			if ( k < 0 ) continue;
 			const edge = Math.abs( s );
 			const ledge = Math.floor( Math.max( 0, edge - 2.2 ) / 1.6 ) * 0.5;
-			const y = smooth[ clamp( Math.round( t ), 0, end ) ] + Math.max( 0, edge - 1.7 ) * 0.55 + ledge;
+			// Broader lower east ledges and unequal shoulders break the symmetric
+			// trench silhouette. Keep the central walking profile exactly graded.
+			const east = name === 'east' ? 1 : 0;
+			const lower = 1 - smoothstep( 15, 42, t );
+			const shoulder = s < 0 ? .7 : 1.16;
+			const ledgeNoise = this.noise2.noise( t / 5.5, s / 3.5 ) * .52;
+			const offPath = smoothstep( 1.6, 4.5, edge );
+			const y = smooth[ clamp( Math.round( t ), 0, end ) ]
+				+ Math.max( 0, edge - 1.7 ) * .55 * ( 1 - east * lower * ( 1 - shoulder ) )
+				+ ledge + east * offPath * ( ledgeNoise - lower * 1.1 );
 			const reach = 11 + this.noise2.noise( t / 9, s > 0 ? 4.1 : 8.7 ) * 1.5;
 			const w = smoothstep( reach, 2.2, edge ) * smoothstep( end + 3, end, t );
 			H[ k ] = lerp( H[ k ], y, w );

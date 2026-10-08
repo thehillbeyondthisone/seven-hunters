@@ -23,10 +23,11 @@ const DIP = 0.004; // rad: the beams aim at the horizon
 
 export class Lamp {
 
-	constructor( { lens = null, lensMaterial = null, light = null, origin = new Vector3( 0, 101, 0 ), intensity = 4000 } = {} ) {
+	constructor( { lens = null, lensMaterial = null, burnerMaterial = null, light = null, origin = new Vector3( 0, 101, 0 ), intensity = 4000 } = {} ) {
 
 		this.lens = lens; // the turning group (Station.js assembleStation)
 		this.lensMaterial = lensMaterial;
+		this.burnerMaterial = burnerMaterial;
 		this.light = light; // the LocalLights source inside the lens
 		this.origin = origin;
 		this.intensity = intensity;
@@ -127,6 +128,7 @@ export class Lamp {
 
 		}
 
+		if ( this.burnerMaterial ) this.burnerMaterial.uniforms.glow.value = this.glow;
 		if ( this.light ) this.light.scale = this.glow;
 		const B = Beams.uniforms;
 		B.origin.value.copy( this.origin );

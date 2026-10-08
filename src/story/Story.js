@@ -1,11 +1,15 @@
 import { Vector3, MathUtils } from '../engine/math/index.js';
 import { Interact } from './Interact.js';
 import { StoryUI } from './StoryUI.js';
+import { installArchiveDocuments } from './ArchiveDocuments.js';
 import { BoatArrival, CROSSING_SECONDS, DEPARTURE_VISIBLE_SECONDS } from './BoatArrival.js';
 import { IslandReveal } from './IslandReveal.js';
 import { IntroLessons, INTRO_PAPERS } from './IntroLessons.js';
 import { KeeperDuties, KEEPER_PAPER } from './KeeperDuties.js';
 import { NextWatch } from './NextWatch.js';
+import { RoomArrival } from './RoomArrival.js';
+import { Unpacking, BROWNIE_PAPER } from './Unpacking.js';
+import { WeatherObservations } from './WeatherObservations.js';
 import { storyGuidance } from './Guidance.js';
 import { Watcher } from './Watcher.js';
 import * as S from './Script.js';
@@ -64,7 +68,8 @@ export class Story {
 	constructor( app ) {
 
 		this.app = app;
-		this.saveKey = app.isArrivalAtmosphere ? 'sevenhunters.arrival-atmosphere-preview.v1' : app.qs?.has( 'keeperPreview' ) ? 'sevenhunters.keeper-duty-preview.v1' : app.qs?.has( 'islandRevealPreview' ) ? 'sevenhunters.island-reveal-preview.v1' : app.qs?.has( 'chapterPreview' ) ? `sevenhunters.chapter-preview.${ app.qs.get( 'chapterPreview' ) || 'kitchen' }.v1` : app.qs?.has( 'arrivalPreview' ) ? 'sevenhunters.arrival-preview.v1' : SAVE_KEY;
+		this.saveKey = app.qs?.has( 'interiorPreview' ) ? 'sevenhunters.interior-preview.v1' : app.qs?.has( 'unpackingPreview' ) ? 'sevenhunters.unpacking-preview.v1' : app.qs?.has( 'firstWatchPreview' ) ? 'sevenhunters.first-watch-preview.v1' : app.isArrivalAtmosphere ? 'sevenhunters.arrival-atmosphere-preview.v1' : app.qs?.has( 'keeperPreview' ) ? 'sevenhunters.keeper-duty-preview.v1' : app.qs?.has( 'islandRevealPreview' ) ? 'sevenhunters.island-reveal-preview.v1' : app.qs?.has( 'chapterPreview' ) ? `sevenhunters.chapter-preview.${ app.qs.get( 'chapterPreview' ) || 'kitchen' }.v1` : app.qs?.has( 'arrivalPreview' ) ? 'sevenhunters.arrival-preview.v1' : SAVE_KEY;
+		if ( app.qs?.has( 'weatherObservationsPreview' ) ) this.saveKey = `sevenhunters.weather-observations-preview.${ app.qs.get( 'weatherObservationsPreview' ) === '21' ? '21' : '18' }.v1`;
 		const st = app.village.station;
 		this.station = st;
 		this.moving = st.moving;
@@ -128,11 +133,17 @@ export class Story {
 		window.addEventListener( 'keydown', this._keys, true );
 		document.addEventListener( 'visibilitychange', () => { if ( document.hidden ) this.islandReveal.music.stop(); } );
 		this._items();
+		installArchiveDocuments( this );
 		this.next = new NextWatch( this );
 		this.next.install();
-		this.keeper = app.qs?.has( 'keeperPreview' ) ? new KeeperDuties( this ) : null;
-		this.keeper?.install();
+		this.keeper = new KeeperDuties( this );
+		this.keeper.install();
 		this.intro = new IntroLessons( this );
+		this.roomArrival = new RoomArrival( this );
+		this.unpacking = new Unpacking( this );
+		this.unpacking.install();
+		this.weatherObservations = new WeatherObservations( this );
+		this.weatherObservations.install();
 
 	}
 
@@ -195,9 +206,17 @@ export class Story {
 
 		}
 
-		if ( this.keeper ) { await this._previewKeeper(); return; }
+		if ( this.app.qs?.has( 'keeperPreview' ) ) { await this._previewKeeper(); return; }
 		if ( this.app.qs?.has( 'islandRevealPreview' ) ) { await this._previewIslandReveal(); return; }
 		if ( this.app.qs?.has( 'chapterPreview' ) ) { await this.next.preview( this.app.qs.get( 'chapterPreview' ) || 'kitchen' ); return; }
+		this.flags.keeperRoutine = true;
+		this.flags.roomArrival = { elapsed: 0, done: false };
+		this.flags.unpacking = { stage: 0 };
+		this.unpacking.sync();
+		this.keeper.sync();
+		if ( this.app.qs?.has( 'unpackingPreview' ) ) { await this._previewUnpacking(); return; }
+		if ( this.app.qs?.has( 'weatherObservationsPreview' ) ) { await this._previewWeatherObservations(); return; }
+		if ( this.app.qs?.has( 'firstWatchPreview' ) && this.app.qs.get( 'firstWatchPreview' ) !== 'crossing' ) { await this._previewFirstWatch(); return; }
 		this.h = START - 10 / 60;
 		this.arrival.begin();
 		this._applyClock();
@@ -229,6 +248,73 @@ export class Story {
 		this.setBeat( 'light' ); this.paused = false;
 	}
 
+	async _previewFirstWatch() {
+		const app = this.app, p = app.player, T = TOWER;
+		this.h = START + .25;
+		this.flags.landed = this.flags.islandRevealSeen = true;
+		this.flags.introLessons = { seen: [], pending: [], active: null, gap: 0, yard: true, done: true };
+		this.arrival.group.visible = false;
+		p.position.set( 3.4, STATION.yard, ROOM.door.z );
+		p.mode = 'walk'; p.grounded = true; p.velocity.set( 0, 0, 0 ); p.bob = 0;
+		p.yaw = Math.PI / 2; p.pitch = 0; p._camY = null; p.update( 0 );
+		this._applyClock(); app.cameraCut?.();
+		await this.ui.card( [ 'The boat has turned back. The evening light is waiting.', 'Your watch begins at the door of the keepers’ room.' ], { kicker: S.TITLE, title: 'A room to keep watch in' } );
+		this.setBeat( 'room' ); this.paused = false;
+	}
+
+	async _previewWeatherObservations() {
+		const app = this.app, p = app.player, at = app.qs.get( 'weatherObservationsPreview' ) === '21' ? 21 : 18;
+		this.h = at; this.arrival.group.visible = false;
+		this.flags.landed = this.flags.islandRevealSeen = this.flags.boardRead = true;
+		this.flags.roomArrival.done = true; this.flags.unpacking.stage = 5;
+		this.flags.introLessons = { seen: [], pending: [], active: null, gap: 0, yard: true, done: true };
+		this.flags.keeperDuty = { inspected: true, verified: true, descentSeen: true, rewound: true };
+		this.flags.litAt = S.SUNSET;
+		if ( at === 21 ) this.obs[ 18 ] = { wind: 'Fresh breeze, SW', sea: 'Moderate', visibility: 'Earlier round already entered for this preview' };
+		this.keeper.sync(); this.unpacking.sync();
+		this.lamp.wind = .95; this.lamp.ignite(); this.lamp.start(); this.lamp.glow = this.lamp.speed = 1;
+		this.hand.carried = this.hand.lit = true; this.hasTelescope = true; this.moving.telescope.visible = false;
+		this.watcher.state = 'done';
+		for ( const d of this.doors.house ) d.target = d.open = 1;
+		p.position.set( ROOM.barometer.x, TOWER.floor, ROOM.barometer.z + 1.1 );
+		p.mode = 'walk'; p.grounded = true; p.velocity.set( 0, 0, 0 ); p.bob = 0;
+		p.yaw = 0; p.pitch = Math.atan2( ROOM.barometer.y - p.position.y - 1.62, 1.1 );
+		// Optional entry poses for isolated render/interaction review. The normal
+		// round still starts in the room and is completed on foot.
+		const location = app.qs.get( 'weatherLocation' );
+		let target;
+		if ( location === 'thermometer' ) { p.position.set( ROOM.thermometer.x, STATION.yard, ROOM.thermometer.z-1 ); target = ROOM.thermometer; }
+		if ( location === 'vane' ) { p.position.set( this.weatherObservations.windStand.x, STATION.yard, this.weatherObservations.windStand.z ); target = this.station.parts.windVane; }
+		if ( location === 'sea' || location === 'landmarks' || location === 'island' ) { p.position.set( Math.cos(TOWER.galleryDoor)*3.1, TOWER.deck, Math.sin(TOWER.galleryDoor)*3.1 ); target = location === 'sea' ? new Vector3(500,0,100) : location === 'island' ? this.weatherObservations.landmarkPosition( 'near' ) : this.her; }
+		if ( location === 'slate' ) { p.position.set( ROOM.slate.x, TOWER.floor, ROOM.slate.z+.9 ); target = ROOM.slate; }
+		if ( target ) { const dx = target.x-p.position.x, dz = target.z-p.position.z; p.yaw = Math.atan2(-dx,-dz); p.pitch = Math.atan2(target.y-p.position.y-1.62,Math.hypot(dx,dz)); }
+		p._camY = null; p.update( 0 ); this._applyClock(); app.cameraCut?.();
+		await this.ui.card( [ 'Read the barometer in the room and the shaded thermometer outside the north wall.', 'Observe the roof vane from the yard, then the sea and landmark bearings from the balcony. Return to chalk the slate.', 'This study has a separate save. Instrument designs, placement and game weather are reconstructions.' ], { kicker: S.TITLE, title: `${ at === 18 ? 'Six' : 'Nine' } o’clock observations` } );
+		this.setBeat( 'evening' ); this.paused = false;
+	}
+
+	async _previewUnpacking() {
+		const app = this.app, p = app.player;
+		this.h = 15.65;
+		this.flags.landed = this.flags.islandRevealSeen = true;
+		this.flags.roomArrival.done = true;
+		this.flags.introLessons = { seen: [], pending: [], active: null, gap: 0, yard: true, done: true };
+		this.flags.litAt = S.SUNSET;
+		this.flags.keeperDuty = { inspected: true, verified: true, descentSeen: true, rewound: true };
+		this.arrival.group.visible = false;
+		this.lamp.wind = .95; this.lamp.ignite(); this.lamp.start(); this.lamp.glow = this.lamp.speed = 1;
+		this.keeper.sync();
+		this.hand.carried = this.hand.lit = true;
+		for ( const d of this.doors.house ) d.target = d.open = 0;
+		p.position.set( -1.25, TOWER.floor, 4.0 );
+		p.mode = 'walk'; p.grounded = true; p.velocity.set( 0, 0, 0 ); p.bob = 0;
+		p.yaw = Math.atan2( p.position.x - ROOM.bag.x, p.position.z - ROOM.bag.z );
+		p.pitch = Math.atan2( ROOM.bag.y - p.position.y - 1.62, Math.hypot( p.position.x - ROOM.bag.x, p.position.z - ROOM.bag.z ) );
+		p._camY = null; p.update( 0 ); this._applyClock(); app.cameraCut?.();
+		await this.ui.card( [ 'The evening light is burning. The machine is wound.', 'For a moment, there is time for your own things.' ], { kicker: S.TITLE, title: 'One roll. Six pictures.' } );
+		this.setBeat( 'watch' ); this.paused = false;
+	}
+
 	_placeAtRevealCrest() {
 		const app = this.app, p = app.player, L = this.station.landings.east, top = L.top;
 		this.h = START; this.flags.landed = true;
@@ -253,9 +339,10 @@ export class Story {
 
 		if ( this.ui.open || this.paused ) return;
 		const read = this.flags.papersRead || ( this.flags.papersRead = [] );
-		await this.ui.packet( [ ...S.CROSSING_PAPERS, ...INTRO_PAPERS, ...( this.keeper ? [ KEEPER_PAPER ] : [] ) ], read, ( id ) => {
+		await this.ui.packet( [ ...S.CROSSING_PAPERS, ...INTRO_PAPERS, ...( this.keeper.enabled ? [ KEEPER_PAPER ] : [] ), ...( this.unpacking.stage >= 3 ? [ BROWNIE_PAPER ] : [] ) ], read, ( id ) => {
 
 			if ( ! read.includes( id ) ) read.push( id );
+			if ( id === 'brownie' && this.unpacking.stage === 4 ) this.flags.unpacking.examined = true;
 			this.save();
 
 		} );
@@ -285,9 +372,11 @@ export class Story {
 		p.position.y = Math.max( this.app.terrainData.heightAt( p.position.x, p.position.z ), this.app.colliders.groundHeightAt( p.position.x, p.position.z, L.stage.y + 1 ) );
 		// facing up the flight
 		p.yaw = Math.atan2( L.dir[ 0 ], L.dir[ 1 ] );
-		p.pitch = 0.12;
+		p.pitch = 0.32;
 		p.velocity.set( 0, 0, 0 );
 		p.mode = 'walk';
+		p.grounded = true; p.bob = 0; p._camY = null;
+		p.update( 0 );
 		if ( this.app.cameraCut ) this.app.cameraCut();
 
 	}
@@ -322,8 +411,10 @@ export class Story {
 		if ( this.lamp.lit && this.lamp.wind <= 0 ) return S.GOALS.bell;
 		if ( b === 'gate' ) return S.GOALS.gate;
 		const due = this._obsDue();
-		if ( due && b !== 'dawn' && b !== 'journal' ) return S.GOALS.obs.replace( 'six', due === 18 ? 'six' : 'nine' );
+		if ( due && b !== 'dawn' && b !== 'journal' ) return this.weatherObservations.goal();
 		if ( this.watcher.state === 'calling' || this.watcher.state === 'waiting' || ( this.watcher.state === 'steady' && this.lamp.lit ) ) return this.hasTelescope ? S.GOALS.answer : S.GOALS.gallan;
+		const unpackingGoal = this.unpacking?.goal();
+		if ( unpackingGoal ) return unpackingGoal;
 		if ( b === 'haar' ) return this.islet ? 'Keep watch on the balcony. Look out over the sea.' : 'Sea fog has arrived. Step onto the balcony outside the lantern and keep watch.';
 		if ( b === 'light' && this._inLantern() ) return this.h < S.SUNSET - 0.25 ? S.GOALS.lightWait : S.GOALS.lightHere;
 		if ( b === 'machine' && this._inLantern() ) return S.GOALS.machineHere;
@@ -381,6 +472,7 @@ export class Story {
 		I.add( { id: 'clock', at: R.clock, size: 0.2, text: 'The clock', use: () => this.toast( `The clock says ${ clockText( this.h ) }.` ) } );
 		I.add( { id: 'oilskins', at: R.oilskins, size: 0.45, text: 'The oilskins', use: read( S.NOTES.oilskins ) } );
 		I.add( { id: 'stove', at: R.stove, size: 0.4, text: 'The stove', use: read( S.NOTES.stove ) } );
+		if ( R.bag ) I.add( { id: 'bag', at: R.bag, size: .28, text: 'Your bag', use: read( S.NOTES.bag ) } );
 		I.add( { id: 'westDoor', at: R.westDoor, size: 0.5, text: 'The bedrooms', use: read( S.NOTES.westDoor ) } );
 		I.add( { id: 'kitchenDoor', at: R.kitchenDoor, size: 0.5, text: 'The kitchen', use: read( S.NOTES.kitchenDoor ) } );
 		I.add( { id: 'handLamp', at: () => _v.copy( this.hand.rest.position ).setY( this.hand.rest.position.y + 0.15 ), size: 0.22, when: () => ! this.hand.carried, text: 'Take the storm lantern', use: () => {
@@ -554,26 +646,14 @@ export class Story {
 	// ---- observations
 
 	async _observe( at ) {
-
-		const v = await this.ui.form( {
-			title: `The slate: ${ at === 18 ? '6' : '9' } p.m.`,
-			intro: `The barometer reads ${ S.barometer( this.h ) } Chalk up the wind, the sea and the visibility.`,
-			fields: [
-				{ key: 'wind', label: 'Wind', options: S.OBS.wind },
-				{ key: 'sea', label: 'Sea', options: S.OBS.sea },
-				{ key: 'visibility', label: 'Visibility', options: S.OBS.visibility },
-			],
-		} );
-		if ( ! v ) return;
-		this.obs[ at ] = v;
-		this.row( at, `Bar. ${ S.barometer( at ).split( ' ' )[ 0 ] }. Wind: ${ lc( v.wind ) }. Sea: ${ lc( v.sea ) }. Visibility: ${ lc( v.visibility ) }.` );
-		this.save();
-
+		return this.weatherObservations.slate();
 	}
 
 	_readSlate() {
 
-		const lines = Object.keys( this.obs ).sort().map( ( k ) => `${ k === '18' ? '6' : '9' } p.m.: ${ this.obs[ k ].wind }; sea ${ this.obs[ k ].sea.toLowerCase() }; ${ this.obs[ k ].visibility.toLowerCase() }.` );
+		const lines = Object.keys( this.obs ).sort( ( a, b ) => Number( a ) - Number( b ) ).filter( k => this.obs[ k ] && typeof this.obs[ k ] === 'object' ).map( ( k ) => `${ k === '18' ? '6' : '9' } p.m.: ${ this.obs[ k ].wind }; sea ${ this.obs[ k ].sea.toLowerCase() }; ${ this.obs[ k ].visibility }.` );
+		if ( this.obs[ 27 ] === 'auto' ) lines.push( '3 a.m.: entered during the small-hours watch.' );
+		for ( const [ at, draft ] of Object.entries( this.flags.weatherObservations || {} ) ) if ( ! this.obs[ at ] ) lines.push( `${ at === '18' ? 'Six' : 'Nine' } o’clock round unfinished (${ Object.keys( draft.readings || {} ).length } readings); not chalked.` );
 		return this.ui.read( { title: 'The slate', body: lines.length ? lines : S.NOTES.slate.body } );
 
 	}
@@ -595,6 +675,8 @@ export class Story {
 
 		if ( this.watcher.talking || this.signal ) return '';
 		if ( this.next?.active ) return this.next.watchText();
+		if ( this.keeper?.active && ! this.keeper.state.rewound && this.h < S.SUNRISE + 24 - .25 ) return '';
+		if ( this.unpacking?.pending ) return '';
 		const b = this.beat;
 		if ( b === 'night' ) return 'Keep the watch until dawn';
 		if ( b === 'dawn' && this.h < S.SUNRISE + 24 - 0.25 ) return 'Keep the watch until sunrise';
@@ -612,6 +694,8 @@ export class Story {
 	async _keepWatch() {
 
 		if ( this.next?.active ) return this.next.keepWatch();
+		if ( this.keeper?.active && ! this.keeper.state.rewound && this.h < S.SUNRISE + 24 - .25 ) return;
+		if ( this.unpacking?.pending ) return;
 		const b = this.beat;
 		if ( b === 'night' ) {
 
@@ -954,6 +1038,7 @@ export class Story {
 	}
 
 	update( dt ) {
+		this.keeper?.sync();
 
 		const app = this.app;
 		const modal = this.ui.open || !! this.app.mobile?.paused || !! app.devMenu?.open;
@@ -997,7 +1082,7 @@ export class Story {
 
 			// (her messages come slowly by lamp; the night's clock slows with them)
 			const rate = ( this.lamp.lit || this.h > 24 ? RATE_NIGHT : RATE_DAY ) * ( this.watcher.state === 'sending' ? 0.25 : 1 );
-			const dh = dt * rate;
+			const dh = this.unpacking.holdsClock ? 0 : dt * rate * this.weatherObservations.clockScale;
 			this.h += dh;
 			this.lamp.update( dt, dh );
 
@@ -1071,13 +1156,17 @@ export class Story {
 
 		}
 
+		this.weatherObservations.update();
 		// the HUD
 		this.ui.setClock( `${ clockText( this.h ) } · ${ this.dayText() }` );
 		this.ui.setObjective( this.beat === 'intro' ? '' : this.goal() );
 		this.ui.guidance( storyGuidance( this ), app.camera, !! app.player.prompt );
-		const introLine = this.intro.update( dt, { blocked: this.paused || modal || app.freeCam || app.ui?.ui?.photoMode || !! globalThis.document?.hidden } );
-		const keeperLine = this.keeper?.update( dt, { blocked: this.paused || modal || app.freeCam || app.ui?.ui?.photoMode || !! globalThis.document?.hidden } );
-		this.ui.arrival( keeperLine || introLine );
+		const blockedReading = this.paused || modal || app.freeCam || app.ui?.ui?.photoMode || !! globalThis.document?.hidden;
+		const keeperLine = this.keeper?.update( dt, { blocked: blockedReading } );
+		const unpackingLine = this.unpacking.update( dt, { blocked: blockedReading || !! keeperLine } );
+		const roomLine = this.roomArrival?.update( dt, { blocked: blockedReading || !! keeperLine || !! unpackingLine } );
+		const introLine = this.intro.update( dt, { blocked: blockedReading || !! roomLine || !! keeperLine || !! unpackingLine } );
+		this.ui.arrival( keeperLine || unpackingLine || roomLine || introLine );
 
 		this.saveT += dt;
 		if ( this.saveT > 20 && ! modal && this.beat !== 'intro' && this.beat !== 'end' ) this.save();
@@ -1137,7 +1226,19 @@ export class Story {
 	_restore( s ) {
 
 		Object.assign( this, { h: s.h, beat: s.beat, flags: s.flags || {}, rows: s.rows || [], obs: s.obs || {}, hasTelescope: !! s.tel, haar: s.haar || HAAR, saidName: !! s.saidName, islet: s.islet || null } );
+		// A saved arrival can take up the new work without repeating the crossing
+		// or losing its position, clock or apparatus state. An established watch
+		// retains its original routine, including saves where the light is out.
+		if ( ! this.flags.keeperRoutine && ! s.lamp?.lit && ! this.flags.litAt && [ 'crossing', 'climb', 'room', 'letter', 'light' ].includes( s.beat ) ) {
+			this.flags.keeperRoutine = true;
+			this.flags.unpacking ||= { stage: 0 };
+			if ( [ 'crossing', 'climb', 'room', 'letter' ].includes( s.beat ) ) this.flags.roomArrival ||= { elapsed: 0, done: false };
+		}
+		if ( ! s.lamp?.lit && ! this.flags.litAt && [ 'crossing', 'climb', 'room', 'letter', 'light' ].includes( s.beat ) ) this.flags.unpacking ||= { stage: 0 };
 		this.lamp.load( s.lamp );
+		this.keeper.note = null;
+		this.keeper.sync();
+		this.unpacking.sync();
 		if ( this.next.active ) this.next.restore( s.watcher ); else this.watcher.load( s.watcher );
 		// (a night saved before the lantern: it is in your hand)
 		this.hand.load( s.hand || { carried: true } );

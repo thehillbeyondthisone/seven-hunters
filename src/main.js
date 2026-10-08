@@ -14,6 +14,10 @@ if ( /[?&]bench\b/.test( location.search ) ) {
 }
 
 const app = new App();
+if ( app.qs.has( 'firstWatchPreview' ) ) {
+	document.querySelector( '.loader-kicker.sh-only' ).textContent = 'Eilean Mòr · Your first watch';
+	document.querySelector( '.loader-tagline.sh-only' ).textContent = 'A room against the wind. A light to keep. Someone watching across the water.';
+}
 if ( app.isArrivalAtmosphere ) {
 	document.querySelector( '.loader-kicker.sh-only' ).textContent = 'Eilean Mòr · Arrival study';
 	document.querySelector( '.loader-tagline.sh-only' ).textContent = 'A wooden boat, a narrow landing, and the sound of company receding across the water.';
@@ -23,12 +27,26 @@ if ( app.isMobile ) {
 	document.querySelector( '.loader-tip-list.sh-only' ).innerHTML = `
 		<p>Drag on the left to walk and on the right to look. Landscape gives you the clearest view.</p>
 		<p>Tools holds your papers, lantern and telescope. The action button names what you can do nearby.</p>
-		<p>Hold the action button to light the lamp and wind the machine. Its border shows your progress.</p>
+		<p>Use the action button to attend to the lamp. Hold it at the crank to wind the machine.</p>
 		<p>On the boat, tap Read papers for your packet. Tap Go to landing to finish the crossing, then Step ashore to leave the boat.</p>
 		<p>The watch saves in this browser. Pause before putting your phone away.</p>`;
 }
 const ui = new UI();
 window.__ui = ui;
+
+if ( app.qs.has( 'unpackingPreview' ) ) {
+	document.querySelector( '.loader-kicker.sh-only' ).textContent = 'Eilean Mòr · Unpacking';
+	document.querySelector( '.loader-tagline.sh-only' ).textContent = 'The light is burning. Your own things can come out of the bag.';
+	document.querySelector( '.loader-tip-list.sh-only' ).innerHTML = app.isMobile ?
+		'<p>Look down at the bag and tap the named action button to unpack.</p><p>Lay out your clothes, unwrap the small parcel, then set the Brownie on the desk.</p><p>Walk to the desk and examine the camera and Mary’s note.</p><p>This scene has its own save. Tools holds your papers, lantern and telescope.</p>' :
+		'<p>Look down at your bag. E unbuckles it and unpacks one thing at a time.</p><p>Lay out your clothes, unwrap the small parcel, then set the Brownie on the desk.</p><p>WASD walks. Follow the marker to the desk and use E to examine the camera and Mary’s note.</p><p>B opens Papers. This scene has its own save.</p>';
+}
+
+if ( app.qs.has( 'weatherObservationsPreview' ) ) {
+	document.querySelector( '.loader-kicker.sh-only' ).textContent = 'Eilean Mòr · Weather observations';
+	document.querySelector( '.loader-tagline.sh-only' ).textContent = 'Read the instruments. Go out and look. Chalk what you observed.';
+	document.querySelector( '.loader-tip-list.sh-only' ).innerHTML = '<p>Read the room barometer and the shaded thermometer outside the north wall.</p><p>Look up at the roof vane from the yard. From the balcony, watch open water and check both landmark bearings.</p><p>Return to the slate to chalk the captured readings. This study uses a separate save.</p><p>Use the named action button on touch screens; E interacts on desktop. Hold to observe the sea for four seconds.</p>';
+}
 
 if ( app.qs.has( 'keeperPreview' ) ) {
 	document.querySelector( '.loader-kicker.sh-only' ).textContent = 'Eilean Mòr · Keeper’s duties study';

@@ -1,5 +1,6 @@
 import { standard, physical } from '../../materials/Materials.js';
 import { villageMaterialModule, createHardMaterial } from '../village/VillageMaterials.js';
+import { terrainShadingModule, rot2 } from '../terrain/TerrainShading.js';
 
 // Dedicated station finishes use baked normal/roughness detail at metre scale.
 // tint is the actual linear albedo, rather than a multiplier on silver driftwood.
@@ -134,30 +135,61 @@ export function createStationMasonry( T ) {
 // Landing concrete is exposed cast material, not limewashed station plaster.
 // World-space mapping keeps aggregate consistent across stage, risers and kerbs.
 export function createLandingConcrete( T ) {
-	const m = stationSurface( T, [ 'stoneN', 'stoneGrainN', 'grime' ], { roughness: 0.92, uniforms: { arrivalDetail: [ 'f32', 0 ] } } );
+	const m = stationSurface( T, [ 'stoneGrainN', 'grime' ], { roughness: 0.92, uniforms: { arrivalDetail: [ 'f32', 1 ] } } );
 	m.name = 'FlannanLandingConcrete';
 	m.surface = /* wgsl */`
 	let n = abs( in.N );
 	let top = step( 0.65, n.y );
 	let wallUV = select( in.P.xy, in.P.zy, n.x > n.z );
 	let uv = mix( wallUV, in.P.xz, top );
-	let grain = textureSample( stationstoneN, smpAnisoRepeat, uv * 4.5 );
+	let grain = textureSample( stationstoneGrainN, smpAnisoRepeat, uv * 4.5 );
 	let broad = textureSample( stationgrime, smpAnisoRepeat, uv * 0.19 );
 	let fine = textureSample( stationgrime, smpAnisoRepeat, uv * 2.3 );
 	let aggregate = textureSample( stationstoneGrainN, smpAnisoRepeat, uv * 1.3 );
 	let detail = mat.arrivalDetail;
-	let tide = 1.0 - smoothstep( 0.3, 2.7, in.P.y );
-	let damp = tide * 0.36 + top * broad.r * 0.16;
-	let tone = 0.73 + broad.a * 0.32 + ( grain.a - 0.5 ) * 0.12;
+	let tide = 1.0 - smoothstep( 0.5, 2.5 + broad.a * .5, in.P.y );
+	let damp = tide * 0.32 + top * broad.r * 0.13;
+	let tone = 0.85 + broad.a * 0.28 + ( grain.a - 0.5 ) * 0.14;
+	let runnel = smoothstep( .56, .77, fine.a * .55 + broad.a * .45 ) * ( 1.0 - top );
+	let salt = smoothstep( .72, .9, grain.a ) * ( 1.0 - tide ) * .045;
 	// Sparse construction lifts on vertical faces; no brick courses on concrete.
 	let lift = min( fract( uv.y / 0.9 ), 1.0 - fract( uv.y / 0.9 ) ) * 0.9;
 	let aa = max( fwidth( uv.y ), 0.0005 );
 	let joint = clamp( ( 0.0015 - lift ) / aa + 0.5, 0.0, 1.0 ) * min( 1.0, 0.003 / aa ) * ( 1.0 - top );
-	s.albedo = in.vs.vTint * tone * ( 1.0 - damp - fine.r * 0.09 - broad.r * 0.15 - joint * 0.2 );
+	s.albedo = in.vs.vTint * tone * ( 1.0 - damp - fine.r * 0.07 - broad.r * 0.12 - joint * 0.2 - runnel * .12 ) + salt;
 	s.roughness = 0.93 - tide * ( 0.17 + detail * 0.18 ) - top * broad.r * 0.06;
 	s.ao = 1.0 - joint * 0.06;
 	let close = 1.0 - smoothstep( 0.006, 0.045, max( length( fwidth( uv ) ), 0.0001 ) );
 	s.normal = vlmNormalFromSlope( in.P, in.N, uv, vlmSlopeOf( grain ) * 0.07 + vlmSlopeOf( aggregate ) * detail * close * 0.42 );
+`;
+	return m;
+}
+
+// One merged batch of bedrock at the east landing, using existing baked maps.
+// Grey mineral faces, oblique quartz seams, ochre lichen above a dark tidal belt.
+export function createLandingRock( T ) {
+	const m = stationSurface( T, [ 'grime' ], { roughness: .86 } );
+	m.modules = [ villageMaterialModule, terrainShadingModule( T.stoneGrainN ) ];
+	m.name = 'EastLandingBedrock';
+	m.surface = /* wgsl */`
+	let p = in.P;
+	let g = terrainImplicitGrad( p );
+	let mcr = textureSample( terrainDetailTex, smpAniso4Repeat, ${ rot2( 'p.xz', .9 ) } / 61.0 ).w * .6
+		+ textureSample( terrainDetailTex, smpAniso4Repeat, ${ rot2( 'p.xz', 2.3 ) } / 17.0 ).w * .4;
+	// The same metre-scale fractured stone as the terrain, so the exposed
+	// shelves read as the cliff's bedrock rather than separate pale boulders.
+	let R = terrainRockSurface( p, in.N, p.y, mcr, .5, .65, g );
+	let detail = terrainStoneDetail( p, in.N, g );
+	let broad = textureSample( stationgrime, smpAnisoRepeat, p.xz * .22 );
+	let axis = dot( p, vec3f( .17, .38, -.09 ) ) + ( broad.a-.5 ) * .16;
+	let aa = max( fwidth( axis ), .001 );
+	let quartz = ( 1.0-smoothstep( .009, .022 + aa, abs( fract( axis * .57 + .13 )-.5 ) ) )
+		* smoothstep( .35, .6, broad.a );
+	let grey = dot( R.albedo, vec3f( .2126, .7152, .0722 ) ) * vec3f( .93, .98, 1.0 );
+	s.albedo = mix( grey, R.albedo, R.moss * .22 ) + quartz * .016 * ( 1.0-R.wet );
+	s.roughness = mix( detail.rough, .34 + detail.rough * .13, R.wet );
+	s.ao = .84 + smoothstep( .0, .35, R.height ) * .16;
+	s.normal = terrainStoneNormal( terrainPerturbNormal( p, in.N, R.hd, 1.4 ), detail.slope );
 `;
 	return m;
 }
@@ -233,10 +265,27 @@ export function createLanternGlass() {
 //   glow: the flame (0 out .. 1 burning bright); angle: the lens's turn (radians)
 export const BULLSEYES = [ 0, 25 * Math.PI / 180, Math.PI, Math.PI + 25 * Math.PI / 180 ];
 
+export function createBurnerFlameMaterial() {
+
+	const m = physical( {
+		transparent: true, depthWrite: false, side: 'double',
+		defines: { NO_LOCAL_LIGHTS: 1 }, uniforms: { glow: [ 'f32', 0 ] },
+	} );
+	m.name = 'fixedBurnerFlame';
+	m.surface = /* wgsl */`
+	s.albedo = vec3f( 0.0 );
+	s.alpha = mat.glow * 0.78;
+	s.emissive = vec3f( 1.0, 0.57, 0.17 ) * mat.glow * 3.0;
+`;
+	return m;
+
+}
+
 export function createLensMaterial() {
 
-	const m = standard( {
-		color: 0xa4bbb1, roughness: 0.06, metalness: 0,
+	const m = physical( {
+		color: 0xdbe5df, roughness: 0.06, metalness: 0, ior: 1.52,
+		transparent: true, opacity: .26, side: 'double', depthWrite: false,
 		defines: { NO_LOCAL_LIGHTS: 1 },
 		uniforms: { glow: [ 'f32', 0 ], angle: [ 'f32', 0 ] },
 		varyings: { vLocal: 'vec3f' },
@@ -276,13 +325,22 @@ export function createLensMaterial() {
 	let glass = mix( 0.25 + 0.35 * belt, 1.0, bull );
 	let annuli = 0.5 + 0.5 * cos( nearest * 6.2831853 / 0.065 );
 	let prism = mix( belt, annuli, 1.0 - smoothstep( 0.85, 1.25, nearest ) );
-	s.albedo = mat.color * ( 0.58 + prism * 0.42 );
-	s.roughness = mix( 0.035, 0.16, prism );
+	// Concentric prism faces around the paired eyes bend the reflected light.
+	// This is a surface study; the engine does not solve the optic's refraction.
+	let height = annuli * 0.006 * ( 1.0 - smoothstep( 0.85, 1.25, nearest ) );
+	let dx = dpdx( in.P ); let dy = dpdy( in.P );
+	let r1 = cross( dy, in.N ); let r2 = cross( in.N, dx );
+	let det = dot( dx, r1 );
+	s.normal = normalize( abs( det ) * in.N - sign( det ) * ( dpdx( height ) * r1 + dpdy( height ) * r2 ) + in.N * 1e-12 );
+	let grazing = pow( 1.0 - abs( dot( s.normal, in.V ) ), 3.0 );
+	s.alpha = 0.33 + grazing * 0.32 + prism * 0.18;
+	s.albedo = mat.color * ( 0.60 + prism * 0.30 );
+	s.roughness = mix( 0.035, 0.075, prism );
 	// The flame's local point light is deliberately excluded: inverse-square
 	// lighting a shell from inside flattened every prism to white. Preserve dark
 	// grooves and concentrate the bright flash in the bullseyes themselves.
-	let transmission = 0.012 + prism * 0.065 + bull * 0.02;
-	s.emissive = flame * mat.glow * ( transmission + flash * 3.0 );
+	let transmission = 0.006 + prism * 0.025 + bull * 0.012;
+	s.emissive = flame * mat.glow * ( transmission + flash * 1.8 );
 `;
 	return m;
 

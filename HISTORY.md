@@ -3,6 +3,35 @@
 Context for new sessions: what this repository is, what changed recently, and where things stand. Newest
 entries first.
 
+## 8 October 2026 · Weather observations through exploration
+
+- The first evening's six and nine o'clock rounds now collect instrument and
+  scene evidence before a single chalking action. The room barometer and shaded
+  north-wall thermometer have readable physical faces. The original roof vane
+  follows rendered wind; balcony sea and landmark checks use fresh water queries,
+  haze, curvature, sightlines and lighting.
+- Draft readings save their source and capture time. Existing entries, deadlines,
+  the small-hours entry and later watches remain compatible. An unfinished round
+  slows the story clock and lamp consumption together. The preview has separate
+  saves and direct six/nine entry points. See `docs/WEATHER-OBSERVATIONS.md` for
+  controls, modern calibration and historical reconstruction boundaries.
+
+## 7 October 2026 · Unpacking and the Brownie introduction
+
+- After the first-lighting and driving-weight routine, new watches return to
+  the kitbag: open it, lay out the shirt and blue stockings, unwrap Mary's
+  camera, and set it beside the journal. Each action changes the scene. Walking
+  to the desk opens the camera inspection and Mary's note.
+- The original 1900 Brownie's approximate 3 x 3 x 5 inch proportions, small
+  lens, top sight lines, shutter lever, winding key and red film window are
+  modelled. The introduction establishes one loaded roll and six square
+  photographs that must be developed ashore. Photograph capture remains future
+  work. Sources and fiction boundaries are in `docs/UNPACKING.md` and Papers.
+- The scene saves its individual steps, holds time during unpacking in the room,
+  and yields objectives to keeper duties. Established saves are preserved.
+  `unpacking.html` offers a direct local review with a separate preview save;
+  the first-watch review links to it.
+
 ## Start here
 
 - **What this is.** The repository began as *Tidewater*, a WebGPU island fishing game on a hand-written
@@ -34,6 +63,31 @@ entries first.
   npm run shots -- --views=beach,aerial --styles=photoreal,poster,albumen --times=12.4,14.8 \
                    --adapt --params="setting=flannan&lite" --w=640 --h=360 --frames=24
   ```
+
+## 2026-10-07: the house arrival and first evening light
+
+The approved next step focuses on the house and the first working light.
+
+- Walter's kitbag sits under the entrance shelf, with an optional thought recalling
+  Mary's existing letter. A brief passage about the three chairs appears once on
+  entering, without taking the camera or stopping the walker. It pauses during
+  papers, hidden tabs and other reading.
+- The yard door's real opening affects the outside sound near the threshold.
+  Low surf remains audible through the walls; the wall clock and footsteps stay
+  clear inside. The table lamp is softer and the desk light more concentrated.
+- New watches include apparatus inspection, raising the weight, lighting the
+  burner, releasing the clockwork stop, verifying the working light, and observing
+  and rewinding the moving weight. Saved arrivals take up the lesson at their
+  current position and time; watches already past first lighting retain their
+  previous routine and closed tube. Dawn and later chapters retain their flow.
+- `first-watch.html` provides an isolated review at the house or from the crossing.
+  It uses `sevenhunters.first-watch-preview.v1`. `keeper-duties.html` remains the
+  shorter lantern study. The exposed weightway and exact controls remain teaching
+  reconstructions, documented in `docs/KEEPER-DUTIES.md`.
+- Validation includes the full story through dawn and the current continuation,
+  legacy saves, isolated preview saves, threshold acoustics and apparatus tests,
+  plus engine renders. Browser UI automation was unavailable; speaker audibility
+  and physical-device play remain hands-on checks.
 
 ## 2026-10-04: supplied-photograph architecture and materials pass
 

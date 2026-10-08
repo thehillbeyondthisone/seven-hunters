@@ -42,6 +42,7 @@ assert.equal( s.aboard, false );
 assert.ok( s.goal().includes( 'Examine' ) );
 assert.equal( s.interact.get( 'lens' ).hold, 0 );
 const drive = s.keeper.drive;
+assert.ok( st.parts.weightWay.top + .38 < TOWER.landing - .1, 'fully raised weight stays below the opaque upper landing' );
 assert.equal( drive.at.y, st.parts.weightWay.bottom );
 
 async function use( id ) {

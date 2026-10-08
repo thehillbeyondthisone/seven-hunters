@@ -1,8 +1,11 @@
 import { Color, Group, Matrix4, Mesh, Vector3 } from '../../engine/index.js';
-import { createLanternGlass, createLensMaterial, createStationTimber, createStationFlags, createStationMasonry, createLandingConcrete, createStationIron } from './StationMaterials.js';
+import { createLanternGlass, createLensMaterial, createBurnerFlameMaterial, createStationTimber, createStationFlags, createStationMasonry, createLandingConcrete, createLandingRock, createStationIron } from './StationMaterials.js';
+import { dressEastLanding } from './LandingCraft.js';
+import { bolt, railShoe } from './ApparatusCraft.js';
 import { portholeDrum } from './ReferenceDetails.js';
 import { fittedStoneWall, stoneBlock, islandStoneScatter } from './StoneMasonry.js';
 import { dressKeepersRoom, deskOilLamp } from './InteriorDressing.js';
+import { keeperTable, keeperChair, rangeDetails } from './InteriorCraft.js';
 import { nextRooms, haulingShed, KITCHEN, HAULING_SHED } from './NextRooms.js';
 import { ChimneySmoke } from './ChimneySmoke.js';
 import { Builder, Part, quad01Part, sagPoints } from '../village/GeoBuilder.js';
@@ -510,7 +513,7 @@ function keepersRoom( ctx, parts, S ) {
 	const plaster = { tint: P.white, data: PLASTER( 0.43, 0.25 ) };
 	const boards = { tint: lin( 0x9b815f ), data: WOOD( 0.5, 0.08 ) };
 	rectAroundTower( B, 'stationFloor', R.x0, R.z0, R.x1 + 0.6, R.z1, 3.3, F, true, boards );
-	rectAroundTower( B, 'stationMasonry', R.x0, R.z0, R.x1, R.z1, 3.0, R.ceiling, false, plaster );
+	rectAroundTower( B, 'stationFloor', R.x0, R.z0, R.x1, R.z1, 3.0, R.ceiling, false, { tint: lin( 0xcfcbbb ), data: WOOD( .54, .015, 1 ) } );
 	// the threshold through the tower's wall, and the step up at the yard door
 	sectorSlab( B, 'stationFlags', TOWER.rIn - 0.05, 3.5, TOWER.doorAngle - DOOR_HALF, TOWER.doorAngle + DOOR_HALF, F - 0.12, F, { tint: P.flags, data: RUBBLE( 0.45 ) } );
 	colliders.addBox( new Vector3( ( R.x0 + 1.8 ) / 2, F - 0.25, ( R.z0 + R.z1 ) / 2 ), new Vector3( ( 1.8 - R.x0 ) / 2, 0.25, ( R.z1 - R.z0 ) / 2 ), 0, { walkable: true, solid: false, tag: 'floor' } );
@@ -546,22 +549,14 @@ function keepersRoom( ctx, parts, S ) {
 	const brass = { tint: C.brass, data: HARD( 0.89, 0.1, 0.9, 0.35 ) };
 	const table = ( x, z, w, d, h, ry, s ) => {
 
-		B.pushAt( x, F, z, ry );
-		B.box( 'stationTimber', 0, h - 0.025, 0, w, 0.05, d, { grain: 0, ...wood( s ) } );
-		for ( const [ lx, lz ] of [ [ - 1, - 1 ], [ 1, - 1 ], [ 1, 1 ], [ - 1, 1 ] ] ) B.box( 'stationTimber', lx * ( w / 2 - 0.05 ), ( h - 0.05 ) / 2, lz * ( d / 2 - 0.05 ), 0.05, h - 0.05, 0.05, { grain: 1, ...wood( s + 0.01 ) } );
-		B.pop();
+		keeperTable( B, x, F, z, w, d, h, ry, s, z < 0 );
 		colliders.addBox( new Vector3( x, F + h / 2, z ), new Vector3( w / 2, h / 2, d / 2 ), ry, { tag: 'furniture' } );
 
 	};
 
 	const chair = ( x, z, ry, s ) => {
 
-		B.pushAt( x, F, z, ry );
-		B.box( 'stationTimber', 0, 0.45, 0, 0.42, 0.04, 0.4, { grain: 0, ...wood( s ) } );
-		for ( const [ lx, lz ] of [ [ - 1, - 1 ], [ 1, - 1 ], [ 1, 1 ], [ - 1, 1 ] ] ) B.box( 'stationTimber', lx * 0.18, 0.22, lz * 0.17, 0.035, 0.45, 0.035, { grain: 1, ...wood( s + 0.01 ) } );
-		for ( const lx of [ - 1, 1 ] ) B.box( 'stationTimber', lx * 0.18, 0.7, 0.18, 0.035, 0.5, 0.035, { grain: 1, ...wood( s + 0.02 ) } );
-		B.box( 'stationTimber', 0, 0.88, 0.18, 0.4, 0.1, 0.025, { grain: 0, ...wood( s + 0.03 ) } );
-		B.pop();
+		keeperChair( B, x, F, z, ry, s );
 
 	};
 
@@ -584,19 +579,27 @@ function keepersRoom( ctx, parts, S ) {
 	R.letter = new Vector3( desk.x - 0.36, top + 0.01, desk.z + 0.14 );
 	// the desk lamp
 	const deskFlame = deskOilLamp( B, desk.x + 0.5, top, desk.z - 0.12, 0.31 );
-	lights.push( { position: deskFlame, color: new Color( 1.0, 0.72, 0.43 ), intensity: 6.5, range: 7, kind: 'lamp', flicker: 0.035, story: 'deskLamp' } );
+	lights.push( { position: deskFlame, dir: new Vector3( 0, -1, 0 ), cosInner: .15, cosOuter: -.8, color: new Color( 1.0, 0.72, 0.43 ), intensity: 4.6, range: 4.8, kind: 'lamp', flicker: 0.025, story: 'deskLamp' } );
 
 	// the barometer and the thermometer on the north wall by the tower, the clock over the kitchen door
 	B.pushAt( - 3.6, F, R.z0, 0 );
 	B.box( 'stationTimber', 0, 1.65, 0.03, 0.16, 1.0, 0.05, { grain: 1, ...wood( 0.13, 0.2 ) } );
 	B.cyl( 'hard', 0, 1.95, 0.06, 0.1, 0.1, 0.02, { rx: Math.PI / 2, segs: 16, ...brass } );
-	B.box( 'stationTimber', 0, 1.95, 0.075, 0.15, 0.15, 0.004, { grain: 0, tint: lin( 0xece4d0 ), data: WOOD( 0.15, 0.05, 0.9, 0 ) } );
 	B.rod( 'hard', [ 0, 1.2, 0.06 ], [ 0, 1.75, 0.06 ], 0.006, 0.006, { segs: 4, tint: lin( 0x9aa0a6 ), data: HARD( 0.17, 0, 1, 0.1 ) } );
 	B.pop();
-	R.barometer = new Vector3( - 3.6, F + 1.75, R.z0 + 0.08 );
+	R.barometer = parts.barometerFace = new Vector3( - 3.6, F + 1.95, R.z0 + 0.083 );
+	// Shaded north-facing air thermometer: plausible placement, not an archive inventory.
+	R.thermometer = parts.thermometerFace = new Vector3( - 5, F + 1.6, R.z0 - .69 );
+	B.box( 'stationTimber', - 5, F + 1.6, R.z0 - .665, .17, .58, .04, { grain: 1, ...wood( .15, .1 ) } );
+	B.box( 'hard', - 5, F + 1.92, R.z0 - .78, .22, .025, .18, iron );
 	B.pushAt( - 2.2, F, R.z1, Math.PI );
 	B.cyl( 'stationTimber', 0, 2.55, 0.02, 0.17, 0.17, 0.06, { rx: Math.PI / 2, segs: 20, ...wood( 0.19, 0.2 ) } );
 	B.cyl( 'stationTimber', 0, 2.55, 0.05, 0.14, 0.14, 0.01, { rx: Math.PI / 2, segs: 20, tint: lin( 0xece4d0 ), data: WOOD( 0.21, 0.05, 0.9, 0 ) } );
+	for ( let i = 0; i < 12; i ++ ) {
+		const a = i / 12 * Math.PI * 2;
+		B.rod( 'hard', [ Math.sin(a)*.111, 2.55+Math.cos(a)*.111, .063 ], [ Math.sin(a)*.126, 2.55+Math.cos(a)*.126, .063 ], .0018, .0018, {segs:4, tint:P.black, data:HARD(.25,0,0,.85)} );
+	}
+	parts.clockFace = new Vector3( -2.2, F+2.55, R.z1-.067 );
 	B.pop();
 	R.clock = new Vector3( - 2.2, F + 2.55, R.z1 - 0.06 );
 
@@ -606,6 +609,7 @@ function keepersRoom( ctx, parts, S ) {
 	B.cyl( 'hard', R.x0 + 0.35, F + 0.88, 3.9, 0.07, 0.07, R.ceiling - F - 0.88, { segs: 10, ...iron } );
 	colliders.addBox( new Vector3( R.x0 + 0.4, F + 0.45, 3.9 ), new Vector3( 0.35, 0.45, 0.31 ), 0, { tag: 'furniture' } );
 	R.stove = new Vector3( R.x0 + 0.5, F + 0.6, 3.9 );
+	rangeDetails( B, R.x0 + .4, F, 3.9, .65, .58 );
 
 	// the table and chairs
 	table( - 5.4, 3.3, 1.4, 0.8, 0.74, 0.1, 0.23 );
@@ -622,7 +626,7 @@ function keepersRoom( ctx, parts, S ) {
 	B.lathe( 'stationTimber', 0.3, 1.8, 0.14, [ [ 0.16, 0 ], [ 0.12, 0.06 ], [ 0.1, 0.14 ], [ 0.02, 0.16 ] ], { segs: 10, ...oil } );
 	B.pop();
 	R.oilskins = new Vector3( R.x1 - 0.15, F + 1.4, 3.2 );
-	dressKeepersRoom( ctx, R, F );
+	dressKeepersRoom( ctx, R, F, parts );
 	nextRooms( ctx, parts, F, R.ceiling, P, door );
 
 }
@@ -854,22 +858,44 @@ function lensPedestal( ctx, parts, deck, gm ) {
 	const iron = { tint: lin( 0x2c3a33 ), data: IRON( 0.71, 0.15 ) };
 	const brass = { tint: lin( 0xb08a3e ), data: HARD( 0.73, 0, 0.9, 0.35 ) };
 	B.cyl( 'hard', 0, deck, 0, 0.55, 0.6, 0.15, { segs: 24, ...iron } );
+	for ( let i = 0; i < 8; i ++ ) {
+		const a = i / 8 * Math.PI * 2;
+		bolt( B, [ Math.cos( a ) * .49, deck + .151, Math.sin( a ) * .49 ], [ 0, 1, 0 ], iron, .021 );
+	}
 	B.cyl( 'hard', 0, deck + 0.15, 0, 0.36, 0.42, 1.55, { segs: 24, ...iron } );
 	// the machine: a cabinet on the column facing the hatch, the winding square and its crank
 	const ca = TOWER.crankAngle = TOWER.hatch.angle + 1.05;
 	B.pushAt( 0, 0, 0, Math.PI / 2 - ca );
 	B.box( 'hard', 0, deck + 0.95, 0.45, 0.62, 0.7, 0.3, iron );
 	B.box( 'hard', 0, deck + 0.95, 0.61, 0.5, 0.58, 0.02, brass );
+	// Recessed service-door seam, hinge knuckles and fasteners around the winding square.
+	for ( const x of [ -.265, .265 ] ) B.box( 'hard', x, deck + .95, .615, .014, .61, .012, iron );
+	for ( const y of [ deck + .65, deck + 1.25 ] ) B.box( 'hard', 0, y, .615, .54, .014, .012, iron );
+	for ( const x of [ -.22, .22 ] ) for ( const y of [ deck + .70, deck + 1.20 ] ) bolt( B, [ x, y, .624 ], [ 0, 0, 1 ], brass );
+	for ( const y of [ deck + .79, deck + 1.10 ] ) B.cyl( 'hard', -.275, y, .622, .018, .018, .10, { segs: 8, ...iron } );
+	B.cyl( 'hard', 0, deck + 1.0, .626, .085, .085, .012, { rx: Math.PI / 2, segs: 20, ...iron } );
 	B.cyl( 'hard', 0, deck + 1.0, 0.62, 0.05, 0.05, 0.08, { rx: Math.PI / 2, segs: 10, ...brass } );
 	B.pop();
 	TOWER.crank = new Vector3( Math.cos( ca ) * 0.7, deck + 1.0, Math.sin( ca ) * 0.7 );
 	const crank = new Builder();
 	crank.box( 'hard', 0, 0.12, 0, 0.03, 0.26, 0.03, brass );
-	crank.cyl( 'hard', 0, 0.22, 0, 0.022, 0.022, 0.14, { rx: Math.PI / 2, segs: 8, tint: lin( 0x3a2a1c ), data: WOOD( 0.75, 0.4 ) } );
+	crank.box( 'hard', 0, 0, 0, .064, .064, .038, brass );
+	bolt( crank, [ 0, 0, .02 ], [ 0, 0, 1 ], iron, .016 );
+	crank.lathe( 'stationTimber', 0, .22, .018, [ [ .018, 0 ], [ .029, .025 ], [ .027, .13 ], [ .018, .15 ] ], { rx: Math.PI / 2, segs: 12, tint: lin( 0x5e4430 ), data: WOOD( .75, .04 ) } );
 	parts.crank = { B: crank, position: TOWER.crank.clone(), ry: Math.PI / 2 - ca };
 	B.cyl( 'hard', 0, deck + 1.7, 0, 0.62, 0.58, 0.12, { segs: 24, ...brass } );
 	// the burner: a brass column with the concentric wicks at the focus
 	B.cyl( 'hard', 0, deck + 1.82, 0, 0.09, 0.12, gm - deck - 1.92, { segs: 12, ...brass } );
+	// The fixed burner sits inside the revolving glass. Oil feed, adjustment
+	// wheel and nested wick cups make its job legible even with the flame out.
+	B.rod( 'hard', [ .23, deck + 1.80, .05 ], [ .23, gm - .25, .05 ], .013, .013, { segs: 10, ...brass } );
+	B.rod( 'hard', [ .23, gm - .25, .05 ], [ .08, gm - .18, .05 ], .013, .013, { segs: 10, ...brass } );
+	B.torus( 'hard', .23, gm - .28, .09, .045, .008, { rx: Math.PI / 2, radial: 6, tubular: 20, ...brass } );
+	B.lathe( 'hard', 0, gm - .14, 0, [ [ .105, 0 ], [ .16, .018 ], [ .16, .035 ], [ .12, .048 ], [ .12, .073 ] ], { segs: 32, ...brass } );
+	for ( const r of [ .046, .079, .113 ] ) B.torus( 'hard', 0, gm - .063, 0, r, .006, { radial: 6, tubular: 32, tint: lin( 0x302a20 ), data: HARD( .77, 0, 0, .85 ) } );
+	const flame = new Builder();
+	flame.lathe( 'flame', 0, gm - .056, 0, [ [ .085, 0 ], [ .11, .045 ], [ .078, .11 ], [ .032, .19 ], [ .001, .24 ] ], { segs: 24 } );
+	parts.flame = flame;
 
 	// Original 1899 hyper-radial optic (museum SLM.1997.9316). The museum photograph
 	// guides the broad bivalve silhouette and paired bullseyes. Frame/clearances are reconstructed.
@@ -883,12 +909,25 @@ function lensPedestal( ctx, parts, deck, gm ) {
 		}
 		return 0.60;
 	};
-	G.lathe( 'lens', 0, 0, 0, profile, { segs: 96 } );
-	for ( const y of [ -1.31, 0, 1.31 ] ) L.torus( 'hard', 0, y, 0, radiusAt( clamp( y, -1.3, 1.3 ) ) + 0.015, 0.018, { radial: 5, tubular: 64, ...brass } );
+	// Individual refracting faces catch light as real glass rather than painted
+	// stripes. Ring pitch/depth are visual reconstruction, not recovered optics.
+	const prisms = [];
+	for ( let y = -1.30; y < 1.299; y += .045 ) {
+		const end = Math.min( y + .045, 1.30 );
+		// Separate sloping and return faces at every ring, avoiding collapsed
+		// duplicate endpoints in the prism profile.
+		prisms.push( [ radiusAt( y ), y ], [ radiusAt( end ) + .014, end ], [ radiusAt( end ), end ] );
+	}
+	G.lathe( 'lens', 0, 0, 0, prisms, { segs: 96 } );
+	for ( const y of [ -1.31, -.72, .72, 1.31 ] ) L.torus( 'hard', 0, y, 0, radiusAt( clamp( y, -1.3, 1.3 ) ) + 0.018, 0.016, { radial: 7, tubular: 96, ...brass } );
 	for ( let i = 0; i < 12; i ++ ) {
 		const a = ( i + 0.5 ) / 12 * Math.PI * 2;
 		const rib = profile.map( ( [ r, y ] ) => new Vector3( Math.cos( a ) * ( r + 0.018 ), y, Math.sin( a ) * ( r + 0.018 ) ) );
 		L.tube( 'hard', rib, 0.014, { radial: 5, ...brass } );
+		for ( const y of [ -1.28, -.72, .72, 1.28 ] ) {
+			const rr = radiusAt( y ) + .023, n = [ Math.cos( a ), 0, Math.sin( a ) ];
+			bolt( L, [ n[ 0 ] * rr, y, n[ 2 ] * rr ], n, brass, .009 );
+		}
 	}
 	// Curved concentric prism edges, clipped at the seam between each paired bullseye.
 	for ( const c of [ 0, 25 * Math.PI / 180, Math.PI, Math.PI + 25 * Math.PI / 180 ] ) {
@@ -990,7 +1029,17 @@ function tower( ctx, parts ) {
 		sectorSlab( B, 'hard', T.newel, T.rIn + 0.05, a - 0.012, a + T.dTread + 0.012, top - 0.045, top, tread );
 		// Cast rib beneath each tread, with a slim outer baluster.
 		B.beam( 'hard', [ Math.cos( a ) * 0.25, top - 0.09, Math.sin( a ) * 0.25 ], [ Math.cos( a ) * 2.18, top - 0.09, Math.sin( a ) * 2.18 ], 0.035, 0.13, tread );
-		if ( i % 2 === 0 ) B.rod( 'hard', [ Math.cos( a ) * 2.17, top, Math.sin( a ) * 2.17 ], [ Math.cos( a ) * 2.17, top + 0.95, Math.sin( a ) * 2.17 ], 0.014, 0.014, { segs: 5, ...tread } );
+		sectorSlab( B, 'hard', T.newel - .006, T.newel + .055, a - .035, a + .16, top - .14, top - .045, iron );
+		B.pushAt( 0, 0, 0, Math.PI / 2 - a );
+		B.box( 'hard', 0, top - .11, 2.30, .14, .20, .05, iron );
+		for ( const x of [ -.043, .043 ] ) bolt( B, [ x, top - .10, 2.268 ], [ 0, 0, -1 ], tread, .009 );
+		B.pop();
+		if ( i % 2 === 0 ) {
+			const x = Math.cos( a ) * 2.17, z = Math.sin( a ) * 2.17;
+			railShoe( B, x, top, z, tread );
+			B.rod( 'hard', [ x, top + .045, z ], [ x, top + .93, z ], .014, .014, { segs: 8, ...tread } );
+			B.box( 'hard', x, top + .923, z, .064, .016, .036, { ry: -a, ...tread } );
+		}
 
 	}
 
@@ -998,7 +1047,13 @@ function tower( ctx, parts ) {
 	if ( ctx.keeperStudy ) {
 		// An exposed teaching section, only in the keeper study. Retain the solid
 		// newel collider and stair connections; this is not an original Flannan opening.
-		parts.weightWay = { bottom: T.floor + .65, top: T.deck - .8, anchor: T.deck - .25, angle: T.hatch.angle };
+		// Keep the raised teaching weight below the landing slab, where it can
+		// actually be seen from the upper treads rather than through that floor.
+		parts.weightWay = { bottom: T.floor + .65, top: T.landing - .75, anchor: T.deck - .25, angle: T.hatch.angle };
+		// The closed tube remains available for legacy watches and scene previews.
+		// The first-watch lesson exposes it only while that routine is enabled.
+		parts.weightCover = new Builder();
+		parts.weightCover.cyl( 'hard', 0, T.floor, 0, T.newel + .002, T.newel + .002, T.deck - T.floor, { segs: 16, ...iron } );
 		sectorSlab( B, 'hard', T.newel - .025, T.newel, T.hatch.angle + Math.PI / 3, T.hatch.angle + 5 * Math.PI / 3, T.floor, T.deck - .2, iron, 16 );
 		for ( const a of [ T.hatch.angle - Math.PI / 3, T.hatch.angle + Math.PI / 3 ] ) {
 			B.rod( 'hard', [ Math.cos( a ) * T.newel, T.floor, Math.sin( a ) * T.newel ], [ Math.cos( a ) * T.newel, T.deck - .2, Math.sin( a ) * T.newel ], .012, .012, { segs: 6, ...iron } );
@@ -1009,11 +1064,20 @@ function tower( ctx, parts ) {
 	const rail = [];
 	for ( let i = 0; i <= T.count; i ++ ) {
 
-		const a = T.start + i * T.dTread, y = T.floor + ( i + 1 ) * T.riser + 0.95;
+		const a = T.start + i * T.dTread, y = T.floor + Math.min( i + 1, T.count ) * T.riser + 0.95;
 		rail.push( new Vector3( Math.cos( a ) * 2.17, y, Math.sin( a ) * 2.17 ) );
 
 	}
 
+	for ( let i = 1; i <= 10; i ++ ) {
+		const a = lerp( T.landingFrom, T.landingTo, i / 10 );
+		rail.push( new Vector3( Math.cos( a ) * 2.17, T.landing + .95, Math.sin( a ) * 2.17 ) );
+		if ( i % 2 === 0 ) {
+			const x = Math.cos( a ) * 2.17, z = Math.sin( a ) * 2.17;
+			railShoe( B, x, T.landing, z, tread );
+			B.rod( 'hard', [ x, T.landing + .04, z ], [ x, T.landing + .94, z ], .014, .014, { segs: 8, ...tread } );
+		}
+	}
 	B.tube( 'stationTimber', rail, 0.035, { radial: 7, tint: lin( 0x795b3c ), data: WOOD( 0.56, 0.1 ) } );
 	colliders.addRing( 0, 0, T.rIn, 3.45, Y0 - 0.5, T.deck - 0.05, { gaps: [ [ dA - dw, dA + dw ] ], tag: 'tower' } );
 	colliders.addCylinder( 0, 0, T.newel, T.floor, T.deck, { tag: 'newel' } );
@@ -1028,6 +1092,7 @@ function tower( ctx, parts ) {
 	for ( let j = 1; j < H.steps; j ++ ) {
 
 		const y = T.landing + j * rise, c = hp( ( j - 0.5 ) * run, 0, 0 );
+		for ( const w of [ -H.half + .052, H.half - .052 ] ) bolt( B, hp( ( j - .5 ) * run, w, y + .001 ), [ 0, 1, 0 ], tread, .008 );
 		B.box( 'hard', c[ 0 ], y - 0.02, c[ 2 ], run + 0.04, 0.04, H.half * 2, { ry: hry, ...iron } );
 		colliders.addBox( new Vector3( c[ 0 ], y - 0.1, c[ 2 ] ), new Vector3( run / 2 + 0.02, 0.1, H.half ), hry, { walkable: true, solid: false, tag: 'hatchStair' } );
 
@@ -1038,6 +1103,12 @@ function tower( ctx, parts ) {
 		B.beam( 'hard', hp( - 0.1, w, T.landing - 0.05 ), hp( H.run + 0.05, w, T.deck - 0.05 ), 0.025, 0.24, iron );
 		B.rod( 'hard', hp( 0.05, w, T.landing + 0.95 ), hp( H.run, w, T.deck + 0.9 ), 0.018, 0.018, { segs: 5, ...iron } );
 		B.rod( 'hard', hp( 0.05, w, T.landing ), hp( 0.05, w, T.landing + 0.95 ), 0.018, 0.018, { segs: 5, ...iron } );
+		for ( const [ s, y ] of [ [ .05, T.landing ], [ H.run, T.deck ] ] ) {
+			const p = hp( s, w, y ); railShoe( B, p[ 0 ], p[ 1 ], p[ 2 ], iron );
+		}
+		B.rod( 'hard', hp( H.run, w, T.deck + .9 ), hp( H.run, Math.sign( w ) * ( H.half + .08 ), T.deck + 1 ), .018, .018, { segs: 8, ...iron } );
+		const normal = [ Math.sign( w ) * hc, 0, Math.sign( w ) * hs ];
+		for ( const [ s, y ] of [ [ .05, T.landing + .02 ], [ H.run - .05, T.deck - .16 ] ] ) bolt( B, hp( s, w, y ), normal, tread, .011 );
 
 	}
 
@@ -1047,6 +1118,7 @@ function tower( ctx, parts ) {
 	for ( let k = 0; k < guard.length; k ++ ) {
 
 		const [ s0, w0 ] = guard[ k ];
+		const foot = hp( s0, w0, T.deck ); railShoe( B, foot[ 0 ], foot[ 1 ], foot[ 2 ], iron );
 		B.rod( 'hard', hp( s0, w0, T.deck ), hp( s0, w0, top1 ), 0.02, 0.02, { segs: 5, ...iron } );
 		if ( k === 0 ) continue;
 		const [ s1, w1 ] = guard[ k - 1 ];
@@ -1055,6 +1127,14 @@ function tower( ctx, parts ) {
 		const m = hp( ( s0 + s1 ) / 2, ( w0 + w1 ) / 2, T.deck + 0.5 ), along = s0 === s1;
 		colliders.addBox( new Vector3( m[ 0 ], m[ 1 ], m[ 2 ] ), new Vector3( along ? 0.03 : Math.abs( s1 - s0 ) / 2, 0.5, along ? Math.abs( w1 - w0 ) / 2 : 0.03 ), hry, { tag: 'hatchRail' } );
 
+	}
+
+	// Angle-iron edging and girder flanges stay outside the open hatch.
+	for ( const w of [ -hq, hq ] ) {
+		B.beam( 'hard', hp( -.2, w, T.deck - .018 ), hp( H.run + .02, w, T.deck - .018 ), .036, .045, iron );
+		B.beam( 'hard', hp( -.85, w, T.deck - .27 ), hp( H.run + .2, w, T.deck - .27 ), .038, .18, iron );
+		B.beam( 'hard', hp( -.85, w, T.deck - .18 ), hp( H.run + .2, w, T.deck - .18 ), .13, .022, iron );
+		for ( const s of [ -.1, .5, 1.1 ] ) bolt( B, hp( s, w, T.deck + .007 ), [ 0, 1, 0 ], iron, .008 );
 	}
 
 	// stage 2: the corbelled walkway (a stone floor, iron railings)
@@ -1132,6 +1212,13 @@ function tower( ctx, parts ) {
 	};
 
 	const gm = ( g0 + g1 ) / 2;
+	// Sheet 4 shows bolted astragal intersections. Give the lattice real collars
+	// and bolt heads; exact fastener size is a modelling reconstruction.
+	for(let k=0;k<N;k++) {
+		const a=k/N*Math.PI*2, p=at(k,gm,2.043);
+		B.cyl('hard',...p,.042,.042,.018,{rz:Math.PI/2,ry:-a,segs:10,...iron});
+		B.rod('hard',at(k,gm,2.038),at(k,gm,2.085),.012,.012,{segs:6,...iron});
+	}
 	for ( let k = 0; k < N; k ++ ) {
 
 		for ( const s of [ 1, - 1 ] ) {
@@ -1153,6 +1240,16 @@ function tower( ctx, parts ) {
 	lensPedestal( ctx, parts, deck, gm );
 	B.rod( 'hard', [ 0, gm + 0.75, 0 ], [ 0, g1 + 1.2, 0 ], 0.05, 0.05, { segs: 8, ...iron } );
 	lanternFittings( ctx, parts, deck, top );
+	// Original drawings on a shallow rack, clear of the hatch and machinery.
+	const rackAngle=2.55,rackRotation=Math.PI*1.5-rackAngle;
+	const rackX=Math.cos(rackAngle)*2.04,rackZ=Math.sin(rackAngle)*2.04;
+	B.pushAt(rackX,deck+.8,rackZ,rackRotation);
+	const rackWood={tint:lin(0x596555),data:WOOD(.63,.025,1)};
+	B.box('stationTimber',0,0,-.012,1.38,.63,.035,{grain:0,...rackWood});
+	B.box('stationTimber',0,-.3,.02,1.4,.05,.065,{grain:0,...rackWood});
+	B.pop();
+	parts.archiveDisplays ||= [];
+	for(const [id,offset] of [['lanternElevation',-.345],['lanternDetails',.345]]) parts.archiveDisplays.push({id,x:rackX+Math.cos(rackRotation)*offset+Math.sin(rackRotation)*.018,y:deck+.8,z:rackZ-Math.sin(rackRotation)*offset+Math.cos(rackRotation)*.018,width:.65,height:.47,ry:rackRotation,rx:0});
 
 	// walls to stand inside or outside of, the floor, the door
 	colliders.addRing( 0, 0, 2.2, 2.4, deck - 0.05, g1, { gaps: [ [ ga - gw, ga + gw ] ], tag: 'lantern' } );
@@ -1167,10 +1264,7 @@ function tower( ctx, parts ) {
 	B.lathe( 'hard', 0, g1, 0, [ [ 2.24, 0 ], [ 2.24, 0.1 ], [ 2.02, 0.22 ], [ 1.72, 0.48 ], [ 1.3, 0.78 ], [ 0.78, 1.0 ], [ 0.36, 1.12 ], [ 0.3, 1.16 ], [ 0.3, 1.2 ] ], { segs: 32, ...iron } );
 	B.lathe( 'hard', 0, g1 + 1.2, 0, [ [ 0.3, 0 ], [ 0.42, 0.14 ], [ 0.45, 0.3 ], [ 0.38, 0.46 ], [ 0.12, 0.58 ], [ 0.05, 0.62 ] ], { segs: 16, ...iron } );
 	B.rod( 'hard', [ 0, g1 + 1.8, 0 ], [ 0, g1 + 2.6, 0 ], 0.022, 0.012, { segs: 5, ...iron } );
-	B.pushAt( 0, g1 + 2.35, 0, 0.7 );
-	B.box( 'hard', 0.25, 0, 0, 0.5, 0.14, 0.012, { tint: P.black, data: IRON( 0.5, 0.2 ) } );
-	B.box( 'hard', - 0.3, 0, 0, 0.12, 0.02, 0.02, { tint: P.black, data: IRON( 0.5, 0.2 ) } );
-	B.pop();
+	parts.windVane = new Vector3( 0, g1 + 2.35, 0 );
 
 	// small windows lighting the stair, above the house's roof: their margins and sashes stand just
 	// proud of the curved wall
@@ -1416,6 +1510,7 @@ function landing( ctx, name, L ) {
 	}
 	// Small local working details on the east stage; no modern quay equipment.
 	if ( name === 'east' ) {
+		dressEastLanding( ctx, L, at );
 		ropeCoil( B, 2.6, stageY + .015, -2.05, .028, .28, 4, .37 );
 		B.box( 'stationTimber', .1, stageY+.25, 2.45, 1.05, .5, .65, { tint:P.box, data:WOOD(.41,.15,.25,3) } );
 		for ( const x of [ -.27, .47 ] ) B.box( 'hard', x, stageY+.25, 2.45, .045, .52, .67, iron );
@@ -1639,7 +1734,7 @@ export function buildStation( ctx, village ) {
 		village.textures.addStoneGrain();
 		village.textures.addStationSurfaces();
 		const T = village.textures.textures;
-		Object.assign( village.materials, { stationTimber: createStationTimber( T ), stationFloor: createStationTimber( T, true ), stationFlags: createStationFlags( T ), stationMasonry: createStationMasonry( T ), landingConcrete: createLandingConcrete( T ), hard: createStationIron( T ) } );
+		Object.assign( village.materials, { stationTimber: createStationTimber( T ), stationFloor: createStationTimber( T, true ), stationFlags: createStationFlags( T ), stationMasonry: createStationMasonry( T ), landingConcrete: createLandingConcrete( T ), landingRock: createLandingRock( T ), hard: createStationIron( T ) } );
 
 	}
 
@@ -1746,6 +1841,10 @@ export function assembleStation( village ) {
 
 	const group = new Group();
 	group.name = 'station_parts';
+	const weightCover = new Group();
+	weightCover.name = 'station-weightway-cover';
+	if ( parts.weightCover ) for ( const mesh of meshes( parts.weightCover ) ) weightCover.add( mesh );
+	group.add( weightCover );
 
 	// the lantern's glazing
 	const glassMaterial = createLanternGlass();
@@ -1756,6 +1855,10 @@ export function assembleStation( village ) {
 
 	// the lens: brass frame (village hard) and the glass drum (the lens material), turning together
 	const lensMaterial = createLensMaterial();
+	const burnerMaterial = createBurnerFlameMaterial();
+	const burnerFlame = new Mesh( parts.flame.batches.flame.build(), burnerMaterial );
+	burnerFlame.name = 'fixed-paraffin-flame';
+	group.add( burnerFlame );
 	const lens = new Group();
 	lens.name = 'station_lens';
 	lens.position.copy( parts.lens.position );
@@ -1805,7 +1908,13 @@ export function assembleStation( village ) {
 		const g = new Group(); for ( const mesh of meshes( chain ) ) g.add( mesh );
 		g.visible = name === 'loose'; haulingChains[ name ] = g; group.add( g );
 	}
-	S.moving = { group, lens, crank, doors, glass, lensMaterial, telescope, smoke, haulingChains };
+	const unpacking = {};
+	for ( const [ name, B ] of Object.entries( parts.unpacking.builders ) ) {
+		const g = new Group(); g.name = 'personal-kit-' + name;
+		for ( const mesh of meshes( B ) ) g.add( mesh );
+		g.visible = name === 'closed'; unpacking[ name ] = g; group.add( g );
+	}
+	S.moving = { group, lens, crank, doors, glass, lensMaterial, burnerMaterial, telescope, smoke, haulingChains, weightCover, unpacking };
 	return S.moving;
 
 }

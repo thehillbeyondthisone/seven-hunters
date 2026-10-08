@@ -67,6 +67,10 @@ export class Terrain {
 				gustOffset: [ 'vec2f', this.gustOffset ],
 				// 1: a treeless northern island in winter (the Flannans): turf everywhere, no forest, no laterite
 				maritime: [ 'f32', 0 ],
+				// Local reference pass around the east landing; other shores retain
+				// their existing palette. xy=head, zw=seaward direction.
+				landingFrame: [ 'vec4f', terrainData.landings?.east
+					? [ terrainData.landings.east.head.x, terrainData.landings.east.head.z, ...terrainData.landings.east.dir ] : [ 0, 0, 1, 0 ] ],
 			},
 			attributes: { nodeData: 'vec4f', nodeEdges: 'vec4f' },
 		} );
@@ -302,11 +306,20 @@ const TERRAIN_SURFACE = /* wgsl */`
 		var rockW = 0.0; var screeW = 0.0;
 		let cliffK = smoothstep( 0.28, 0.55, slope );
 		let convex = smoothstep( 0.5, 0.85, nr.w );
+		let dockDelta = p.xz - mat.landingFrame.xy;
+		let dockAlong = dot( dockDelta, mat.landingFrame.zw );
+		let dockAcross = abs( dot( dockDelta, vec2f( -mat.landingFrame.w, mat.landingFrame.z ) ) );
+		let dockRock = smoothstep( -110.0, -75.0, dockAlong ) * ( 1.0-smoothstep( 16.0, 44.0, dockAlong ) )
+			* ( 1.0-smoothstep( 18.0, 52.0, dockAcross ) ) * mat.maritime;
+		// Exposed lower cutting: short turf stays on level shelves, while the
+		// inclined faces join the added bedrock in the same mineral palette.
+		let dockExposure = dockRock * ( 1.0-smoothstep( 22.0, 43.0, dockAcross ) )
+			* ( 1.0-smoothstep( 40.0, 70.0, h ) ) * smoothstep( 2.0, 5.0, h ) * smoothstep( .08, .35, slope );
 		// rv below, without the rock's own relief term, which adds at most 0.1925 (R.height <= 1): where
 		// even that can't reach the scree band (0.28), rock and scree weigh 0 and the rock isn't shaded
 		let rvBound = nr.z * 0.7 + smoothstep( 0.3, 0.62, slope ) * 0.5 + convex * 0.14 - gully * 0.4
 			+ ( dM.w - 0.5 ) * 0.34 + ( dN.w - 0.5 ) * 0.22 + ( streak - 0.5 ) * 1.0 * cliffK + 0.2;
-		if ( ( nr.z > 0.06 || slope > 0.3 ) && rvBound > 0.28 ) {
+		if ( ( ( nr.z > 0.06 || slope > 0.3 ) && rvBound > 0.28 ) || dockExposure > .01 ) {
 
 			var g: RockGrad;
 			g.dpdx = dpx; g.dpdy = dpy; g.fwY = fwY; g.useGrad = true;
@@ -316,7 +329,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 				+ ( streak - 0.5 ) * 1.0 * cliffK;
 			// fades to 0 at the branch boundary: no step along the slope / mask iso-lines
 			let branchK = max( smoothstep( 0.06, 0.18, nr.z ), smoothstep( 0.3, 0.42, slope ) );
-			rockW = smoothstep( 0.5, 0.68, rv ) * branchK;
+			rockW = max( smoothstep( 0.5, 0.68, rv ) * branchK, dockExposure * .94 );
 			screeW = smoothstep( 0.28, 0.52, rv ) * branchK * ( 1.0 - rockW );
 			// weathered basalt: darker and browner than the sea-cliff palette, streaked; moss and
 			// ferns on the ledges and on the less steep parts of the faces
@@ -341,7 +354,11 @@ const TERRAIN_SURFACE = /* wgsl */`
 			let fractureDist = abs( fract( fractureCoord ) - 0.5 );
 			let fractureAA = max( abs( dot( dpx, fractureAxis ) ) + abs( dot( dpy, fractureAxis ) ), 0.002 );
 			let fracture = 1.0 - clamp( ( fractureDist - 0.012 ) / fractureAA + 0.5, 0.0, 1.0 );
-			let maritimeRock = R.albedo * vec3f( 0.72, 0.76, 0.75 ) * ( 1.0 - stain * 0.16 - fracture * 0.28 );
+			var maritimeRock = R.albedo * vec3f( 0.72, 0.76, 0.75 ) * ( 1.0 - stain * 0.16 - fracture * 0.28 );
+			let mineralGrey = dot( R.albedo, vec3f( .2126, .7152, .0722 ) ) * vec3f( .93, .98, 1.0 );
+			let quartz = 1.0-smoothstep( .017, .034+fractureAA, abs( fract( fractureCoord * .57 + .13 )-.5 ) );
+			let dockMineral = mineralGrey * ( 1.0-stain*.12-fracture*.27 ) + quartz*.026*(1.0-R.wet);
+			maritimeRock = mix( maritimeRock, dockMineral, dockRock * .88 );
 			rockAlbedo = mix( rockAlbedo, mix( maritimeRock, rockAlbedo, ledgeMoss * 0.19 ), mat.maritime );
 			let stoneDetail = terrainStoneDetail( p, N0, g );
 			rockRough = mix( R.rough, mix( stoneDetail.rough, .34 + stoneDetail.rough * .13, R.wet ), mat.maritime );

@@ -69,6 +69,15 @@ Marini, SIL Open Font License 1.1), also from Google Fonts.
 
 ## Seven Hunters
 
+- The optional papers in `public/archive/` reproduce the 1898 *Flannan Isles or Seven Hunters* map
+  and two original Flannan lantern engineering sheets. The map's publication and public-domain
+  record are on [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Flannan_isles.jpg).
+  Scans were downloaded from [9001.lt's Flannan collection](https://9001.lt/1900/); that source dates
+  the drawings to 1895, but their precise archive accession remains unverified. Source URLs,
+  original-file hashes and conversion details are in [`public/archive/provenance.json`](public/archive/provenance.json).
+  The reader retains the original scans; the in-world paper textures are resized/converted copies.
+  Their placement and accompanying story prose are authored for the game.
+
 - The optional dev minigun is [Minigun](https://sketchfab.com/3d-models/minigun-9f0d4c65f1284914a8a8f9de76896b21)
   by [TWORKS / trbrick](https://sketchfab.com/trbrick), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
   Packed as GLB and animated for the easter egg; [asset credits](public/models/dev-weapons/CREDITS.md).

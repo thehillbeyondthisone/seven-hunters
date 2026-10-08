@@ -26,6 +26,8 @@ const params = new UniformBlock( 'LocalLightParams', {
 	pos: [ `vec4f[${ MAX }]`, v4() ], // xyz, range^2
 	col: [ `vec4f[${ MAX }]`, v4() ], // rgb x intensity, cos(inner cone)
 	dir: [ `vec4f[${ MAX }]`, v4() ], // spot axis, cos(outer cone) (-2: point light)
+	boundMin: [ `vec4f[${ MAX }]`, v4() ], // optional room extent; w = edge softness (0 disables)
+	boundMax: [ `vec4f[${ MAX }]`, v4() ],
 	count: [ 'i32', 0 ],
 	flashOn: [ 'f32', 0 ],
 	flashCone: [ 'vec2f', new THREE.Vector2( 0.99, 0.82 ) ], // cos inner, cos outer
@@ -78,6 +80,14 @@ fn hookLocalLights( s: Surface, P: vec3f, N: vec3f, V: vec3f, acc: ptr<function,
 			// smooth range window (1 - (d/r)^4)^2 on the inverse-square law
 			let x = d2 / p.w;
 			let win = sat( 1.0 - x * x );
+			// Room bounds contain spill through solid partitions. This is a soft
+			// architectural mask, not a replacement for the sun's shadow maps.
+			let b = localLights.boundMin[ i ];
+			var room = 1.0;
+			if ( b.w > 0.0 ) {
+				let outside = max( max( b.xyz - P, P - localLights.boundMax[ i ].xyz ), vec3f( 0.0 ) );
+				room = 1.0 - smoothstep( 0.0, b.w, length( outside ) );
+			}
 			// spot: hot centre, soft edge at the outer cone, faint wide spill
 			let spot = localLightsSpotProfile( dot( -L, sd.xyz ), c.w, sd.w );
 			// Beer-Lambert over the underwater part of the path (straight, mean sea level): red dies
@@ -86,7 +96,7 @@ fn hookLocalLights( s: Surface, P: vec3f, N: vec3f, V: vec3f, acc: ptr<function,
 			let under = sat( ( frame.seaLevel - min( P.y, p.y ) ) / max( abs( p.y - P.y ), 1e-3 ) );
 			let Tw = exp( -( frame.waterAbsorption + frame.waterScattering ) * ( r * under ) );
 			// the + 0.15 m^2 softens the near field of a lamp's finite size (no hot spot on the post)
-			let lightColor = c.xyz * Tw * ( win * win * spot / ( d2 + 0.15 ) );
+			let lightColor = c.xyz * Tw * ( win * win * spot * room / ( d2 + 0.15 ) );
 			let irradiance = max( dot( N, L ), 0.0 ) * lightColor;
 #if LOCAL_LIGHTS_CHEAP
 			// foliage (heavy overdraw): Lambert only
@@ -160,8 +170,15 @@ export class LocalLights {
 		let n = 0;
 		FLASH.on.value = this.flashlight.on && this.enabled ? 1 : 0;
 		const pos = uPos.array, col = uCol.array, dir = uDir.array;
+		const packBounds = ( index, bounds ) => {
+			if ( bounds ) {
+				F.boundMin.value[ index ].set( ...bounds.min, bounds.softness ?? .25 );
+				F.boundMax.value[ index ].set( ...bounds.max, 0 );
+			} else F.boundMin.value[ index ].set( 0, 0, 0, 0 );
+		};
 		const fl = this.flashlight;
 		if ( fl.on && this.enabled ) {
+			packBounds( 0, fl.bounds );
 
 			// held a little right of and below the eye, lagging the view slightly
 			camera.updateMatrixWorld();
@@ -225,6 +242,7 @@ export class LocalLights {
 				const k = s.intensity * ( s.always ? this.strength : s.day ? onDay : on ) * fade * fl2 * ( s.scale ?? 1 );
 				if ( k <= 1e-4 ) continue;
 				const r = s.range;
+				packBounds( n, s.bounds );
 				pos[ n ].set( s.position.x, s.position.y, s.position.z, r * r );
 				col[ n ].set( s.color.r * k, s.color.g * k, s.color.b * k, s.cosInner ?? - 1.5 );
 				if ( s.dir ) dir[ n ].set( s.dir.x, s.dir.y, s.dir.z, s.cosOuter ?? - 2 );
@@ -291,9 +309,10 @@ export function addVillageLights( lights, village ) {
 	for ( const l of village.getLightSources() ) {
 
 		const kind = l.kind || 'lantern';
-		const src = { position: l.position, color: l.color, intensity: l.intensity * ( K[ kind ] ?? 1.2 ), range: l.range ?? R[ kind ] ?? 12, kind, day: !! l.day };
+		const src = { position: l.position, color: l.color, intensity: l.intensity * ( K[ kind ] ?? 1.2 ), range: l.range ?? R[ kind ] ?? 12, kind, day: !! l.day,
+			dir: l.dir?.clone(), cosInner: l.cosInner, cosOuter: l.cosOuter, bounds: l.bounds };
 		if ( l.day && l.dir ) {
-			src.dir = l.dir.clone(); src.cosInner = 0.3; src.cosOuter = -0.2;
+			src.dir = l.dir.clone(); src.cosInner ??= 0.3; src.cosOuter ??= -0.2;
 		}
 		if ( kind === 'window' ) {
 
@@ -321,7 +340,7 @@ export function addVillageLights( lights, village ) {
 
 		} else if ( ! l.day ) {
 
-			src.flicker = 0.08;
+			src.flicker = l.flicker ?? 0.08;
 
 		}
 

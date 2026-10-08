@@ -83,7 +83,7 @@ st.moving = { doors: st.parts.doors, telescope: { visible: true }, lens: null };
 
 const keys = new Set();
 const input = { enabled: true, keys, rightDown: false, down: ( c ) => keys.has( c ), hit: () => false, consumeLook: () => ( { x: 0, y: 0 } ), consumeWheel: () => 0, requestLock() {} };
-const query = { n: 0, cpu: new Float32Array( 64 ), cpuValid: true, allocate( n, k ) { const s = this.n; this.n += k; return s; }, setPoint() {} };
+const query = { n: 0, cpu: new Float32Array( 256 ), resultInputs: new Float32Array( 256 ), cpuValid: true, version: 0, resultTime: 0, allocate( n, k ) { const s = this.n; this.n += k; return s; }, setPoint( i, x, z ) { this.resultInputs[ i*4 ] = x; this.resultInputs[ i*4+1 ] = z; } };
 const camera = new E.PerspectiveCamera( 70, 16 / 9, 0.1, 150000 );
 const player = new Player( { camera, input, terrain: terrainData, colliders, query, boat: null } );
 const toasts = [];
@@ -95,10 +95,13 @@ const app = {
 	settings: { timeOfDay: 12, timeSpeed: 0 }, setting: { dayOffset: 0 }, haze: { density: { value: 1 } }, clouds: { coverage: { value: 0.4 } },
 	flannan: F, curvature: CURVATURE, freeCam: false, ui: { ui: { toast: ( t ) => toasts.push( t ) } },
 };
+if ( process.argv.includes( '--weather-walk' ) ) app.qs = new URLSearchParams( 'weatherObservationsPreview=18' );
 
 const story = new Story( app );
+const { G } = await import( '../src/core/Globals.js' );
+G.windDir.value.set( Math.SQRT1_2, -Math.SQRT1_2 ); G.windSpeed.value = 9;
 const S = await import( '../src/story/Script.js' );
-const shown = { cards: 0, read: [], choose: [], forms: 0, journal: null, end: null };
+const shown = { cards: 0, read: [], choose: [], forms: 0, journal: null, end: null, arrivalLine: null };
 const SAY_NAME = process.argv.includes( '--say' );
 story.ui.card = async () => { shown.cards ++; };
 story.ui.fade = async () => {};
@@ -117,6 +120,8 @@ story.ui.form = async ( f ) => {
 	return Object.fromEntries( f.fields.map( ( q ) => [ q.key, q.options[ 2 ] ] ) );
 
 };
+story.ui.inspection = async ( { onRecord } ) => { onRecord(); };
+story.ui.observations = async q => q.complete ? 'chalk' : null;
 story.ui.journal = async ( j ) => {
 
 	shown.journal = j;
@@ -124,18 +129,106 @@ story.ui.journal = async ( j ) => {
 
 };
 story.ui.end = ( e ) => { shown.end = e; };
+story.ui.arrival = line => { shown.arrivalLine = line; };
 
 const item = ( id ) => story.interact.get( id );
 const step = ( sec, dt = 1 / 30 ) => {
 
 	for ( let t = 0; t < sec; t += dt ) {
-
+		G.time.value += dt; query.resultTime = G.time.value; query.version++;
+		for ( let i = 0; i < query.n; i++ ) { const j = i*4; query.cpu[j] = ( i % 3 - 1 ) * .5; query.cpu[j+3] = terrainData.heightAt( query.resultInputs[j], query.resultInputs[j+1] ); }
 		if ( ! story.islandReveal.active ) player.update( dt );
 		story.update( dt );
 
 	}
 
 };
+
+// The CPU director harness supplies synthetic fresh GPU readings, but uses real
+// instruments, landmark positions, terrain, colliders and interaction selection.
+async function gatherWeather() {
+	const w = story.weatherObservations, at = story._obsDue();
+	if ( ! at ) return;
+	const face = target => {
+		const d = target.clone().sub( camera.position ).normalize(); player.yaw = Math.atan2( -d.x, -d.z ); player.pitch = Math.asin( d.y ); player.update( 0 );
+	};
+	const place = ( x, y, z ) => { player.position.set( x, y, z ); player.velocity.set( 0, 0, 0 ); player._camY = null; player.update( 0 ); };
+	place( ROOM.barometer.x, TOWER.floor, ROOM.barometer.z + 1 ); face( ROOM.barometer );
+	ok( story.interact.pick()?.id === 'barometer', 'the barometer is physically selected' ); await item( 'barometer' ).use();
+	story.save(); const savedDraft = structuredClone( w.draft );
+	story.flags.weatherObservations = {}; story._restore( story.loadSave() );
+	ok( JSON.stringify(w.draft) === JSON.stringify(savedDraft), 'the real save loader restores the partial observation evidence' );
+	place( ROOM.thermometer.x, STATION.yard, ROOM.thermometer.z - 1 ); face( ROOM.thermometer );
+	ok( story.interact.pick()?.id === 'thermometer', 'the shaded outdoor thermometer is physically selected' ); await item( 'thermometer' ).use();
+	place( w.windStand.x, STATION.yard, w.windStand.z ); face( st.parts.windVane );
+	ok( w.wind(), 'roof vane captured from the actual yard' );
+	place( Math.cos( TOWER.galleryDoor )*3.1, TOWER.deck, Math.sin( TOWER.galleryDoor )*3.1 ); face( new E.Vector3( 500, 0, 100 ) );
+	keys.add( 'KeyE' ); step( 5 ); keys.delete( 'KeyE' );
+	ok( !! w.draft?.readings.sea, 'four seconds of watching actual open water captures the synthetic renderer samples' );
+	face( w.landmarkPosition( 'far' ) ); ok( w.landmark( 'far' ), 'Gallan Head bearing is checked from the balcony' );
+	face( w.landmarkPosition( 'near' ) ); ok( w.landmark( 'near' ), 'Eilean Tighe bearing is checked from the balcony' );
+	place( ROOM.slate.x, TOWER.floor, ROOM.slate.z + .9 ); face( ROOM.slate );
+	await item( 'slate' ).use();
+	ok( !! story.obs[ at ] && shown.forms === 0, `${ at } o’clock is chalked from captured evidence without a form` );
+}
+
+// Walking acceptance uses the real movement/colliders and story clock. Only the
+// GPU water readback is synthetic here; the render review checks the real water.
+if ( process.argv.includes( '--weather-walk' ) ) {
+	await story.start();
+	const w = story.weatherObservations, at = ( r, a ) => [ Math.cos( a )*r, Math.sin( a )*r ];
+	const face = target => { const d = target.clone().sub( camera.position ).normalize(); player.yaw = Math.atan2( -d.x, -d.z ); player.pitch = Math.asin( d.y ); player.update( 0 ); };
+	let seconds = 0;
+	function walk( points, label, reach = .35 ) {
+		keys.add( 'KeyW' );
+		for ( const [ x, z ] of points ) {
+			let best = Infinity, stuck = 0;
+			while ( Math.hypot( x-player.position.x, z-player.position.z ) > reach ) {
+				const dx = x-player.position.x, dz = z-player.position.z, distance = Math.hypot( dx, dz );
+				if ( distance < best-.04 ) { best = distance; stuck = 0; } else stuck += 1/30;
+				if ( stuck > 4 ) throw new Error( `${label}: stuck at ${player.position.toArray()} toward ${x},${z}` );
+				player.yaw = Math.atan2( -dx, -dz ); player.pitch = 0; step( 1/30 ); seconds += 1/30;
+			}
+		}
+		keys.delete( 'KeyW' ); step( .2 );
+	}
+	const helix = [];
+	for ( let a = TOWER.start+.2; a < TOWER.landingFrom+.15; a += .25 ) helix.push( at( 1.3, a ) );
+	const H = TOWER.hatch, hc = Math.cos( H.angle ), hs = Math.sin( H.angle );
+	const hp = d => [ hc*H.r-hs*d, hs*H.r+hc*d ];
+	const top = hp( H.run+.15 ), topA = Math.atan2( top[1], top[0] );
+	const arc = ( r, from, to, direction = 1 ) => {
+		const delta = direction * ( ( ( direction*( to-from ) ) % ( Math.PI*2 ) + Math.PI*2 ) % ( Math.PI*2 ) );
+		const n = Math.max( 1, Math.ceil( Math.abs( delta )/.25 ) );
+		return Array.from( { length: n }, ( _, i ) => at( r, from+delta*(i+1)/n ) );
+	};
+	for ( const round of [ 18, 21 ] ) {
+		story.h = round; story._applyClock(); G.night.value = 1;
+		const startSeconds = seconds, startWind = story.lamp.wind;
+		walk( [ [ ROOM.barometer.x, ROOM.barometer.z+1 ] ], 'room barometer' ); face( ROOM.barometer ); await item('barometer').use();
+		walk( [ [ -3.6, 3.4 ], [ .3, 4.6 ], [ 3, 4.6 ], [ 5, -3.6 ], [ ROOM.thermometer.x, ROOM.thermometer.z-1 ] ], 'north-wall thermometer' );
+		face( ROOM.thermometer ); await item('thermometer').use();
+		walk( [ [ w.windStand.x, w.windStand.z ] ], 'open yard vane' ); face( st.parts.windVane ); ok( w.wind(), 'walking round captures the vane from an open yard sightline' );
+		walk( [ [ 5, -3.6 ], [ 5, 4.6 ], [ .3, 4.6 ], [ -2.5, 3.2 ], at(4,TOWER.doorAngle), at(3,TOWER.doorAngle), at(1.8,TOWER.doorAngle) ], 'tower threshold' );
+		for ( const door of st.parts.doors ) { door.target = 1; door.open = 1; door.block.solid = false; }
+		walk( helix, 'spiral stair' ); walk( [ hp(-.05), hp(.8), top, at(1.7,topA+.35) ], 'iron hatch stair', .2 );
+		// Approach the winding square on this side of the hatch guard.
+		walk( [ at(1.9,Math.atan2(player.position.z,player.position.x)), ...arc( 1.9, Math.atan2(player.position.z,player.position.x), TOWER.crankAngle, -1 ) ], 'apparatus approach', .2 );
+		face( TOWER.crank ); keys.add('KeyE'); step(12); keys.delete('KeyE');
+		ok( story.lamp.lit && story.lamp.wind > startWind, 'the working lamp is tended during the walking round' );
+		walk( [ ...arc(1.9,Math.atan2(player.position.z,player.position.x),TOWER.galleryDoor,1), at(2.2,TOWER.galleryDoor),at(3.1,TOWER.galleryDoor) ], 'balcony door', .2 );
+		face( new E.Vector3(500,0,100) ); keys.add('KeyE'); step(5); keys.delete('KeyE');
+		face(w.landmarkPosition('far')); ok(w.landmark('far'),'walking round checks Gallan Head');
+		face(w.landmarkPosition('near')); ok(w.landmark('near'),'walking round checks the nearby island');
+		walk( [ at(2.2,TOWER.galleryDoor),at(1.9,TOWER.galleryDoor),...arc(1.9,TOWER.galleryDoor,topA+.35,-1),top,hp(.8),hp(-.05) ], 'return through hatch', .2 );
+		walk( [...helix].reverse(), 'descending spiral stair' );
+		walk( [ at(1.8,TOWER.doorAngle),at(3,TOWER.doorAngle),at(4,TOWER.doorAngle),[-2.5,3.2],[ROOM.slate.x,ROOM.slate.z+.9] ], 'return to slate' );
+		face(ROOM.slate); await item('slate').use();
+		ok( !!story.obs[round] && story.h < round+2.5, `${round} round chalked at ${clockText(story.h)} after ${(seconds-startSeconds).toFixed(0)} walking seconds; lamp remains lit` );
+	}
+	console.log( fails ? `${fails} walking checks failed` : 'PASS both observation rounds at walking speed with lamp duties and original deadlines.' );
+	process.exit( fails ? 1 : 0 );
+}
 
 // The opening crossing, optional reading, saves and the landing.
 await story.start();
@@ -249,6 +342,8 @@ player.position.set( - 3, TOWER.floor, 3 );
 step( 0.2 );
 ok( story.beat === 'letter', `in the keepers' room: '${ story.beat }'` );
 ok( storyGuidance( story )?.id === 'letter', 'the letter objective marks the actual desk item' );
+step( 2.5 );
+ok( shown.arrivalLine?.text.includes( 'Three chairs' ), 'the room arrival takes over from the yard passage without taking control' );
 await item( 'letter' ).use();
 ok( story.beat === 'light' && shown.read.includes( S.LETTER.title ), 'the Board\'s letter read: now light the lamp' );
 
@@ -271,22 +366,54 @@ ok( handLamp.carried && ! item( 'handLamp' ).when(), 'the lantern taken' );
 	player.pitch = 0;
 	step( 0.1 );
 	ok( story.interact.current && story.interact.current.id === 'lens', `facing the lens: '${ story.interact.current && story.interact.current.id }'` );
-	ok( story.goal() === S.GOALS.lightWait, `in the lantern before sunset: '${ story.goal() }'` );
+	ok( story.goal().includes( 'Examine' ), `in the lantern before sunset: '${ story.goal() }'` );
 
 }
 
-// the lamp: wait for sunset, light it, wind the machine
-ok( item( 'lens' ).text() === 'Wait for sunset', `before sunset the lens offers: '${ item( 'lens' ).text() }'` );
+// First light: inspect, wind, light the burner, release the stop, verify the
+// real warm-up, then observe the driving weight from a walkable stair tread.
+ok( item( 'lens' ).text() === 'Examine the prepared lamp and optic', `before sunset the lens offers: '${ item( 'lens' ).text() }'` );
+await item( 'lens' ).use();
+ok( ! app.lamp.lit && story.flags.keeperDuty.inspected, 'inspection leaves the prepared lamp unlit' );
+for ( let i = 0; i < 400 && app.lamp.wind < 1; i ++ ) item( 'crank' ).onHold( 1 / 30 );
+ok( app.lamp.wind > .99 && ! app.lamp.running, 'raising the weight does not release the clockwork stop' );
 await item( 'lens' ).use();
 ok( Math.abs( story.h - ( S.SUNSET - 0.03 ) ) < 0.01, `waited until ${ clockText( story.h ) }` );
 step( 2 );
 await item( 'lens' ).use();
 ok( app.lamp.lit && story.beat === 'machine', `lamp lit at ${ clockText( story.h ) }` );
-for ( let i = 0; i < 200 && app.lamp.wind < 1; i ++ ) item( 'crank' ).onHold( 1 / 30 );
-step( 1 );
-ok( app.lamp.wind > 0.99 && story.beat === 'watch', `machine wound (${ app.lamp.wind.toFixed( 2 ) }): '${ story.beat }'` );
-step( 20 );
+ok( ! app.lamp.running, 'the flame burns independently of the stopped optic' );
+await item( 'machineStop' ).use();
+step( 25 );
+await item( 'lens' ).use();
+ok( story.flags.keeperDuty.verified && story.beat === 'watch', 'working flame and rotation are examined before leaving' );
 ok( app.lamp.glow > 0.9 && app.lamp.speed > 0.9, `after 20 s the flame is up (${ app.lamp.glow.toFixed( 2 ) }) and the lens turning` );
+ok( item( 'stool' ).text() === '', 'the watch skip does not bypass the first weight observation' );
+const lanternFeet = player.position.clone(), lanternYaw = player.yaw, lanternPitch = player.pitch;
+const drive = story.keeper.drive; drive.sync( app.lamp.wind );
+const weightTread = Array.from( { length: TOWER.count }, ( _, i ) => ( { a: TOWER.start + ( i + .5 ) * TOWER.dTread, y: TOWER.floor + ( i + 1 ) * TOWER.riser } ) )
+	.filter( t => Math.cos( t.a - TOWER.hatch.angle ) > .65 )
+	.sort( ( a, b ) => Math.abs( a.y + 1.62 - drive.at.y ) - Math.abs( b.y + 1.62 - drive.at.y ) )[ 0 ];
+player.position.set( Math.cos( weightTread.a ), weightTread.y, Math.sin( weightTread.a ) );
+player.yaw = Math.atan2( player.position.x, player.position.z );
+player.pitch = Math.atan2( drive.at.y - weightTread.y - 1.62, 1 ); player._camY = null;
+step( .5 );
+ok( story.interact.current?.id === 'drivingWeight', 'the real upper stair pose can select the driving weight' );
+await item( 'drivingWeight' ).use();
+step( 4 );
+ok( story.flags.keeperDuty.descentSeen, 'the weight actually descends while being watched' );
+player.position.copy( lanternFeet ); player.yaw = lanternYaw; player.pitch = lanternPitch; player._camY = null; step( .1 );
+for ( let i = 0; i < 400 && app.lamp.wind < 1; i ++ ) item( 'crank' ).onHold( 1 / 30 );
+ok( story.flags.keeperDuty.rewound && app.lamp.running && app.lamp.lit, 'rewinding completes the lesson while the light keeps working' );
+
+// A keeper's own things: the first light comes before the camera introduction.
+ok( story.unpacking.pending && story.goal().includes( 'unpack' ), 'the working light leaves time to unpack before the watch skip' );
+player.position.set( -1.25, TOWER.floor, 4.0 ); player._camY = null;
+await item( 'bag' ).use(); await item( 'bag' ).use(); await item( 'bag' ).use();
+ok( story.unpacking.stage === 3 && item( 'brownieParcel' ).when(), 'the clothes come out before the Brownie is unwrapped' );
+await item( 'brownieParcel' ).use(); await item( 'brownie' ).use();
+ok( story.flags.unpacking.examined && shown.read.includes( 'The Brownie camera' ), 'Mary’s note and the undeveloped roll are introduced' );
+player.position.copy( lanternFeet ); player.yaw = lanternYaw; player.pitch = lanternPitch; player._camY = null;
 
 // keep the watch until Gallan Head shows
 const watchText = item( 'stool' ).text();
@@ -320,15 +447,14 @@ ok( ! story.signal && input.enabled, 'back from the signal lamp' );
 // the six o'clock observations, the machine's bell
 if ( story.h < 17.9 ) await item( 'stool' ).use();
 while ( story.h < 17.95 ) step( 1 );
-ok( story.goal().startsWith( 'Chalk the six' ), `${ clockText( story.h ) }: '${ story.goal() }'` );
-await item( 'slate' ).use();
-ok( story.obs[ 18 ] && shown.forms === 1, 'six o\'clock chalked on the slate' );
+ok( story.goal().includes( 'barometer' ), `${ clockText( story.h ) }: '${ story.goal() }'` );
+await gatherWeather();
 let bell = false;
 const onWarn = app.lamp.onWarning;
 app.lamp.onWarning = () => { bell = true; onWarn(); };
 for ( let i = 0; i < 400 && ! bell; i ++ ) step( 1 );
-ok( bell && story.goal() === S.GOALS.bell, `${ clockText( story.h ) }: the bell, '${ story.goal() }'` );
-for ( let i = 0; i < 200 && app.lamp.wind < 1; i ++ ) item( 'crank' ).onHold( 1 / 30 );
+ok( bell && story.goal().includes( 'weight is nearly down' ), `${ clockText( story.h ) }: the bell, '${ story.goal() }'` );
+for ( let i = 0; i < 400 && app.lamp.wind < 1; i ++ ) item( 'crank' ).onHold( 1 / 30 );
 ok( app.lamp.wind > 0.99 && story.goal() !== S.GOALS.bell, 'wound again' );
 
 // the haar
@@ -337,7 +463,7 @@ while ( story.h < story.haar + 0.1 ) {
 	const t = item( 'stool' ).text();
 	if ( t && story.watcher.state === 'done' ) await item( 'stool' ).use();
 	else step( 1 );
-	if ( story._obsDue() ) await item( 'slate' ).use();
+	if ( story._obsDue() ) await gatherWeather();
 
 }
 
@@ -361,7 +487,7 @@ item( 'gate' ).use();
 ok( story.beat === 'night' && st.parts.doors.find( ( d ) => d.name === 'gate' ).target !== gateWas, 'the gate seen to' );
 
 // to dawn
-if ( story._obsDue() ) await item( 'slate' ).use();
+if ( story._obsDue() ) await gatherWeather();
 ok( item( 'stool' ).text() === 'Keep the watch until dawn', `the stool: '${ item( 'stool' ).text() }'` );
 await item( 'stool' ).use();
 ok( story.beat === 'dawn' && story.h > 32, `the small hours pass: ${ clockText( story.h ) } on the 4th ('${ story.beat }')` );
@@ -461,6 +587,12 @@ const normalSlot = localStorage.getItem( story.saveKey ); app.qs = new URLSearch
 const preview = new Story( app ); preview.ui.card = async () => {}; await preview.start();
 ok( preview.beat === 'd2kitchen' && preview.saveKey !== story.saveKey && localStorage.getItem( story.saveKey ) === normalSlot && preview.loadSave().beat === 'd2kitchen', 'chapter preview has its own save and leaves the normal watch untouched' );
 preview.clearSave(); app.qs = new URLSearchParams();
+app.qs = new URLSearchParams( 'firstWatchPreview' );
+const firstWatch = new Story( app ); firstWatch.ui.card = firstWatch.ui.fade = async () => {};
+await firstWatch.start(); firstWatch.save();
+ok( firstWatch.beat === 'room' && firstWatch.keeper.enabled && ! firstWatch.keeper.active && storyGuidance( firstWatch )?.id === 'houseDoor', 'first-watch review begins at the actual house door before the duties lesson' );
+ok( firstWatch.saveKey === 'sevenhunters.first-watch-preview.v1' && localStorage.getItem( story.saveKey ) === normalSlot, 'first-watch review has a separate save and preserves the normal watch' );
+firstWatch.clearSave(); app.qs = new URLSearchParams();
 
 // Missing the smoke must also remain a valid, honest path.
 const unseen = new Story( app ); unseen.beat = 'd4signal'; unseen.next.state.episode = 0; unseen.next.episode( 4 );
@@ -470,18 +602,20 @@ const oldSave = { ...savedReturn, beat: 'watch', flags: {}, doors: [ 1, 0, 1, 0 
 const oldReader = new Story( app ); oldReader.ui.fade = async () => {}; oldSave.watcher = null;
 await oldReader._restore( oldSave );
 ok( oldReader.doors.gallery[ 0 ].target === 1 && oldReader.doors.house[ 0 ].target === 0 && oldReader.doors.gate[ 0 ].target === 1 && oldReader.doors.gate[ 1 ].target === 0, 'legacy saves preserve original door/gate states after adding two rooms' );
+const savedArrival = { ...oldSave, beat: 'room', h: 14.1, flags: {}, lamp: new Lamp().save(), pos: [ 3.4, STATION.yard, ROOM.door.z ] };
+const arrivalReader = new Story( app ); await arrivalReader._restore( savedArrival );
+ok( arrivalReader.keeper.enabled && ! arrivalReader.keeper.active && arrivalReader.h === savedArrival.h && player.position.equals( new E.Vector3( ...savedArrival.pos ) ) && ! app.lamp.lit, 'a saved arrival adopts the first-lighting routine without replaying or moving the player' );
 story.clearSave();
 
-// a night where the machine is wound before the lamp is lit: lighting it sets the watch going
+// A saved legacy night keeps its original winding and lighting behavior.
 {
 
 	const s3 = new Story( app );
 	s3.ui.card = s3.ui.fade = async () => {};
 	s3.ui.read = async () => {};
-	app.lamp.lit = false;
-	app.lamp.wind = 0;
-	await s3.start();
+	await s3._restore( { ...oldSave, flags: {}, beat: 'watch', h: S.SUNSET, lamp: new Lamp().save() } );
 	s3.setBeat( 'light' );
+	ok( ! s3.keeper.enabled && s3.interact.get( 'lens' ).hold === 2.2, 'legacy save keeps its existing duties and hold controls' );
 	for ( let i = 0; i < 200 && app.lamp.wind < 1; i ++ ) s3.interact.get( 'crank' ).onHold( 1 / 30 );
 	s3.h = S.SUNSET;
 	await s3.interact.get( 'lens' ).use();
@@ -497,6 +631,7 @@ story.clearSave();
 	s2.ui.card = s2.ui.fade = async () => {};
 	s2.ui.read = async () => {};
 	await s2.start();
+	s2.flags.keeperDuty = { inspected: true, verified: true, descentSeen: true, rewound: true };
 	app.lamp.lit = true;
 	app.lamp.wind = 1;
 	app.lamp.running = true;

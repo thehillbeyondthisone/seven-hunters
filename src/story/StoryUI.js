@@ -1,6 +1,6 @@
 
 // The story's screens over the game (src/story/Story.js): dated cards, the objective and the clock, paper
-// pages (letters, the code book, the observation form, the journal), the Morse strip and the telescope.
+// pages (letters, the code book, the observation slate, the journal), the Morse strip and the telescope.
 // Modal pages free the mouse and stop the walker; closing one (a click, which is a user gesture) captures
 // the mouse again.
 //
@@ -97,7 +97,7 @@ export class StoryUI {
 	}
 
 	// a page on the layer; resolves with what done( value ) is given
-	_page( build, { dismiss = true, cls = '' } = {} ) {
+	_page( build, { dismiss = true, cls = '', dismissKeys = [ 'Escape', 'KeyE', 'Enter' ] } = {} ) {
 
 		return new Promise( ( resolve ) => {
 
@@ -117,7 +117,7 @@ export class StoryUI {
 
 			const key = ( e ) => {
 
-				if ( dismiss && ( e.code === 'Escape' || e.code === 'KeyE' || e.code === 'Enter' ) ) {
+				if ( dismiss && dismissKeys.includes( e.code ) ) {
 
 					e.preventDefault();
 					e.stopPropagation();
@@ -373,6 +373,41 @@ export class StoryUI {
 
 	}
 
+	// The instrument itself stays in the rendered world; only the actions sit over it.
+	inspection( { title, onRecord } ) {
+		return new Promise( resolve => {
+			this._open();
+			const panel = el( 'div', 'sh-instrument-actions' );
+			panel.setAttribute( 'role', 'dialog' ); panel.setAttribute( 'aria-modal', 'true' ); panel.setAttribute( 'aria-label', title );
+			panel.append( el( 'h2', '', title ), el( 'p', '', 'Read the graduated face, then note the reading.' ) );
+			const record = el( 'button', 'sh-btn', 'Record reading' ), back = el( 'button', 'sh-btn sh-btn-soft', 'Back' );
+			let closed = false;
+			const done = capture => {
+				if ( closed ) return; closed = true;
+				if ( capture ) onRecord();
+				window.removeEventListener( 'keydown', key, true ); panel.remove(); this._close(); resolve( capture );
+			};
+			const key = e => { if ( ! e.repeat && [ 'Escape', 'KeyE', 'Enter' ].includes( e.code ) ) { e.preventDefault(); e.stopImmediatePropagation?.(); done( e.code !== 'Escape' ); } };
+			record.addEventListener( 'click', () => done( true ) ); back.addEventListener( 'click', () => done( false ) );
+			panel.append( record, back ); this.layer.append( panel ); window.addEventListener( 'keydown', key, true );
+		} );
+	}
+
+	observations( { title, rows, complete, hint } ) {
+		return this._page( ( page, done ) => {
+			page.classList.add( 'is-slate' );
+			page.append( el( 'h2', 'sh-page-title', title ) );
+			for ( const row of rows ) {
+				const line = el( 'p', 'sh-slate-row' ); line.append( el( 'strong', '', row.title ), el( 'span', '', row.value ) ); page.append( line );
+			}
+			page.append( el( 'p', 'sh-page-p', hint ) );
+			const chalk = el( 'button', 'sh-btn', 'Chalk observations' ); chalk.disabled = ! complete;
+			chalk.addEventListener( 'click', () => { if ( complete ) done( 'chalk' ); } );
+			const back = el( 'button', 'sh-btn sh-btn-soft', 'Back to the watch' ); back.addEventListener( 'click', () => done( null ) );
+			page.append( chalk, back );
+		} );
+	}
+
 	read( { title, body } ) {
 
 		return this._page( ( page, done ) => {
@@ -385,6 +420,59 @@ export class StoryUI {
 
 		} );
 
+	}
+
+	// Original facsimiles have their own reader: fit, zoom and scroll without
+	// opening an external tab or resuming the watch. Prose stays separate from pixels.
+	archive( paper ) {
+		const previousFocus = document.activeElement;
+		return this._page( ( page, done ) => {
+			page.classList.add( 'sh-archive-page' );
+			page.setAttribute( 'role', 'dialog' );
+			page.setAttribute( 'aria-modal', 'true' );
+			page.setAttribute( 'aria-label', paper.title );
+			page.append( el( 'div', 'sh-paper-kind', 'Original document · ' + paper.date ), el( 'h2', 'sh-page-title', paper.title ) );
+			const tools = el( 'div', 'sh-archive-tools' );
+			const viewport = el( 'div', 'sh-archive-viewport' );
+			viewport.tabIndex = 0;
+			viewport.setAttribute( 'aria-label', 'Document image; scroll to inspect when enlarged' );
+			const image = el( 'img', 'sh-archive-image' );
+			image.src = paper.image; image.alt = paper.alt; image.draggable = false;
+			viewport.append( image );
+			const buttons = [];
+			for ( const [ label, scale ] of [ [ 'Fit width', 1 ], [ '2×', 2 ], [ '3×', 3 ] ] ) {
+				const button = el( 'button', 'sh-btn is-quiet', label );
+				button.setAttribute( 'aria-pressed', String( scale === 1 ) );
+				button.addEventListener( 'click', () => {
+					image.style.width = `${ scale * 100 }%`;
+					for ( const other of buttons ) other.setAttribute( 'aria-pressed', String( other === button ) );
+				} );
+				buttons.push( button ); tools.append( button );
+			}
+			const close = el( 'button', 'sh-btn', 'Put it back' );
+			close.addEventListener( 'click', () => done( null ) ); tools.append( close );
+			queueMicrotask( () => close.focus() );
+			page.addEventListener( 'keydown', e => {
+				if ( e.code !== 'Tab' ) return;
+				const focusable = [ ...page.querySelectorAll( 'button, summary, a[href], [tabindex="0"]' ) ].filter( element => element.getClientRects().length );
+				const first = focusable[ 0 ], last = focusable.at( -1 );
+				if ( e.shiftKey && document.activeElement === first ) { e.preventDefault(); last?.focus(); }
+				else if ( ! e.shiftKey && document.activeElement === last ) { e.preventDefault(); first?.focus(); }
+			} );
+			image.addEventListener( 'error', () => {
+				viewport.innerHTML = '';
+				viewport.append( el( 'p', 'sh-page-p', 'The scan could not be loaded. Its source is listed below.' ) );
+			} );
+			page.append( tools, viewport );
+			for ( const line of paper.body ) page.append( el( 'p', 'sh-page-p', line ) );
+			const details = el( 'details', 'sh-paper-source' );
+			details.append( el( 'summary', '', 'Source and story placement' ), el( 'p', '', paper.provenance ) );
+			for ( const source of paper.sources ) {
+				const link = el( 'a', '', source.label ); link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+				const row = el( 'p' ); row.append( link ); details.append( row );
+			}
+			page.append( details );
+		}, { cls: 'is-archive', dismissKeys: [ 'Escape', 'KeyE' ] } ).then( value => { previousFocus?.focus?.(); return value; } );
 	}
 
 	choose( { title, intro = '', options, cancel = 'Not now' } ) {

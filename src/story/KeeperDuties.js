@@ -6,8 +6,9 @@ import { SUNSET, SUNRISE } from './Script.js';
 import { WeightDrive } from '../station/WeightDrive.js';
 import { WARN } from '../station/Lamp.js';
 
-// Bounded first-lighting study. Exact controls and timings are reconstructions;
-// see docs/KEEPER-DUTIES.md. No changes to the normal watch or its save key.
+// First lighting for new watches, also available as an isolated study. Existing
+// watches without keeperRoutine keep their original controls and progression.
+// Exact controls, timings and the exposed weightway are reconstructions.
 export const KEEPER_PAPER = {
 	id: 'keeper-duty-study', label: 'Keeping the evening light', sub: 'Lamp, optic and clockwork: three different jobs.', title: 'Keeping the evening light',
 	body: [
@@ -38,24 +39,34 @@ export class KeeperDuties {
 		this.at.z += Math.cos( TOWER.crankAngle ) * .25;
 	}
 
-	get active() { return !! this.s.app.qs?.has( 'keeperPreview' ) && ! this.s.next?.active; }
+	get enabled() { return !! this.s.app.qs?.has( 'keeperPreview' ) || !! this.s.flags.keeperRoutine; }
+	get active() { return this.enabled && ! this.s.next?.active && ! [ 'intro', 'crossing', 'climb', 'room', 'letter', 'dawn', 'journal', 'end' ].includes( this.s.beat ); }
 	get state() { return this.s.flags.keeperDuty ||= { inspected: false, verified: false }; }
 
 	install() {
-		if ( ! this.active ) return;
 		const lens = this.s.interact.get( 'lens' ), crank = this.s.interact.get( 'crank' );
-		lens.hold = 0; // The inspection is a deliberate use, not a timed challenge.
-		crank.hideProgress = true;
-		crank.text = () => this.s.lamp.wind >= .999 ? 'The driving weight is fully raised' : 'Wind the clockwork · raise the driving weight';
+		this.originalLensHold = lens.hold;
+		this.originalCrankText = crank.text;
+		crank.text = () => this.active ? this.s.lamp.wind >= .999 ? 'The driving weight is fully raised' : 'Wind the clockwork · raise the driving weight' : this.originalCrankText();
 		this.s.interact.add( { id: 'machineStop', at: this.at, size: .13, reach: 1.8,
 			when: () => this.active, text: () => this.s.lamp.running ? 'Stop the clockwork' : 'Release the clockwork stop', use: () => this.toggleStop() } );
-		const way = this.s.station.parts.weightWay || { bottom: TOWER.floor + .65, top: TOWER.deck - .8, anchor: TOWER.deck - .25, angle: TOWER.hatch.angle };
+		const way = this.s.station.parts.weightWay || { bottom: TOWER.floor + .65, top: TOWER.landing - .75, anchor: TOWER.deck - .25, angle: TOWER.hatch.angle };
 		this.drive = new WeightDrive( this.s.app.village, way );
 		this.s.moving.group?.add( this.drive.group );
 		this.drive.sync( this.s.lamp.wind );
 		this.s.interact.add( { id: 'drivingWeight', at: () => this.drive.at, size: .24, reach: 2.15,
 			when: () => this.active && this.weightVisible(), text: 'Examine the driving weight', use: () => this.inspectWeight() } );
 		this.buildLever();
+		this.sync();
+	}
+
+	sync() {
+		const enabled = this.enabled, controls = enabled && ! this.s.next?.active && ! [ 'dawn', 'journal' ].includes( this.s.beat );
+		this.s.interact.get( 'lens' ).hold = controls ? 0 : this.originalLensHold;
+		this.s.interact.get( 'crank' ).hideProgress = controls;
+		if ( this.drive ) { this.drive.group.visible = enabled; this.drive.sync( this.s.lamp.wind ); }
+		if ( this.s.moving.weightCover ) this.s.moving.weightCover.visible = ! enabled;
+		if ( this.lever ) { this.lever.visible = enabled; this.lever.rotation.z = this.s.lamp.running ? -.8 : 0; }
 	}
 
 	buildLever() {
@@ -78,6 +89,7 @@ export class KeeperDuties {
 
 	goal() {
 		if ( ! this.active || this.s.h >= SUNRISE + 24 - .25 ) return null;
+		if ( this.state.rewound && this.s.lamp.running && this.s.lamp.wind >= WARN ) return null;
 		if ( this.state.verified ) {
 			if ( this.s.lamp.wind < WARN ) return 'The weight is nearly down. Return to the winding crank and raise it.';
 			if ( ! this.state.descentSeen ) return this.state.weightLook ? 'Watch the driving weight descend as the optic turns.' : 'Go down to the upper stair landing. Examine the driving weight in the central tube.';
@@ -120,7 +132,10 @@ export class KeeperDuties {
 		}
 		if ( ! L.lit ) {
 			if ( s.h < SUNSET - .25 ) { await s._skipTo( SUNSET - .03, 'You keep the sunset watch beside the prepared lamp.' ); return true; }
-			L.ignite(); s.sound?.ignite(); s.flags.litAt = s.h; s.row( s.h, 'Lamp lit.' );
+			L.ignite(); s.sound?.ignite(); s.flags.litAt = s.h;
+			const late = s.h > SUNSET + .25;
+			if ( late ) s.flags.late = true;
+			s.row( s.h, late ? 'Lamp lit (late).' : 'Lamp lit.' );
 			s.setBeat( 'machine' );
 			this.say( 'The burner', L.running ? 'The flame is settling. Watch that it burns clearly and that the optic continues to turn.' : 'The burner is alight. The glass optic is still: its clockwork is a separate mechanism. Release the brass stop beside the crank when the weight is raised.' );
 			s.save(); return true;
@@ -130,7 +145,7 @@ export class KeeperDuties {
 		else {
 			if ( ! this.state.verified ) s.row( s.h, 'Lamp and revolving apparatus examined; light working.' );
 			this.state.verified = true;
-			s.setBeat( 'watch' );
+			if ( ! this.state.rewound ) s.setBeat( 'watch' );
 			this.say( 'Keeping the light', this.state.rewound ? 'The flame is steady and the optic revolves. Keep attending to the light and its clockwork throughout the watch.' : 'The flame is steady at the centre; the optic revolves around it. Now go down to the upper stair landing and examine the weight in the central tube. Watch what is driving the machine.' );
 		}
 		s.save(); return true;
@@ -143,6 +158,10 @@ export class KeeperDuties {
 		L.addWind( Math.max( 0, dt ) / 10, { start: false } );
 		this.drive.sync( L.wind );
 		this.s.sound?.ratchet( L.wind < .999 );
+		if ( before < WARN && L.wind >= WARN && this.state.rewound ) {
+			this.s.row( this.s.h, this.s.flags.stoppedAt ? `Clockwork wound after stopping at ${ this.s.flags.stoppedAt.toFixed( 2 ) }.` : 'Machine wound.' );
+			this.s.flags.stoppedAt = 0;
+		}
 		if ( this.state.descentSeen && ! this.state.rewound && L.running && L.wind > before && L.wind >= Math.min( .999, this.state.descentWind + .08 ) ) {
 			this.state.rewound = true;
 			this.s.row( this.s.h, 'Driving weight raised again while the revolving apparatus continued working.' );
@@ -199,8 +218,7 @@ export class KeeperDuties {
 	}
 
 	update( dt, { blocked = false } = {} ) {
-		if ( this.lever ) this.lever.visible = this.active;
-		if ( this.drive ) { this.drive.group.visible = this.active; this.drive.sync( this.s.lamp.wind ); }
+		this.sync();
 		if ( ! this.active ) return null;
 		if ( this.s.lamp.lit && this.s.lamp.wind <= 0 ) this.state.verified = false;
 		if ( this.lever ) this.lever.rotation.z = this.s.lamp.running ? -.8 : 0;

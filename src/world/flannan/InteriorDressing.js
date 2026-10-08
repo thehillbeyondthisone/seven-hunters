@@ -1,5 +1,7 @@
 import { Color, Vector3 } from '../../engine/index.js';
 import { lin, WOOD, HARD, lantern } from '../Props.js';
+import { unpackingProps } from './UnpackingProps.js';
+import { clothSurface, roomJoinery } from './InteriorCraft.js';
 
 // A standing paraffin lamp. y is the table/shelf, unlike Props.lantern's
 // hanging point. Keep the source aligned with the flame in the chimney.
@@ -16,9 +18,10 @@ export function deskOilLamp( B, x, y, z, seed = 0.5 ) {
 
 // Period-plausible furnishings, kept in the existing workroom. These are
 // reconstruction choices, not a recovered inventory of the missing keepers.
-export function dressKeepersRoom( ctx, room, floor ) {
+export function dressKeepersRoom( ctx, room, floor, parts ) {
 
 	const { B, colliders, lights } = ctx, F = floor, R = room;
+	roomJoinery( B, R, F );
 	const oak = { tint: lin( 0x74593d ), data: WOOD( 0.67, 0.18, 0, 0 ) };
 	const darkOak = { tint: lin( 0x514634 ), data: WOOD( 0.72, 0.1, 0, 0 ) };
 	const tin = { tint: lin( 0x66665f ), data: HARD( 0.34, 0.04, 0.65, 0.54 ) };
@@ -68,7 +71,13 @@ export function dressKeepersRoom( ctx, room, floor ) {
 
 		B.box( 'stationTimber', cx - 0.1, F + y, cz, 0.38, 0.035, 1.62, oak );
 		B.box( 'stationTimber', cx - 0.27, F + y + 0.04, cz, 0.04, 0.12, 1.7, darkOak );
-		for ( let i = 0; i < 4; i ++ ) cup( cx - 0.06, F + y + 0.02, cz - 0.52 + i * 0.32, i % 2 ? blue : cream );
+		// A working cupboard: a few cups, plates, a jug and stores, rather than a row of identical mugs.
+		if ( y === 1.26 ) { for ( let i = 0; i < 3; i ++ ) cup( cx - .06, F+y+.02, cz-.47+i*.33, i===1 ? blue : cream ); }
+		else if ( y === 1.78 ) {
+			for (let i=0;i<4;i++) B.lathe('hard',cx-.05,F+y+.02+i*.018,cz-.35,[[0,0],[.10,0],[.13,.018],[.12,.025],[0,.025]],{segs:20,...cream});
+			B.lathe('hard',cx-.05,F+y+.02,cz+.34,[[.055,0],[.085,.05],[.072,.20],[.045,.24],[.052,.28],[.04,.28],[.036,.21]],{segs:20,...cream});
+			B.torus('hard',cx-.045,F+y+.18,cz+.445,.063,.009,{radial:6,tubular:20,...cream});
+		} else for(const zz of [cz-.42,cz+.22]) B.lathe('hard',cx-.05,F+y+.02,zz,[[.075,0],[.078,.22],[.072,.24],[0,.24]],{segs:16,...tin});
 
 	}
 	for ( const z of [ cz - 0.8, cz + 0.8 ] ) B.box( 'stationTimber', cx - 0.25, F + 1.62, z, 0.07, 1.44, 0.07, oak );
@@ -76,9 +85,10 @@ export function dressKeepersRoom( ctx, room, floor ) {
 	B.lathe( 'hard', cx + 0.06, F + 0.94, cz + 0.54, [ [ 0.05, 0 ], [ 0.06, 0.03 ], [ 0.06, 0.2 ], [ 0.022, 0.23 ], [ 0.022, 0.3 ], [ 0, 0.3 ] ], { segs: 14, tint: lin( 0x514f32 ), data: HARD( 0.62, 0, 0, 0.13 ) } );
 	colliders.addBox( new Vector3( cx, F + 0.47, cz ), new Vector3( 0.33, 0.47, 0.9 ), 0, { tag: 'furniture' } );
 
-	// The table: one used place, two cups set aside. A folded wool blanket and
+	// The table: crockery set aside for the working station. A folded wool blanket and
 	// biscuit tin suggest a long watch without inventing new story evidence.
 	B.pushAt( - 5.4, F + 0.745, 3.3, 0.1 );
+	clothSurface( B, (u,v) => [(u-.5)*.66, .007+Math.sin(u*31)*.002-Math.max(0,Math.abs(v-.5)*1.12-.39)*.95, (v-.5)*1.12], linen );
 	plate( - 0.26, 0, 0.02 );
 	cup( 0.02, 0.005, - 0.17 );
 	cup( - 0.48, 0.005, - 0.15, blue );
@@ -91,7 +101,7 @@ export function dressKeepersRoom( ctx, room, floor ) {
 	B.rod( 'hard', [ - 5.4, F + 2.45, 3.3 ], [ - 5.4, R.ceiling - 0.03, 3.3 ], 0.008, 0.008, { segs: 6, ...iron } );
 	B.cyl( 'hard', - 5.4, R.ceiling - 0.05, 3.3, 0.07, 0.07, 0.035, { segs: 16, ...iron } );
 	const hanging = lantern( B, - 5.4, F + 2.45, 3.3, 0.52, 0.84 );
-	lights.push( { position: new Vector3( ...hanging ), color: new Color( 1.0, 0.73, 0.47 ), intensity: 8, range: 6.2, kind: 'lamp', flicker: 0.025 } );
+	lights.push( { position: new Vector3( ...hanging ), dir: new Vector3( 0, -1, 0 ), cosInner: .35, cosOuter: -.45, color: new Color( 1.0, 0.73, 0.47 ), intensity: 4.8, range: 4.8, kind: 'lamp', flicker: 0.025 } );
 	B.box( 'hard', - 6.39, F + 0.5, 2.66, 0.38, 0.045, 0.29, { ry: 1.88, tint: lin( 0x596352 ), data: HARD( 0.59, 0, 0, 0.96 ) } );
 
 	// Cold stove, kettle and coal scuttle: preserve the existing story's cold
@@ -116,12 +126,17 @@ export function dressKeepersRoom( ctx, room, floor ) {
 	B.box( 'stationTimber', - 0.8, F + 1.35, 5.18, 0.65, 0.045, 0.26, oak );
 	for ( const x of [ - 1.02, - 0.58 ] ) B.beam( 'hard', [ x, F + 1.34, 5.23 ], [ x, F + 1.08, 5.37 ], 0.02, 0.035, iron );
 	const entrance = deskOilLamp( B, - 0.8, F + 1.38, 5.13, 0.36 );
-	lights.push( { position: entrance, color: new Color( 1.0, 0.72, 0.43 ), intensity: 4.2, range: 6.3, kind: 'lamp', flicker: 0.025 } );
+	lights.push( { position: entrance, dir: new Vector3( 0, -.7, -1 ).normalize(), cosInner: .2, cosOuter: -.65, color: new Color( 1.0, 0.72, 0.43 ), intensity: 3.2, range: 4.8, kind: 'lamp', flicker: 0.025 } );
 
-	// An understated chart above the bench: a framed paper sheet, with three
-	// ruled strokes rather than invented legible historical text.
+	// Walter's own kitbag has come up with him. Keep it beside the entrance,
+	// under the shelf and outside both the door swing and the walking route.
+	parts.unpacking = unpackingProps( F, R );
+	R.bag = parts.unpacking.bag;
+
+	// The original 1898 island map replaces the old placeholder above the bench.
+	// Its position here is fictional; the reader retains the unaltered scan.
 	B.box( 'stationTimber', - 5.0, F + 1.85, R.z1 - 0.02, 1.04, 0.66, 0.045, darkOak );
-	B.box( 'hard', - 5.0, F + 1.85, R.z1 - 0.047, 0.94, 0.56, 0.005, linen );
-	for ( const y of [ 1.75, 1.85, 1.95 ] ) B.box( 'hard', - 5.0, F + y, R.z1 - 0.052, 0.72, 0.008, 0.004, { tint: lin( 0x7b7967 ), data: HARD( 0.23, 0, 0, 1 ) } );
+	parts.archiveDisplays ||= [];
+	parts.archiveDisplays.push( { id:'islandMap', x:-5, y:F+1.85, z:R.z1-.048, width:.94, height:.56, ry:Math.PI, rx:0 } );
 
 }
