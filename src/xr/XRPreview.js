@@ -304,7 +304,11 @@ export class XRPreview {
 				}
 				for ( const door of this.app.village.station.moving.doors ) updateDoor( door, dt );
 				this.views = pose.views.map( ( view ) => ( { view, subImage: this.bridge ? { viewport: this.layer.getViewport( view ) } : this.binding.getViewSubImage( this.layer, view ) } ) );
-				this.app.frame( dt );
+				// App frames can also be triggered by desktop/browser events. Only
+				// this synchronous XR callback may use the opaque headset framebuffer.
+				this.renderingFrame = frame;
+				try { this.app.frame( dt ); }
+				finally { this.renderingFrame = null; }
 				this.stats.frameRate = frame.session.frameRate || this.stats.frameRate;
 				this.stats.record( interval, performance.now() - t0, LOCATIONS[ this.location ][ 0 ] );
 
@@ -361,7 +365,12 @@ export class XRPreview {
 
 	}
 
-	render() { this.renderer.render( this.views, this.locomotion.rig, this.bridge ); }
+	render() {
+
+		if ( ! this.active || this.renderingFrame?.session !== this.session ) return;
+		this.renderer.render( this.views, this.locomotion.rig, this.bridge );
+
+	}
 
 	async exit() {
 
@@ -374,6 +383,7 @@ export class XRPreview {
 		if ( this.session !== session ) return;
 		const wasActive = this.active;
 		this.active = false;
+		this.renderingFrame = null;
 		this.session = null;
 		if ( this._raf !== undefined ) session.cancelAnimationFrame?.( this._raf );
 		this._raf = undefined;

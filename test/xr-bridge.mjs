@@ -59,6 +59,8 @@ try {
 	const firstUpload = calls.findIndex( c => c[ 0 ] === 'upload' );
 	assert.equal( calls.slice( 0, firstUpload ).filter( c => c[ 0 ] === 'framebuffer' ).at( - 1 )[ 1 ], null, 'canvas upload must not bind the opaque XR framebuffer' );
 	assert.equal( bridge.transferMode, 'direct' );
+	assert.equal( calls.includes( 'clear' ), false, 'WebXR owns clearing its opaque framebuffer' );
+	assert.equal( calls.filter( c => c[ 0 ] === 'framebuffer' ).at( - 1 )[ 1 ], null, 'opaque framebuffer must be detached after presenting' );
 	rejectDirect = true;
 	const beforeRecovery = calls.length;
 	bridge.present( { x: 0, y: 0, width: 640, height: 720 } );
@@ -78,6 +80,7 @@ try {
 	rejectCopy = rejectDirect = false;
 	failDraw = true;
 	assert.throws( () => bridge.present( { x: 0, y: 0, width: 320, height: 240 } ), /compositor draw failed.*1282/ ); failDraw = false;
+	assert.equal( calls.filter( c => c[ 0 ] === 'framebuffer' ).at( - 1 )[ 1 ], null, 'failed compositor drawing must also detach the framebuffer' );
 	bridge.dispose(); bridge.dispose(); assert.deepEqual( deleted, { texture: 1, buffer: 1, program: 1 } );
 	assert.equal( calls.filter( c => c === 'unconfigure' ).length, 1 ); assert.equal( bridge.gl, null );
 	assert.equal( bridge.copyCanvas, null ); assert.equal( bridge.copyContext, null );

@@ -70,6 +70,14 @@ try {
 	assert.equal( p.session.renderState.baseLayer, p.bridge.layer ); assert.equal( p.session.renderState.layers, undefined );
 	assert.equal( p.renderMode, 'WebGL compatibility' ); tick( p );
 	assert.deepEqual( p.views.map( eye => eye.subImage.viewport.x ), [ 0, 320 ] ); assert.equal( p.renderArgs[ 2 ], p.bridge );
+	p.renderArgs = null;
+	p.render(); assert.equal( p.renderArgs, null, 'desktop events must not render into an opaque XR framebuffer' );
+	assert.equal( p.renderingFrame, null ); tick( p ); assert.ok( p.renderArgs );
+	p.renderer.render = () => { throw Error( 'Synthetic compositor failure' ); };
+	// Verify the callback token also clears on a thrown render without ending this session.
+	const originalExit = p.exit; p.exit = () => {};
+	tick( p ); assert.equal( p.renderingFrame, null ); p.exit = originalExit;
+	p.renderer.render = ( ...args ) => { p.renderArgs = args; }; p.failure = null;
 	const firstBridge = p.bridge; await p.exit(); assert.equal( firstBridge.disposed, true ); assert.equal( p.bridge, null );
 	await p.enter(); assert.notEqual( p.bridge, firstBridge ); await p.exit(); assert.equal( p.app.starts, 2 );
 	console.log( 'PASS standard WebXR request, base layer, eye viewports and bridge disposal across exit/re-entry.' );

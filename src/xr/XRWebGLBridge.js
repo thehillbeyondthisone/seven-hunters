@@ -91,10 +91,11 @@ export class XRWebGLBridge {
 
 		const gl = this.gl;
 		if ( gl.isContextLost() ) throw new Error( 'The VR compatibility graphics context was lost.' );
-		gl.bindFramebuffer( gl.FRAMEBUFFER, this.layer.framebuffer );
-		gl.clearColor( 0, 0, 0, 1 );
-		gl.clear( gl.COLOR_BUFFER_BIT );
-		this._checkError( 'framebuffer clear' );
+		// WebXR clears the opaque framebuffer before each XR callback. Both eye
+		// viewports are fully overwritten below, so no explicit clear is needed.
+		// Leave it detached while the WebGPU scene and canvas uploads are prepared.
+		gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+		this._checkError( 'frame start' );
 
 	}
 
@@ -156,8 +157,17 @@ export class XRWebGLBridge {
 		gl.bindBuffer( gl.ARRAY_BUFFER, this.buffer );
 		gl.enableVertexAttribArray( this.positionAttribute );
 		gl.vertexAttribPointer( this.positionAttribute, 2, gl.FLOAT, false, 0, 0 );
-		gl.drawArrays( gl.TRIANGLES, 0, 3 );
-		this._checkError( 'compositor draw' );
+		try {
+
+			gl.drawArrays( gl.TRIANGLES, 0, 3 );
+			this._checkError( 'compositor draw' );
+
+		} finally {
+
+			// Opaque framebuffers become incomplete when the XR callback returns.
+			gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+
+		}
 
 	}
 

@@ -98,6 +98,7 @@ try {
 
 	}
 	const gl = bridge.gl, pixels = {}, q = size / 4;
+	gl.bindFramebuffer( gl.FRAMEBUFFER, bridge.layer.framebuffer );
 	for ( const [ name, x, y, expected ] of [
 		[ 'leftTopLeft', q, 3*q, [ 255, 0, 0, 255 ] ], [ 'leftTopRight', 3*q, 3*q, [ 255, 255, 0, 255 ] ],
 		[ 'leftBottomLeft', q, q, [ 0, 0, 255, 255 ] ], [ 'leftBottomRight', 3*q, q, [ 0, 255, 255, 255 ] ],
