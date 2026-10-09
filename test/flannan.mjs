@@ -79,6 +79,25 @@ for ( const k in B.batches ) {
 ok( finite && tris > 20000, `station geometry: ${ tris } triangles, all finite` );
 ok( [ 'house', 'tower', 'store', 'chapel' ].every( ( n ) => village.buildings.some( ( b ) => b.name === n ) ), 'house, tower, store and chapel registered' );
 ok( colliders.boxes.filter( ( b ) => b.tag === 'steps' && b.walkable ).length > 300, 'walkable steps on both flights' );
+// Sample between heightmap texels, where terrain formerly bled through the
+// apron and risers. The collision tops supply the independent walking surface.
+for ( const name of [ 'east', 'west' ] ) {
+	const L = st.landings[ name ];
+	const world = ( x, z ) => [ L.head.x + x * L.dir[0] - z * L.dir[1], L.head.z + x * L.dir[1] + z * L.dir[0] ];
+	let clearance = Infinity;
+	for ( let t = .15; t < L.steps.pts.length - 1.5; t += .17 ) for ( const w of [ -.82, -.4, 0, .4, .82 ] ) {
+		const [ x, z ] = world( -t, w );
+		const top = colliders.groundHeightAt( x, z, L.steps.to.y + 1, 1e-6 );
+		clearance = Math.min( clearance, top - T.heightAt( x, z ) );
+	}
+	ok( clearance > .1, `${ name } treads stay clear of bilinearly filtered terrain (${ clearance.toFixed(2) } m minimum)` );
+	let apronClearance = Infinity;
+	for ( let u = -1.2; u < 7.2; u += .23 ) for ( let v = -3; v < 3; v += .23 ) {
+		const [ x, z ] = world( u, v );
+		apronClearance = Math.min( apronClearance, L.stage.y - T.heightAt( x, z ) );
+	}
+	ok( apronClearance > .1, `${ name } apron has no terrain piercing its top (${ apronClearance.toFixed(2) } m minimum)` );
+}
 const westCrane = colliders.boxes.find( b => b.tag === 'cranePlatform' );
 ok( westCrane?.walkable && Math.abs( westCrane.top - 70 * .3048 ) < 1, 'west crane platform near the reported 70 ft elevation, separate from boat stage' );
 ok( lights.some( ( l ) => l.kind === 'lantern' && l.position.y > 95 ), 'the lamp in the lantern' );

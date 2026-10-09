@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { Matrix4, Quaternion, Vector3 } from '../src/engine/math/index.js';
 import { Colliders } from '../src/world/Colliders.js';
-import { Locomotion, axis, heading, controllerState, reversedProjection } from '../src/xr/Locomotion.js';
+import { Locomotion, ControllerInput, axis, heading, controllerState, reversedProjection } from '../src/xr/Locomotion.js';
+import { SessionStats } from '../src/xr/SessionStats.js';
 import { configurePreview, projectionScale, supportMessage } from '../src/xr/PreviewOptions.js';
 import { XRPreview, pickDoor } from '../src/xr/XRPreview.js';
 
@@ -87,6 +88,64 @@ test( 'initial tracked origin, eye separation and head height map into game metr
 	const left = new Vector3( 2.968, 1.72, 4 ).applyMatrix4( rig ), right = new Vector3( 3.032, 1.72, 4 ).applyMatrix4( rig );
 	near( left.distanceTo( right ), 0.064 );
 	near( loco.yaw + heading( tracked.transform.orientation ), Math.PI / 2 );
+
+} );
+
+test( 'held controls cannot move, turn or act after entry / tracking interruptions', () => {
+
+	const gate = new ControllerInput();
+	const held = { x: 1, z: -1, turn: 1, use: true, next: true, recenter: true, exit: true };
+	for ( let i = 0; i < 20; i ++ ) assert.deepEqual( Object.values( gate.sample( held ) ), [ 0, 0, 0, false, false, false, false ] );
+	gate.sample( idle() );
+	assert.equal( gate.sample( held ), held );
+	gate.reset();
+	assert.equal( gate.sample( held ).use, false );
+	gate.sample( idle() );
+	assert.equal( gate.sample( held ).use, true );
+
+} );
+
+test( 'VR stair height eases while physical crouching remains immediate', () => {
+
+	for ( const fps of [ 30, 72, 90, 120 ] ) for ( const descending of [ false, true ] ) {
+
+		const height = ( x ) => 10 + Math.max( 0, Math.min( 12, Math.floor( x / 0.28 ) ) ) * 0.19;
+		const p = player( height ), loco = new Locomotion( p );
+		p.position.set( descending ? 3.6 : -0.2, descending ? 12.28 : 10, 0 );
+		loco.update( pose(), idle(), 0 );
+		let last = loco.rig.elements[ 13 ], maxStep = 0;
+		for ( let i = 0; i < fps * 3; i ++ ) {
+			loco.update( pose(), { ...idle(), x: descending ? -1 : 1 }, 1 / fps );
+			maxStep = Math.max( maxStep, Math.abs( loco.rig.elements[ 13 ] - last ) );
+			last = loco.rig.elements[ 13 ];
+		}
+		assert.ok( Math.abs( p.position.y - ( descending ? 10 : 12.28 ) ) < 1e-6, 'crossed every tread' );
+		assert.ok( maxStep < 0.11, `${ fps } Hz stair movement snapped ${ maxStep } m` );
+		for ( let i = 0; i < fps; i ++ ) loco.update( pose(), idle(), 1 / fps );
+		near( loco.groundY, p.position.y, 1e-5 );
+		const before = new Vector3( 0, 1.62, 0 ).applyMatrix4( loco.rig ).y;
+		loco.update( pose( 0, 1.12, 0 ), idle(), 0 );
+		near( new Vector3( 0, 1.12, 0 ).applyMatrix4( loco.rig ).y, before - 0.5 );
+		p.position.y += 20;
+		loco.recenter(); loco.update( pose(), idle(), 0 );
+		near( loco.groundY, p.position.y );
+
+	}
+
+} );
+
+test( 'Quest diagnostics keep bounded samples and distinguish CPU from GPU timing', () => {
+
+	const stats = new SessionStats( 0.65 );
+	for ( let i = 0; i < 1000; i ++ ) stats.record( 1000 / 72, 4, 'room' );
+	stats.record( 30, 20, 'stairs' );
+	const report = stats.report();
+	assert.equal( report.frames, 1001 );
+	assert.equal( report.sampleWindow, 512 );
+	assert.equal( report.cpuP95Ms, 4 );
+	assert.equal( report.maxCpuMs, 20 );
+	assert.equal( report.longIntervals, 1 );
+	assert.equal( report.gpuTimingMeasured, false );
 
 } );
 
@@ -178,11 +237,12 @@ test( 'session end restores desktop loop and input once, retaining the explorati
 		camera: { fov: 110, near: 0.06, updateProjectionMatrix() {} },
 		sceneRenderer: { setSize( w, h ) { assert.equal( w, 640 ); assert.equal( h, 360 ); } },
 		post: {}, player: p,
-		input: { enabled: false, keys: new Set( [ 'KeyW' ] ), pressed: new Set( [ 'KeyE' ] ), consumeLook() {} },
+		engine: { resize() {} },
+		input: { enabled: false, keys: new Set( [ 'KeyW' ] ), pressed: new Set( [ 'KeyE' ] ), reset() { this.keys.clear(); this.pressed.clear(); } },
 		cameraCut() { cuts ++; }, start() { starts ++; },
 	};
-	preview.root = {}; preview.enterButton = {}; preview.status = {};
-	preview.stats = { frames: 12, maxCpuMs: 3.5 };
+	preview.root = { querySelector: () => ( {} ) }; preview.enterButton = {}; preview.status = {};
+	preview.stats = new SessionStats( 0.65 ); preview.stats.record( 1000 / 72, 3.5, 'room' );
 	preview._ended( session );
 	preview._ended( session );
 	assert.equal( starts, 1 ); assert.equal( cuts, 1 );

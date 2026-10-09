@@ -15,6 +15,7 @@ import { MathUtils, Vector2, Vector3 } from '../engine/math/index.js';
 //    reaching a little further than blue (diffraction scales with wavelength), a pixel or so wide;
 //    and a haze of fine short streaks right around the disc
 //  - veiling glare: a soft wide glow lifting the blacks
+//  - optional anamorphic glass: a long blue-white horizontal streak and stretched halo
 // The sun's visibility (fraction of the disc not hidden by the scene, times the cloud
 // transmittance) is measured on the GPU from the depth buffer every frame and eased, so leaves and
 // masts crossing the sun make the flare flicker naturally without popping.
@@ -53,6 +54,8 @@ export class LensFlare {
 		this.uniforms = new UniformBlock( 'FlareParams', {
 			sunDir: [ 'vec3f', new Vector3( 0, 1, 0 ) ],
 			strength: [ 'f32', 1 ],
+			cloudGlare: [ 'f32', 0 ], // optional soft flare from the low sun diffused by cloud
+			anamorphic: [ 'f32', 0 ], // cinematic horizontal streak, halo and amplified ghosts
 			sunUV: [ 'vec2f', new Vector2( 0.5, 0.5 ) ],
 			inView: [ 'f32', 0 ], // 0..1, fades as the sun leaves the frame
 			aboveWater: [ 'f32', 1 ],
@@ -62,6 +65,8 @@ export class LensFlare {
 		}, { label: 'flare' } );
 		const U = this.uniforms.fields;
 		this.strength = U.strength;
+		this.cloudGlare = U.cloudGlare;
+		this.anamorphic = U.anamorphic;
 		this.sunUV = U.sunUV;
 		this.inView = U.inView;
 		this.aboveWater = U.aboveWater;
@@ -104,7 +109,12 @@ fn main() {
 	let c = flareParams.sunUV * vec2f( size );
 	var sky = 0.0;
 ${ taps }
-	let cloudT = ${ hasClouds ? 'cloudsSunTransmittance( cloudsSampleView( flareParams.sunDir ).a )' : '1.0' };
+	let rawCloudT = ${ hasClouds ? 'clamp( cloudsSampleView( flareParams.sunDir ).a, 0.0, 1.0 )' : '1.0' };
+	let discT = ${ hasClouds ? 'cloudsSunTransmittance( rawCloudT )' : '1.0' };
+	// The disc's sparkle cutoff also removed every trace of optical glare in
+	// the cloudy first evening. A gentler response lets diffused sunset light
+	// register faintly; fully opaque cloud and scene geometry still extinguish it.
+	let cloudT = mix( discT, pow( rawCloudT, 0.35 ), flareParams.cloudGlare );
 	let up = smoothstep( -0.02, 0.04, flareParams.sunDir.y );
 	let tgt = sky / ${ f( VIS_TAPS ) } * cloudT * up * flareParams.inView * flareParams.aboveWater;
 	let v = flareVisRW[ 0 ];
@@ -192,7 +202,22 @@ ${ ghosts }
 	let glow = exp( rq * -5.0 ) * 0.05 + exp( rq * -40.0 ) * 0.4;
 	let burst = spikes + vec3f( fine + glow );
 
-	return light * ( ghosts * offAxis + halo + burst );
+	// Cylindrical lens elements spread the sun into a frame-spanning streak.
+	// A narrow white core sits inside a cooler, softer shoulder; both stay on
+	// the sun's screen height as the cutscene camera turns. Widths have a pixel
+	// floor so the streak remains visible at small display sizes.
+	let ax = abs( q.x );
+	let coreWidth = max( px * 1.25, 0.0014 ) + ax * 0.001;
+	let vertical = q.y / coreWidth;
+	let core = exp( -vertical * vertical ) * exp( -ax / 0.62 );
+	let shoulder = exp( -vertical * vertical / 16.0 ) * exp( -ax / 0.48 );
+	let stretched = q / vec2f( 0.42, 0.028 );
+	let veil = exp( -dot( stretched, stretched ) );
+	let streak = core * vec3f( 7.0, 24.0, 90.0 )
+		+ shoulder * vec3f( 1.0, 7.0, 40.0 ) + veil * vec3f( 2.0, 3.0, 8.0 );
+	let cinema = flareParams.anamorphic;
+	return light * ( ghosts * offAxis * ( 1.0 + cinema * 3.0 )
+		+ halo * ( 1.0 + cinema * 5.0 ) + burst + streak * cinema );
 }
 `,
 		} );

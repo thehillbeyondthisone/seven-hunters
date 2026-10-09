@@ -90,10 +90,23 @@ export function dressEastLanding( ctx, L, at ) {
 	}
 	for ( let i = 0; i < 11; i ++ ) {
 		const h = y - i * .24, x = 7.38 + i * .28;
-		B.box( 'landingConcrete', x, h - .15, -2.55, .31, .3, 1.12, concrete );
+		// Full-depth cast steps meet the seabed and overlap the stage at their
+		// head. Thin individual treads left the entire stair floating over water.
+		const bottom = -3.7;
+		B.box( 'landingConcrete', x, ( h + bottom ) / 2, -2.55, .31, h - bottom, 1.12, concrete );
 		colliders.addBox( B.toWorld( x, h-.15, -2.55 ), new Vector3( .155, .15, .56 ), Math.atan2( -L.dir[1], L.dir[0] ),
 			{ walkable: true, solid: false, tag: 'landingAccess' } );
 	}
+	// Continue the stage rail down the exposed side of the water stair.
+	const rail = [];
+	for ( const i of [ 0, 5, 10 ] ) {
+		const x = 7.38 + i * .28, h = y - i * .24, z = -3.08;
+		B.box( 'hard', x, h + .03, z, .15, .055, .15, iron );
+		B.rod( 'hard', [ x, h, z ], [ x, h + .98, z ], .025, .025, { segs: 8, ...iron } );
+		rail.push( new Vector3( x, h + .98, z ) );
+	}
+	B.rod( 'hard', [ 6.3, y + .98, -3.07 ], rail[0].toArray(), .025, .025, { segs: 8, ...iron } );
+	for ( let i = 1; i < rail.length; i ++ ) B.rod( 'hard', rail[i-1].toArray(), rail[i].toArray(), .025, .025, { segs: 8, ...iron } );
 	// A return handrail frames the first step without fencing off the approach.
 	for ( const x of [ 2.0, 4.15, 6.3 ] ) {
 		B.box( 'hard', x, y + .03, -3.07, .19, .055, .19, iron );

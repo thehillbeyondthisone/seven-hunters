@@ -26,20 +26,25 @@ if ( renew ) {
 const cert = readFileSync( join( certDir, 'cert.pem' ) );
 const server = await createServer( {
 	configFile: join( root, 'vite.config.js' ), root,
+	plugins: [ {
+		name: 'xr-public-certificate',
+		configureServer( server ) {
+			// Register before Vite's HTML fallback, which otherwise turns this
+			// download into index.html while still returning HTTP 200.
+			server.middlewares.use( ( req, res, next ) => {
+				if ( req.url !== '/xr-preview-certificate.cer' ) return next();
+				res.setHeader( 'Content-Type', 'application/pkix-cert' );
+				res.setHeader( 'Content-Disposition', 'attachment; filename="seven-hunters-local.cer"' );
+				res.end( readFileSync( join( certDir, 'certificate.cer' ) ) );
+			} );
+		},
+	} ],
 	server: {
 		host: '0.0.0.0', port: Number( process.env.XR_PORT ) || 5443, strictPort: false,
 		https: { cert, key: readFileSync( join( certDir, 'key.pem' ) ) },
 		// Vite serves the project root; never expose the local certificate's private key.
 		fs: { deny: [ '**/.git/**', '**/.env', '**/.env.*', '**/.local/**', '**/*.pem', '**/*.key', '**/*.pfx' ] },
 	},
-} );
-server.middlewares.use( ( req, res, next ) => {
-
-	if ( req.url !== '/xr-preview-certificate.cer' ) return next();
-	res.setHeader( 'Content-Type', 'application/pkix-cert' );
-	res.setHeader( 'Content-Disposition', 'attachment; filename="seven-hunters-local.cer"' );
-	res.end( readFileSync( join( certDir, 'certificate.cer' ) ) );
-
 } );
 await server.listen();
 const port = server.httpServer.address().port;

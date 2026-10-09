@@ -101,6 +101,12 @@ if ( app.qs.has( 'playground' ) ) {
 	document.querySelector( '.loader-tip-list.sh-only' ).innerHTML = '<p>Click a buoy or supply crate to grab it. Click again to place; Q drops it.</p><p>Hold right click, then release to throw. The wheel changes distance; R turns a held prop.</p><p>G resets the toys. J starts the lighthouse disco. Backtick opens palettes, mist, tempo and the optional synth beat.</p><p>This playground opens no story or watch save. Desktop keyboard and mouse.</p>';
 }
 
+if ( app.isVRPreview ) {
+	document.querySelector( '.loader-kicker.sh-only' ).textContent = 'Eilean Mòr · VR exploration';
+	document.querySelector( '.loader-tagline.sh-only' ).textContent = 'Explore the island and light station at your own scale. This mode opens no watch save.';
+	document.querySelector( '.loader-tip-list.sh-only' ).innerHTML = '<p>Choose a location and resolution when loading finishes. Start with Balanced resolution on Quest 3.</p><p>Left stick walks. Right stick turns 30°. Point the right controller at a nearby door and press its trigger.</p><p>A changes location. B recenters. Left Y exits VR. Release the controls after entry or a tracking interruption.</p><p>This mode explores the environment. The saved story, boat crossing and keeper duties do not run here.</p><p>On desktop, choose Explore on desktop, then use WASD and the mouse.</p>';
+}
+
 app.init( ( p, text, until ) => ui.setLoading( p, text, until ) ).then( async () => {
 
 	app.ui = new AppUI( app, ui );

@@ -28,6 +28,8 @@ Desktop preview: open the printed localhost HTTPS URL or `http://127.0.0.1:5189/
 
 Controller rays show where you are pointing. Walking uses the existing station colliders and floors. Small steps are allowed; deep water and large drops are blocked. If floor tracking is unavailable, local tracking uses a 1.62 m initial eye height. Tracking loss/system overlays pause preview updates. Exit restores desktop rendering and clears held inputs.
 
+Release the sticks and buttons after entering VR, returning from a system overlay, or resetting tracking. The preview waits for neutral controls before accepting movement or actions. Doors require a tracked right controller. Stair height changes ease into the view while real head movement and crouching remain immediate.
+
 ## Scope and architecture
 
 This first milestone is environment exploration, with no story UI, telescope zoom, boat ride, swimming, hand tracking, or teleport locomotion. Clouds, volumetric haze/beams, shore simulation and boat wakes are disabled in the preview; shadow maps and ocean geometry are reduced. Water uses the opaque scene copy rather than a separate underwater refraction pass, and omits boat hull masks, to fit mobile texture limits. The lighthouse lamp and your carried storm lantern are lit for inspection. Desktop VR-preview graphics are also simplified; normal desktop graphics are unchanged.
@@ -44,8 +46,24 @@ The preview code is under `src/xr/` and loaded on demand. The normal game retain
 
 ## Verification and next device check
 
-`npm run test:xr` checks projection/depth math, controller mapping, movement, collision, snap-turn pivot, floor fallback, recentering, session cleanup, distinct eye images, array layers and atlas viewports. `npm run test:xr-scene` renders the actual station/coast with synthetic XR views. Set `WEBGPU_DEFAULT_LIMITS=1` for conservative mobile binding limits. `npm test` covers the existing game logic, Flannan geometry, walk route, first-night story, guidance and engine smoke test.
+`npm run test:xr` checks projection/depth math, controller mapping, movement, collision, snap-turn pivot, stair smoothing, immediate crouching, neutral controls on resume, floor fallback, reference-space resets, async entry cancellation, failed sessions, session cleanup, repeated entry, viewport restoration, distinct eye images, array layers and atlas viewports. `npm run test:xr-scene` checks all six real VR spawn positions and renders those locations plus night views of the room and lantern with synthetic XR views and controller rays. Set `WEBGPU_DEFAULT_LIMITS=1` for conservative mobile binding limits, and `XR_TEST_OUT=artifacts/quest-pass` to preserve the earlier previews. With the HTTPS server running, `node test/xr-launch.mjs` checks its page, certificate and private-file exclusions (`XR_PORT` overrides port 5443). `npm test` covers the existing game logic, Flannan geometry, walk route, first-night story, guidance and engine smoke test.
 
 Local browser screenshots and synthetic stereo renders are in `artifacts/xr-preview/`. These checks verify code and local GPU rendering. They do not measure Quest startup, sustained frame rate, headset comfort, physical controller input, audio or certificate/firewall setup.
 
-On Quest, first inspect the approach and coast, then the room and stairs, then the lantern. Check world scale, left/right alignment, leaning, 30-degree turns, door selection, and exit/re-entry. Use `window.__xr.stats` in remote DevTools for XR frame interval and CPU timing; those values are not GPU timings. Save the installed browser version and selected resolution with any performance observations.
+For an automated launcher check that starts and stops its own isolated server, run `node test/xr-launch.mjs --spawn`. It uses port 5543 or the next available port, leaving any existing preview running.
+
+On Quest, first inspect the approach and coast, then the room and stairs, then the lantern. Check world scale, left/right alignment, leaning, 30-degree turns, door selection, and exit/re-entry. After exit, expand **Last VR session** for the 95th percentile XR callback interval and CPU submission time over the last 512 rendered frames, long intervals (over 1.5 frame periods), and tracking/overlay pauses. `window.__xr.stats` remains available in remote DevTools; `window.__xr.lastReport` holds the completed summary. These are not GPU timings or a comfort assessment. Save the installed browser version and selected resolution with any observations.
+
+## Quest 3 device acceptance pass
+
+The local automated pass can run with the headset disconnected. The following checks remain physical-device acceptance:
+
+1. Open the printed LAN HTTPS URL on Quest 3. Confirm the page reports VR available. Record the Quest Browser version, resolution and whether certificate trust needed setup.
+2. Enter at Balanced resolution, release all controls, and stay on the approach for two minutes. Turn, lean and crouch: scale and stereo alignment should remain stable, with no extra head bob.
+3. Walk the yard, point at doors and gates, and use the right trigger. Check collisions with shut doors, passage through open doors, stair ascent/descent, and blocking of cliff drops and deep water.
+4. Use A to visit all six locations. Check floors, near surfaces, controller rays, sea rendering and the carried lamp. Listen outdoors, indoors and in the lantern room for spatial sound.
+5. Open the Quest system menu while holding a stick, then resume. Movement should wait for release. Repeat after briefly removing the headset. Use B to recenter; position should stay put.
+6. Exit with left Y, inspect **Last VR session**, change resolution and re-enter. Repeat three times. The desktop page should remain usable and held controls should not carry over.
+7. Spend at least ten minutes walking between the room, stairs, lantern and coast. Record sustained stutter, visual defects and discomfort separately from the timing summary. If Balanced is uneven, repeat at Low resolution.
+
+This pass covers the existing environment exploration mode. Story dialogue, papers, boat arrival, telescope and keeper duties still need VR interfaces before the saved watch can be played in the headset.

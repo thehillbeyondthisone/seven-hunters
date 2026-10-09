@@ -45,7 +45,7 @@ export function controllerState( sources ) {
 
 		} else if ( source.handedness === 'right' ) {
 
-			state.turn = g.axes[ a ] || 0;
+			state.turn = Number.isFinite( g.axes[ a ] ) ? g.axes[ a ] : 0;
 			state.next = button( 4 );
 			state.recenter = button( 5 );
 			state.use = button( 0 );
@@ -54,6 +54,27 @@ export function controllerState( sources ) {
 
 	}
 	return state;
+
+}
+
+// A system overlay can leave sticks/buttons held when tracking returns. Require
+// a neutral sample before handing control back, including on session entry.
+export class ControllerInput {
+
+	constructor() { this.reset(); }
+	reset() { this.armed = false; }
+	sample( state ) {
+
+		if ( ! this.armed ) {
+
+			this.armed = state.x === 0 && state.z === 0 && Math.abs( state.turn ) < 0.25
+				&& ! state.next && ! state.recenter && ! state.exit && ! state.use;
+			return { x: 0, z: 0, turn: 0, next: false, recenter: false, exit: false, use: false };
+
+		}
+		return state;
+
+	}
 
 }
 
@@ -71,6 +92,7 @@ export class Locomotion {
 		this.snapReady = true;
 		this.previous = {};
 		this.heightOffset = 0;
+		this.groundY = null;
 
 	}
 
@@ -85,6 +107,7 @@ export class Locomotion {
 	recenter() {
 
 		this.tracked = null;
+		this.groundY = null;
 		this.player.velocity.set( 0, 0, 0 );
 
 	}
@@ -92,6 +115,7 @@ export class Locomotion {
 	update( pose, state, dt ) {
 
 		const head = pose.transform.position, q = pose.transform.orientation;
+		this.groundY ??= this.player.position.y;
 		if ( ! this.tracked ) {
 
 			this.yaw = this.player.yaw - heading( q );
@@ -120,7 +144,11 @@ export class Locomotion {
 		this.rotation.setFromAxisAngle( UP, this.yaw );
 		const offset = new Vector3( head.x, 0, head.z ).applyQuaternion( this.rotation );
 		const p = this.player.position;
-		this.rig.compose( new Vector3( p.x - offset.x, p.y + this.heightOffset, p.z - offset.z ), this.rotation, new Vector3( 1, 1, 1 ) );
+		// Ease only the artificial floor-height changes on treads. Real head motion
+		// remains unfiltered, and recenter/location changes reset this immediately.
+		this.groundY += ( p.y - this.groundY ) * ( 1 - Math.exp( - 16 * Math.min( Math.max( dt, 0 ), 0.05 ) ) );
+		this.groundY = Math.max( p.y - 0.4, Math.min( p.y + 0.4, this.groundY ) );
+		this.rig.compose( new Vector3( p.x - offset.x, this.groundY + this.heightOffset, p.z - offset.z ), this.rotation, new Vector3( 1, 1, 1 ) );
 		this.player.yaw = h;
 		this.player.velocity.set( 0, 0, 0 );
 		this.player.mode = 'walk';

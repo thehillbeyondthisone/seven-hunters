@@ -1038,6 +1038,13 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.post.lens.update( dt, this.camera.position.y < ( this.cameraWaterHeight ?? 0 ) );
 		if ( this.post.flare ) {
 
+			const sunY = this.atmosphere.sunDir.value.y;
+			const evening = this.flannan && ( ! this.story || this.story.h < 24 )
+				? MathUtils.smoothstep( 0.2 - sunY, 0, 0.15 ) : 0;
+			const reveal = this.story?.islandReveal?.active;
+			this.post.flare.cloudGlare.value = evening * 0.7;
+			this.post.flare.strength.value = 1 + evening * ( reveal ? 14 : 9 );
+			this.post.flare.anamorphic.value = evening * ( reveal ? 2 : 1.4 );
 			this.post.flare.setDepthHeight( this.sceneRenderer.sceneRT.height );
 			this.post.flare.update( this.camera, dt, { aboveWater: this.camera.position.y > ( this.cameraWaterHeight ?? 0 ) - 0.02 } );
 

@@ -268,17 +268,24 @@ function flightTop( pts, t ) {
 function cutUnderFlight( T, L ) {
 
 	const pts = L.steps.pts, [ dx, dz ] = L.dir, hx = L.head.x, hz = L.head.z, n = T.res;
-	const end = pts.length - 1, half = 1.3;
-	const xs = [ hx, hx - dx * end ], zs = [ hz, hz - dz * end ];
-	const i0 = Math.max( 0, Math.floor( ( Math.min( ...xs ) - 3 - T.origin ) / T.texel ) ), i1 = Math.min( n - 1, Math.ceil( ( Math.max( ...xs ) + 3 - T.origin ) / T.texel ) );
-	const j0 = Math.max( 0, Math.floor( ( Math.min( ...zs ) - 3 - T.origin ) / T.texel ) ), j1 = Math.min( n - 1, Math.ceil( ( Math.max( ...zs ) + 3 - T.origin ) / T.texel ) );
+	// Include the neighbouring heightmap samples used by bilinear filtering.
+	// Cutting only samples inside the 1.3 m bed left high samples bleeding
+	// through both the apron and the distant risers.
+	const end = pts.length - 1, margin = Math.SQRT2 * T.texel, half = 1.3 + margin;
+	const xs = [ hx + dx * 7.5, hx - dx * end ], zs = [ hz + dz * 7.5, hz - dz * end ];
+	const pad = 3.3 + margin;
+	const i0 = Math.max( 0, Math.floor( ( Math.min( ...xs ) - pad - T.origin ) / T.texel ) ), i1 = Math.min( n - 1, Math.ceil( ( Math.max( ...xs ) + pad - T.origin ) / T.texel ) );
+	const j0 = Math.max( 0, Math.floor( ( Math.min( ...zs ) - pad - T.origin ) / T.texel ) ), j1 = Math.min( n - 1, Math.ceil( ( Math.max( ...zs ) + pad - T.origin ) / T.texel ) );
 	for ( let j = j0; j <= j1; j ++ ) for ( let i = i0; i <= i1; i ++ ) {
 
 		const x = T.origin + ( i + 0.5 ) * T.texel, z = T.origin + ( j + 0.5 ) * T.texel;
 		const t = - ( ( x - hx ) * dx + ( z - hz ) * dz ), w = - ( x - hx ) * dz + ( z - hz ) * dx;
-		if ( t < 0 || t > end || Math.abs( w ) > half ) continue;
+		const apron = t >= -7.5 - margin && t <= 1.5 + margin && Math.abs( w ) <= 3.3 + margin;
+		const flight = t >= -margin && t <= end && Math.abs( w ) <= half;
+		if ( ! apron && ! flight ) continue;
 		const k = j * n + i;
-		T.heights[ k ] = Math.min( T.heights[ k ], flightTop( pts, t ) - 0.85 );
+		const floor = apron ? L.stage.y - 0.55 : flightTop( pts, Math.max( 0, t - margin ) ) - 0.95;
+		T.heights[ k ] = Math.min( T.heights[ k ], floor );
 
 	}
 
@@ -1449,7 +1456,7 @@ function landing( ctx, name, L ) {
 		for ( let k = 1; k <= n; k ++ ) {
 
 			const ta = i - 1 + ( k - 1 ) / n, tb = i - 1 + k / n, y = y0 + dy * k / n;
-			wallBox( B, 'landingConcrete', - tb, - ta, y - 0.9, y - 0.018, - W / 2, W / 2, { ...concrete( 0.13 ), u0: 0 } );
+			wallBox( B, 'landingConcrete', - tb, - ta, y - 2.7, y - 0.018, - W / 2, W / 2, { ...concrete( 0.13 ), u0: 0 } );
 			// Small cast arris rather than a razor-thin luminous edge at each riser.
 			poly( B, 'landingConcrete', [ [ -tb, y, -W/2 ], [ -tb, y, W/2 ], [ -ta-0.018, y, W/2 ], [ -ta-0.018, y, -W/2 ] ], p => [ p[0], p[2] ], { ...concrete(.13), face: [0,1,0] } );
 			poly( B, 'landingConcrete', [ [ -ta-0.018, y, -W/2 ], [ -ta-0.018, y, W/2 ], [ -ta, y-0.018, W/2 ], [ -ta, y-0.018, -W/2 ] ], p => [ p[0], p[2] ], { ...concrete(.13), face: [1,1,0] } );
