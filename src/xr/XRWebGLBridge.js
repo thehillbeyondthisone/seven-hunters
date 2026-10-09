@@ -91,6 +91,25 @@ export class XRWebGLBridge {
 
 		const gl = this.gl;
 		if ( gl.isContextLost() ) throw new Error( 'The VR compatibility graphics context was lost.' );
+		// getError is sticky: errors from session activation / the browser's XR
+		// handoff can arrive between callbacks. Record those before issuing our
+		// first command, rather than attributing them to a successful bind/clear.
+		const pending = [];
+		for ( let i = 0; i < 16; i ++ ) {
+
+			const error = gl.getError();
+			if ( error === gl.NO_ERROR ) break;
+			if ( gl.isContextLost() ) throw new Error( 'The VR compatibility graphics context was lost.' );
+			pending.push( error );
+			if ( i === 15 ) throw new Error( 'VR compatibility error state did not reset before frame start.' );
+
+		}
+		if ( pending.length ) {
+
+			this.boundaryErrorCount = ( this.boundaryErrorCount || 0 ) + pending.length;
+			this.lastBoundaryErrors = pending;
+
+		}
 		// WebXR clears the opaque framebuffer before each XR callback. Both eye
 		// viewports are fully overwritten below, so no explicit clear is needed.
 		// Leave it detached while the WebGPU scene and canvas uploads are prepared.
@@ -166,6 +185,7 @@ export class XRWebGLBridge {
 
 			// Opaque framebuffers become incomplete when the XR callback returns.
 			gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+			this._checkError( 'framebuffer release' );
 
 		}
 

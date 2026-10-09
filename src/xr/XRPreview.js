@@ -391,6 +391,8 @@ export class XRPreview {
 		this._resetSpace = null;
 		this.space = null;
 		this.layer?.destroy?.();
+		this.lastBoundaryErrorCount = this.bridge?.boundaryErrorCount || 0;
+		this.lastBoundaryErrors = this.bridge?.lastBoundaryErrors || [];
 		this.bridge?.dispose();
 		this.bridge = null;
 		this.layer = null;
@@ -423,6 +425,7 @@ export class XRPreview {
 			const report = this.lastReport = this.stats.report();
 			diagnostics.hidden = false;
 			this.root.querySelector( '.xr-metrics' ).textContent = `${ this.renderMode }. ${ report.frames } frames at ${ Math.round( report.scale * 100 ) }% resolution. Last ${ report.sampleWindow } frames: 95th percentile interval ${ report.intervalP95Ms.toFixed( 1 ) } ms; CPU ${ report.cpuP95Ms.toFixed( 1 ) } ms. ${ report.longIntervals } long intervals; ${ report.pauses } tracking / overlay pauses.`;
+			if ( this.lastBoundaryErrorCount ) this.root.querySelector( '.xr-metrics' ).textContent += ` ${ this.lastBoundaryErrorCount } pending WebGL errors recorded before frame commands (last: ${ this.lastBoundaryErrors.join( ', ' ) }).`;
 		}
 		this.failure = null;
 

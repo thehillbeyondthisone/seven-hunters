@@ -78,7 +78,9 @@ try {
 	const originalExit = p.exit; p.exit = () => {};
 	tick( p ); assert.equal( p.renderingFrame, null ); p.exit = originalExit;
 	p.renderer.render = ( ...args ) => { p.renderArgs = args; }; p.failure = null;
-	const firstBridge = p.bridge; await p.exit(); assert.equal( firstBridge.disposed, true ); assert.equal( p.bridge, null );
+	const firstBridge = p.bridge; firstBridge.boundaryErrorCount = 3; firstBridge.lastBoundaryErrors = [ 1282 ];
+	await p.exit(); assert.equal( firstBridge.disposed, true ); assert.equal( p.bridge, null );
+	assert.equal( p.lastBoundaryErrorCount, 3 ); assert.deepEqual( p.lastBoundaryErrors, [ 1282 ] );
 	await p.enter(); assert.notEqual( p.bridge, firstBridge ); await p.exit(); assert.equal( p.app.starts, 2 );
 	console.log( 'PASS standard WebXR request, base layer, eye viewports and bridge disposal across exit/re-entry.' );
 

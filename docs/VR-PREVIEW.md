@@ -22,6 +22,8 @@ If the browser rejects a direct WebGPU-canvas upload (including WebGL error 1282
 
 Desktop preview: open the printed localhost HTTPS URL or `http://127.0.0.1:5189/?vr` with the normal dev server. Select locations, press **Explore on desktop**, and use the normal mouse/WASD controls. **Return to the normal game** opens the first night at the same origin. Browser save storage remains specific to that origin and device; this work does not synchronize saves between PC and Quest.
 
+The compatibility bridge records pending WebGL errors at the start of each headset callback before issuing its own GL commands. These are shown in **Last VR session** after exit, instead of being attributed to a subsequent successful framebuffer operation. New errors from binding, upload, draw and release are still checked and stop the session; a lost context or error queue that will not reset also stops it. This separates errors arriving during the browser handoff from failures in the preview's commands without proving their original cause.
+
 ## Quest controls
 
 | Control | Action |

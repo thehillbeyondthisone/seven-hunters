@@ -11,7 +11,7 @@ close( new Vector3( 0, 0, - 0.06 ).applyMatrix4( reversed ).z, 1 );
 close( new Vector3( 0, 0, - 1000 ).applyMatrix4( reversed ).z, 0 );
 console.log( 'PASS WebGL asymmetric eye projection converts to reversed WebGPU depth without changing x/y.' );
 
-let calls, failContext = false, rejectDirect = false, rejectCopy = false, failDraw = false, pendingError = 0, gate = null, deleted;
+let calls, failContext = false, rejectDirect = false, rejectCopy = false, failDraw = false, failBind = false, lost = false, pendingError = 0, gate = null, deleted;
 const context = { configure() { calls.push( 'configure' ); }, unconfigure() { calls.push( 'unconfigure' ); }, getCurrentTexture() { return { createView: () => ( {} ) }; } };
 const gl = {
 	VERTEX_SHADER: 1, FRAGMENT_SHADER: 2, COMPILE_STATUS: 3, LINK_STATUS: 4, ARRAY_BUFFER: 5, STATIC_DRAW: 6, FLOAT: 7,
@@ -23,8 +23,8 @@ const gl = {
 	createProgram: () => ( {} ), attachShader() {}, linkProgram() {}, getProgramParameter: () => true,
 	createBuffer: () => ( {} ), bindBuffer() {}, bufferData() {}, useProgram() {}, getAttribLocation: () => 0,
 	enableVertexAttribArray() {}, vertexAttribPointer() {}, createTexture: () => ( {} ), activeTexture() {}, bindTexture() {},
-	texParameteri() {}, pixelStorei() {}, uniform1i() {}, getUniformLocation: () => ( {} ), isContextLost: () => false,
-	bindFramebuffer( target, framebuffer ) { calls.push( [ 'framebuffer', framebuffer ] ); }, clearColor() {}, clear() { calls.push( 'clear' ); },
+	texParameteri() {}, pixelStorei() {}, uniform1i() {}, getUniformLocation: () => ( {} ), isContextLost: () => lost,
+	bindFramebuffer( target, framebuffer ) { calls.push( [ 'framebuffer', framebuffer ] ); if ( failBind ) pendingError = 1282; }, clearColor() {}, clear() { calls.push( 'clear' ); },
 	viewport( ...v ) { calls.push( [ 'viewport', ...v ] ); }, texImage2D( ...args ) {
 		calls.push( [ 'upload', args[ 5 ] ] );
 		if ( rejectDirect && args[ 5 ].isGPUCanvas || rejectCopy && args[ 5 ].is2DCanvas ) pendingError = 1282;
@@ -51,6 +51,10 @@ try {
 	const session = {}, bridge = new XRWebGLBridge(); await bridge.init( session, 0.65 );
 	assert.equal( calls[ 0 ], 'compatible' );
 	assert.equal( calls[ 1 ][ 0 ], 'layer' ); assert.equal( calls[ 1 ][ 3 ].framebufferScaleFactor, 0.65 );
+	pendingError = 1282; bridge.beginFrame();
+	assert.equal( bridge.boundaryErrorCount, 1 ); assert.deepEqual( bridge.lastBoundaryErrors, [ 1282 ] );
+	failBind = true; assert.throws( () => bridge.beginFrame(), /frame start failed.*1282/ ); failBind = false;
+	lost = true; assert.throws( () => bridge.beginFrame(), /context was lost/ ); lost = false;
 	bridge.beginFrame(); bridge.target( 640, 720 ); bridge.present( { x: 640, y: 0, width: 640, height: 720 } );
 	assert.equal( bridge.staging.width, 640 ); assert.equal( bridge.staging.height, 720 );
 	assert.deepEqual( calls.find( c => c[ 0 ] === 'viewport' ), [ 'viewport', 640, 0, 640, 720 ] );
