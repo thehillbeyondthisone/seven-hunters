@@ -13,6 +13,7 @@ export const GPU = {
 	device: null,
 	queue: null,
 	adapter: null,
+	xrCompatible: null,
 	context: null,
 	canvas: null,
 	format: 'bgra8unorm',
@@ -28,7 +29,18 @@ export const GPU = {
 	async init( { canvas = null, requiredLimits = {}, headless = false, xrCompatible = false } = {} ) {
 
 		if ( ! navigator.gpu ) throw new Error( 'WebGPU is not available in this browser.' );
-		const adapter = await navigator.gpu.requestAdapter( { powerPreference: 'high-performance', ...( xrCompatible ? { xrCompatible: true } : {} ) } );
+		let adapter = null;
+		this.xrCompatible = false;
+		if ( xrCompatible ) {
+
+			// The binding can be exposed while an XR-compatible adapter is unavailable.
+			// Keep the ordinary WebGPU scene usable for the WebGL XR compositor path.
+			try { adapter = await navigator.gpu.requestAdapter( { powerPreference: 'high-performance', xrCompatible: true } ); }
+			catch { /* Try the ordinary graphics adapter below. */ }
+			this.xrCompatible = !! adapter;
+
+		}
+		if ( ! adapter ) adapter = await navigator.gpu.requestAdapter( { powerPreference: 'high-performance' } );
 		if ( ! adapter ) throw new Error( 'No WebGPU adapter found.' );
 		this.adapter = adapter;
 

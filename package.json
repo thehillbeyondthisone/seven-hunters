@@ -9,7 +9,7 @@
     "test:surfaces": "node test/station-surfaces.mjs",
     "test:station-atmosphere": "node test/station-atmosphere.mjs",
     "test:mobile-render": "node test/mobile-render.mjs",
-    "test:xr": "node test/xr.mjs && node test/xr-session.mjs && node test/xr-render.mjs",
+    "test:xr": "node test/xr-startup.mjs && node test/xr-adapter.mjs && node test/xr.mjs && node test/xr-session.mjs && node test/xr-bridge.mjs && node test/xr-bridge-session.mjs && node test/xr-render.mjs",
     "test:xr-scene": "node test/xr-scene.mjs",
     "test:weather": "node test/sea-weather.mjs",
     "test:observations": "node test/weather-observations.mjs && node test/demo-story.mjs --weather-walk",

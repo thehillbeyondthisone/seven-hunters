@@ -34,6 +34,11 @@ jobs:
           node test/mobile-input.mjs
           node test/sea-weather.mjs
           node test/xr.mjs
+          node test/xr-startup.mjs
+          node test/xr-adapter.mjs
+          node test/xr-session.mjs
+          node test/xr-bridge.mjs
+          node test/xr-bridge-session.mjs
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

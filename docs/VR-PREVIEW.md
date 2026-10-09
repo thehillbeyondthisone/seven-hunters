@@ -1,6 +1,8 @@
 # Seven Hunters: Quest 3 preview
 
-The opt-in `?vr` route explores the existing Eilean Mòr environment. The normal URL continues to launch the desktop first-night game. The preview does not read or write a night save.
+The `?vr` route explores the existing Eilean Mòr environment. Opening the normal URL in Meta Quest Browser, or with an available immersive headset, now selects this preview before loading the normal game. **Enter VR** still needs a click because immersive sessions require user activation. Desktop and phone browsers keep their usual first-night flow. Explicit study/preview links keep their selected experience; `?desktop` opens the normal game in the headset’s browser window. The VR preview does not read or write a night save.
+
+Public preview: [Seven Hunters VR](https://thehillbeyondthisone.github.io/seven-hunters/?vr). The public site uses trusted HTTPS and does not need the local server’s certificate setup.
 
 ## Run locally
 
@@ -10,7 +12,11 @@ Open the printed LAN URL ending in `/?vr` in Meta Quest Browser while the headse
 
 The local HTTPS certificate is self-signed and includes the machine's current IPv4 addresses. Files live in the ignored `.local/xr/` directory. The launcher does not install certificates in Windows or change certificate trust. A browser may ask you to accept or trust this certificate before WebXR is usable; the preview reports whether the page is a secure context. The public certificate is available at `/xr-preview-certificate.cer` if it needs to be installed on a test device. Private key routes are blocked by the dev server. When a certificate expires or the PC's addresses change, the next launch regenerates it.
 
-Quest Browser must expose both immersive WebXR and `XRGPUBinding` (WebGPU rendering in WebXR). Meta introduced this experimentally in [Browser 146.0](https://developers.meta.com/vr/downloads/package/browser/146.0/). If the entry button reports unavailable WebGPU-in-WebXR support, update the headset browser and check its WebXR/WebGPU experimental settings. Basic WebGPU support alone is insufficient. A session-request failure remains visible on the page and leaves desktop exploration available.
+The preview requires WebGPU for its scene renderer and immersive WebXR for headset tracking and presentation. It uses native `XRGPUBinding` when available. Meta introduced this experimentally in [Browser 146.0](https://developers.meta.com/vr/downloads/package/browser/146.0/); its absence does not establish that a browser is outdated.
+
+When native WebGPU-in-WebXR is unavailable, the preview uses the standard `XRWebGLLayer` presentation path: each eye is rendered by the existing WebGPU engine, copied from a staging canvas into a WebGL texture, and presented to the headset. This keeps the same world, materials and controls and avoids requiring the experimental WebGPU XR feature. The additional canvas copy needs physical Quest performance testing; start at Low resolution if Balanced is uneven. Session-request failures stay visible and leave browser-window exploration available.
+
+**VR compatibility details** shows the detected headset support, connection security, graphics APIs and browser identification. **Recheck VR** refreshes these checks. If the direct WebGPU session or layer is rejected, **Try compatibility VR** makes a fresh standard-WebXR request from your next click. `?vr&xrBackend=webgl` selects compatibility mode explicitly for comparison. The page no longer suggests updating the browser solely because its experimental WebGPU XR binding is absent.
 
 Desktop preview: open the printed localhost HTTPS URL or `http://127.0.0.1:5189/?vr` with the normal dev server. Select locations, press **Explore on desktop**, and use the normal mouse/WASD controls. **Return to the normal game** opens the first night at the same origin. Browser save storage remains specific to that origin and device; this work does not synchronize saves between PC and Quest.
 
@@ -38,7 +44,7 @@ Sky irradiance automatically uses fewer compute lanes on adapters with a 16 KiB 
 
 The shared world update runs once per XR frame. Head tracking and controller input own the preview camera and walking capsule. Per-eye headset projections keep their asymmetric frusta, with depth converted into the engine's reversed-depth convention. The scene and water render into private HDR/depth targets, then a simple tone-map pass presents each view to its XR projection layer. No reversed-depth texture is submitted to the compositor.
 
-Session, adapter and layer setup follow the [WebXR/WebGPU binding specification](https://immersive-web.github.io/webxr-webgpu-binding/). The preview requires the `webgpu` session feature and an XR-compatible WebGPU adapter.
+Native session, adapter and layer setup follow the [WebXR/WebGPU binding specification](https://immersive-web.github.io/webxr-webgpu-binding/). That path requires the `webgpu` session feature and an XR-compatible WebGPU adapter. The compatibility path requests an ordinary immersive session and an XR-compatible WebGL context for presentation, while the engine continues to render with WebGPU. The different WebGL and WebGPU projection-depth conventions are converted before scene rendering.
 
 The initial implementation submits simulation/shadows and each eye separately. This intentionally avoids overwriting shared GPU camera/material buffers before both eyes have drawn. Eye-specific render targets and uniform buffers, multiview, and a broader Quest quality profile can follow after physical-device profiling. Desktop temporal upscaling, AO, motion blur, bloom and lens effects are bypassed in immersive mode.
 
@@ -46,7 +52,9 @@ The preview code is under `src/xr/` and loaded on demand. The normal game retain
 
 ## Verification and next device check
 
-`npm run test:xr` checks projection/depth math, controller mapping, movement, collision, snap-turn pivot, stair smoothing, immediate crouching, neutral controls on resume, floor fallback, reference-space resets, async entry cancellation, failed sessions, session cleanup, repeated entry, viewport restoration, distinct eye images, array layers and atlas viewports. `npm run test:xr-scene` checks all six real VR spawn positions and renders those locations plus night views of the room and lantern with synthetic XR views and controller rays. Set `WEBGPU_DEFAULT_LIMITS=1` for conservative mobile binding limits, and `XR_TEST_OUT=artifacts/quest-pass` to preserve the earlier previews. With the HTTPS server running, `node test/xr-launch.mjs` checks its page, certificate and private-file exclusions (`XR_PORT` overrides port 5443). `npm test` covers the existing game logic, Flannan geometry, walk route, first-night story, guidance and engine smoke test.
+`npm run test:xr` checks headset detection before story/mobile setup, explicit-route and browser-window overrides, both projection/depth conventions, native and compatibility session lifecycle, controller mapping, movement, collision, snap-turn pivot, stair smoothing, immediate crouching, neutral controls on resume, floor fallback, reference-space resets, async entry cancellation, failed sessions, session cleanup, repeated entry, viewport restoration, distinct eye images, array layers and atlas viewports. `npm run test:xr-scene` checks all six real VR spawn positions and renders those locations plus night views of the room and lantern with synthetic XR views and controller rays. Set `WEBGPU_DEFAULT_LIMITS=1` for conservative mobile binding limits, and `XR_TEST_OUT=artifacts/quest-pass` to preserve the earlier previews. With the HTTPS server running, `node test/xr-launch.mjs` checks its page, certificate and private-file exclusions (`XR_PORT` overrides port 5443). `npm test` covers the existing game logic, Flannan geometry, walk route, first-night story, guidance and engine smoke test.
+
+`test/xr-bridge-browser.html` exercises real WebGPU and WebGL contexts with a simulated compositor framebuffer. It checks two distinct eye images, quadrant colors, vertical orientation and graphics errors in one callback. It proves the browser canvas-transfer mechanism, while physical headset behavior and sustained performance remain separate acceptance checks.
 
 Local browser screenshots and synthetic stereo renders are in `artifacts/xr-preview/`. These checks verify code and local GPU rendering. They do not measure Quest startup, sustained frame rate, headset comfort, physical controller input, audio or certificate/firewall setup.
 

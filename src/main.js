@@ -3,6 +3,14 @@ import { App } from './App.js';
 import { UI } from './ui/UI.js';
 import { AppUI } from './ui/AppUI.js';
 import './mobile/mobile.css';
+import { configureXRLaunch } from './xr/Startup.js';
+
+const launchOptions = new URLSearchParams( location.search );
+if ( await configureXRLaunch( launchOptions ) ) {
+	const url = new URL( location.href );
+	url.search = launchOptions.toString();
+	history.replaceState( history.state, '', url );
+}
 
 // ?bench runs in background tabs too (automation): rAF does not fire in a hidden page
 if ( /[?&]bench\b/.test( location.search ) ) {

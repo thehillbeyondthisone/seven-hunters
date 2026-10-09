@@ -80,6 +80,26 @@ await GPU.queue.onSubmittedWorkDone();
 const both = new Uint8Array( ( await readTexture( atlas ) ).data );
 assert.ok( redPixels( both, W * 2, 0, W ) > 1000, 'right-eye clear erased the left viewport' );
 assert.ok( redPixels( both, W * 2, W, W * 2 ) > 1000 );
+
+// The compatibility renderer uses ordinary WebGL-session projection matrices,
+// private WebGPU canvas targets and an immediate transfer after each eye submit.
+const bridgeTargets = views.map( () => new Texture( { width: W, height: H, format: 'rgba8unorm', usage: [ 'render', 'copySrc' ] } ) );
+const transferred = [];
+let bridgeEye = 0;
+const bridge = {
+	beginFrame() { bridgeEye = 0; },
+	target( width, height ) { assert.equal( width, W ); assert.equal( height, H ); return bridgeTargets[ bridgeEye ].view(); },
+	present( viewport ) { assert.equal( GPU.encoder, null, 'compatibility canvas was copied before eye submission' ); transferred.push( viewport.x ); bridgeEye++; },
+};
+const webglProjection = new Matrix4().makePerspective( - 0.06 * W / H, 0.06 * W / H, 0.06, - 0.06, 0.06, 1000, 2000, false ).toArray();
+const bridgeViews = views.map( ( v, i ) => ( { view: { ...v.view, projectionMatrix: webglProjection }, subImage: { viewport: { x: i * W, y: 0, width: W, height: H } } } ) );
+GPU.beginFrame(); renderer.render( bridgeViews, new Matrix4(), bridge ); await GPU.queue.onSubmittedWorkDone();
+assert.deepEqual( transferred, [ 0, W ] );
+for ( const [ i, expected ] of [ left, right ].entries() ) {
+	const rendered = new Uint8Array( ( await readTexture( bridgeTargets[ i ] ) ).data );
+	assert.deepEqual( rendered, expected, 'WebGL projection or staging viewport changed the eye image' );
+}
+console.log( 'PASS compatibility eye images match native output, with WebGL projection depth and submission before transfer.' );
 const validation = await GPU.device.popErrorScope();
 assert.equal( validation, null, validation?.message );
 assert.deepEqual( errors, [] );

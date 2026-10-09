@@ -7,6 +7,7 @@ import { Locomotion, ControllerInput, controllerState } from './Locomotion.js';
 import { projectionScale, supportMessage } from './PreviewOptions.js';
 import { XRRenderer } from './XRRenderer.js';
 import { SessionStats } from './SessionStats.js';
+import { XRWebGLBridge } from './XRWebGLBridge.js';
 
 export const LOCATIONS = [
 	[ 'Station approach', 'fApproach' ], [ 'Station yard', 'fYard' ],
@@ -50,6 +51,8 @@ export class XRPreview {
 		this._buildUI();
 		this.selectLocation( 0 );
 		this._checkSupport();
+		this._deviceChange = () => this._checkSupport();
+		navigator.xr?.addEventListener?.( 'devicechange', this._deviceChange );
 		window.__xr = this;
 
 	}
@@ -66,9 +69,10 @@ export class XRPreview {
 <label>VR resolution <select class="xr-scale"><option value="0.5">Low · 50%</option><option value="0.65">Balanced · 65%</option><option value="0.85">Higher · 85%</option><option value="1">Full · 100%</option></select></label>
 <div class="xr-actions"><button type="button" class="xr-enter" disabled>Checking VR…</button><button type="button" class="xr-desktop">Explore on desktop</button></div>
 <p class="xr-status" role="status" aria-live="polite"></p>
+<details class="xr-capabilities"><summary>VR compatibility details</summary><p class="xr-features"></p><p class="xr-browser"></p><button type="button" class="xr-recheck">Recheck VR</button></details>
 <details><summary>Quest controls</summary><p>Left stick: walk · Right stick: turn 30°<br>Right trigger: open or close a nearby door / gate<br>A: next location · B: recenter · Left Y: exit VR</p><p>Head movement is tracked. There is no added head bob, swimming, boat ride, telescope or story interface in this first preview.</p></details>
 <details class="xr-diagnostics" hidden><summary>Last VR session</summary><p class="xr-metrics"></p><p>Intervals include browser scheduling. CPU time measures frame submission; GPU time, comfort and tracking quality require headset testing.</p></details>
-<a class="xr-normal" href="./">Return to the normal game</a>`;
+<a class="xr-normal" href="./?desktop">Return to the normal game</a>`;
 		this.enterButton = root.querySelector( '.xr-enter' );
 		this.status = root.querySelector( '.xr-status' );
 		this.locationSelect = root.querySelector( '.xr-location' );
@@ -91,6 +95,7 @@ export class XRPreview {
 		this.scaleSelect.value = this.scale;
 		this.scaleSelect.addEventListener( 'change', () => { this.scale = projectionScale( this.scaleSelect.value ); } );
 		this.enterButton.addEventListener( 'click', () => this.enter() );
+		root.querySelector( '.xr-recheck' ).addEventListener( 'click', () => this._checkSupport() );
 		root.querySelector( '.xr-desktop' ).addEventListener( 'click', () => {
 
 			if ( this.app.audio ) this.app.audio.resume();
@@ -105,19 +110,44 @@ export class XRPreview {
 
 	async _checkSupport() {
 
+		const check = this.supportCheck = ( this.supportCheck || 0 ) + 1;
 		let reason = supportMessage();
-		if ( ! reason ) {
+		let immersive = null, checkError = null;
+		if ( typeof navigator.xr?.isSessionSupported === 'function' ) {
 
 			try {
 
-				if ( ! await navigator.xr.isSessionSupported( 'immersive-vr' ) ) reason = 'No immersive VR headset found. You can still explore on desktop.';
+				immersive = await navigator.xr.isSessionSupported( 'immersive-vr' );
 
-			} catch ( e ) { reason = 'Unable to check VR support: ' + e.message; }
+			} catch ( e ) { checkError = e.message; }
 
 		}
+		if ( check !== this.supportCheck ) return;
+		if ( ! reason && immersive === false ) reason = 'No immersive VR headset found. You can still explore on desktop.';
+		if ( ! reason && checkError ) reason = 'Unable to check VR support: ' + checkError;
+		if ( ! reason && ! this._useNative() && typeof globalThis.XRWebGLLayer !== 'function' ) reason = 'The standard WebXR compositor is unavailable for compatibility mode.';
+		const features = this.root.querySelector( '.xr-features' );
+		if ( features ) features.textContent = [
+			`Secure connection: ${ globalThis.isSecureContext ? 'yes' : 'no' }`,
+			`WebXR: ${ navigator.xr ? 'yes' : 'no' }`, `WebGPU: ${ navigator.gpu ? 'yes' : 'no' }`,
+			`Direct WebGPU XR binding: ${ typeof globalThis.XRGPUBinding === 'function' ? 'yes' : 'no' }`,
+			`Standard WebXR layer: ${ typeof globalThis.XRWebGLLayer === 'function' ? 'yes' : 'no' }`,
+			`XR-compatible WebGPU adapter: ${ GPU.xrCompatible === null ? 'not checked' : GPU.xrCompatible ? 'yes' : 'no (compatibility graphics)' }`,
+			`Immersive VR: ${ immersive === null ? checkError ? 'check failed' : 'not checked' : immersive ? 'headset detected' : 'not available' }`,
+		].join( ' · ' );
+		const browser = this.root.querySelector( '.xr-browser' );
+		if ( browser ) browser.textContent = 'Browser: ' + ( navigator.userAgent || 'not reported' );
+		if ( this.active || this.entering ) return;
 		this.enterButton.disabled = !! reason;
-		this.enterButton.textContent = reason ? 'VR unavailable' : 'Enter VR';
-		this.status.textContent = reason || 'VR is available. Start with Balanced resolution; lower it if motion is uneven.';
+		this.enterButton.textContent = reason ? 'VR unavailable' : this.forceCompatibility ? 'Try compatibility VR' : 'Enter VR';
+		const mode = this._useNative() ? 'Direct WebGPU' : 'WebGL compatibility';
+		this.status.textContent = reason ? `${ immersive ? 'Headset detected. ' : '' }${ reason }` : `${ immersive ? 'Headset detected. ' : '' }VR is available (${ mode }). Start with Balanced resolution; lower it if motion is uneven.`;
+
+	}
+
+	_useNative() {
+
+		return typeof globalThis.XRGPUBinding === 'function' && GPU.xrCompatible !== false && ! this.forceCompatibility && this.app.qs?.get( 'xrBackend' ) !== 'webgl';
 
 	}
 
@@ -147,23 +177,41 @@ export class XRPreview {
 		this.entering = true;
 		this.enterButton.disabled = true;
 		this.status.textContent = 'Opening VR…';
-		let session;
+		let session, native = false, stage = 'support';
 		try {
 
 			const reason = supportMessage();
 			if ( reason ) throw new Error( reason );
+			native = this._useNative();
+			if ( ! native && typeof globalThis.XRWebGLLayer !== 'function' ) throw new Error( 'The standard WebXR compositor is unavailable for compatibility mode.' );
 			// Request immediately from the click so browser user activation is retained.
+			stage = 'request';
 			session = await navigator.xr.requestSession( 'immersive-vr', {
-				requiredFeatures: [ 'webgpu' ], optionalFeatures: [ 'local-floor', 'bounded-floor' ],
+				...( native ? { requiredFeatures: [ 'webgpu' ] } : {} ), optionalFeatures: [ 'local-floor', 'bounded-floor' ],
 			} );
 			this.session = session;
 			session.addEventListener( 'end', () => this._ended( session ), { once: true } );
-			const binding = new XRGPUBinding( session, GPU.device );
-			const format = binding.getPreferredColorFormat();
-			const layer = binding.createProjectionLayer( { colorFormat: format, scaleFactor: this.scale } );
-			this.binding = binding;
-			this.layer = layer;
-			session.updateRenderState( { layers: [ layer ], depthNear: 0.06, depthFar: this.app.camera.far } );
+			let format;
+			if ( native ) {
+
+				stage = 'layer';
+				const binding = this.binding = new XRGPUBinding( session, GPU.device );
+				format = binding.getPreferredColorFormat();
+				this.layer = binding.createProjectionLayer( { colorFormat: format, scaleFactor: this.scale } );
+				session.updateRenderState( { layers: [ this.layer ], depthNear: 0.06, depthFar: this.app.camera.far } );
+
+			} else {
+
+				const bridge = this.bridge = new XRWebGLBridge();
+				await bridge.init( session, this.scale );
+				if ( this.session !== session ) return;
+				format = bridge.format;
+				this.layer = bridge.layer;
+				session.updateRenderState( { baseLayer: this.layer, depthNear: 0.06, depthFar: this.app.camera.far } );
+
+			}
+			this.renderMode = native ? 'Direct WebGPU' : 'WebGL compatibility';
+			stage = 'setup';
 			let localFloor = true, space;
 			try { space = await session.requestReferenceSpace( 'local-floor' ); }
 			catch { localFloor = false; space = await session.requestReferenceSpace( 'local' ); }
@@ -205,13 +253,20 @@ export class XRPreview {
 		} catch ( e ) {
 
 			if ( session ) await session.end().catch( () => {} );
+			if ( this.session === session ) this._ended( session );
 			this.status.textContent = 'Could not enter VR: ' + e.message;
+			if ( native && typeof globalThis.XRWebGLLayer === 'function' && ( stage === 'layer' || stage === 'request' && e.name === 'NotSupportedError' ) ) {
+
+				this.forceCompatibility = true;
+				this.status.textContent += ' Standard WebXR compatibility mode is available; press Try compatibility VR to try it.';
+
+			}
 			console.error( 'VR preview:', e );
 		} finally {
 
 			this.entering = false;
 			this.enterButton.disabled = false;
-			this.enterButton.textContent = 'Enter VR';
+			this.enterButton.textContent = this.forceCompatibility ? 'Try compatibility VR' : 'Enter VR';
 
 		}
 
@@ -248,7 +303,7 @@ export class XRPreview {
 
 				}
 				for ( const door of this.app.village.station.moving.doors ) updateDoor( door, dt );
-				this.views = pose.views.map( ( view ) => ( { view, subImage: this.binding.getViewSubImage( this.layer, view ) } ) );
+				this.views = pose.views.map( ( view ) => ( { view, subImage: this.bridge ? { viewport: this.layer.getViewport( view ) } : this.binding.getViewSubImage( this.layer, view ) } ) );
 				this.app.frame( dt );
 				this.stats.frameRate = frame.session.frameRate || this.stats.frameRate;
 				this.stats.record( interval, performance.now() - t0, LOCATIONS[ this.location ][ 0 ] );
@@ -306,7 +361,7 @@ export class XRPreview {
 
 	}
 
-	render() { this.renderer.render( this.views, this.locomotion.rig ); }
+	render() { this.renderer.render( this.views, this.locomotion.rig, this.bridge ); }
 
 	async exit() {
 
@@ -326,6 +381,8 @@ export class XRPreview {
 		this._resetSpace = null;
 		this.space = null;
 		this.layer?.destroy?.();
+		this.bridge?.dispose();
+		this.bridge = null;
 		this.layer = null;
 		this.binding = null;
 		this.views = null;
@@ -355,7 +412,7 @@ export class XRPreview {
 		if ( wasActive && this.stats.frames ) {
 			const report = this.lastReport = this.stats.report();
 			diagnostics.hidden = false;
-			this.root.querySelector( '.xr-metrics' ).textContent = `${ report.frames } frames at ${ Math.round( report.scale * 100 ) }% resolution. Last ${ report.sampleWindow } frames: 95th percentile interval ${ report.intervalP95Ms.toFixed( 1 ) } ms; CPU ${ report.cpuP95Ms.toFixed( 1 ) } ms. ${ report.longIntervals } long intervals; ${ report.pauses } tracking / overlay pauses.`;
+			this.root.querySelector( '.xr-metrics' ).textContent = `${ this.renderMode }. ${ report.frames } frames at ${ Math.round( report.scale * 100 ) }% resolution. Last ${ report.sampleWindow } frames: 95th percentile interval ${ report.intervalP95Ms.toFixed( 1 ) } ms; CPU ${ report.cpuP95Ms.toFixed( 1 ) } ms. ${ report.longIntervals } long intervals; ${ report.pauses } tracking / overlay pauses.`;
 		}
 		this.failure = null;
 

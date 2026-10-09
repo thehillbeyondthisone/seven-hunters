@@ -147,7 +147,7 @@ export class App {
 		};
 		await progress( 0.02, 'Starting WebGPU…' );
 		const engine = this.engine = new Engine( document.getElementById( 'app' ) );
-		await engine.init( { xrCompatible: vrPreview && typeof globalThis.XRGPUBinding === 'function' } );
+		await engine.init( { xrCompatible: vrPreview && qs.get( 'xrBackend' ) !== 'webgl' && typeof globalThis.XRGPUBinding === 'function' } );
 		// systems take `renderer` first as in the three.js version: it is the Engine now (GPU access is global)
 		const renderer = engine;
 		const { scene, camera } = engine;

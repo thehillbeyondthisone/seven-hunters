@@ -1,0 +1,107 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebGPU canvas to WebGL XR compositor transfer test</title>
+<pre id="result">Checking WebGPU canvas transfer…</pre>
+<script type="module">
+import { GPU } from '/src/engine/gpu/GPU.js';
+import { XRWebGLBridge } from '/src/xr/XRWebGLBridge.js';
+
+window.__xrBridgeResult = { state: 'pending' };
+let bridge;
+try {
+
+	const adapter = await navigator.gpu.requestAdapter();
+	if ( ! adapter ) throw Error( 'No WebGPU adapter available in this test browser.' );
+	GPU.device = await adapter.requestDevice();
+	const errors = [];
+	GPU.device.addEventListener( 'uncapturederror', e => errors.push( e.error.message ) );
+	GPU.device.pushErrorScope( 'validation' );
+	const createElement = document.createElement.bind( document );
+	// Only headset allocation is simulated. Both graphics contexts, the WebGPU
+	// commands and the canvas texture upload run in the actual browser.
+	document.createElement = ( name, ...args ) => {
+
+		const element = createElement( name, ...args );
+		if ( name === 'canvas' ) {
+
+			const getContext = element.getContext.bind( element );
+			element.getContext = ( type, ...options ) => {
+
+				const context = getContext( type, ...options );
+				if ( context && type.startsWith( 'webgl' ) ) context.makeXRCompatible = async () => {};
+				return context;
+
+			};
+
+		}
+		return element;
+
+	};
+	globalThis.XRWebGLLayer = class {
+
+		constructor( session, gl ) {
+
+			this.framebuffer = gl.createFramebuffer();
+			this.testTexture = gl.createTexture();
+			gl.bindTexture( gl.TEXTURE_2D, this.testTexture );
+			gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, 64, 32, 0, gl.RGBA, gl.UNSIGNED_BYTE, null );
+			gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST );
+			gl.bindFramebuffer( gl.FRAMEBUFFER, this.framebuffer );
+			gl.framebufferTexture2D( gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.testTexture, 0 );
+			if ( gl.checkFramebufferStatus( gl.FRAMEBUFFER ) !== gl.FRAMEBUFFER_COMPLETE ) throw Error( 'Test framebuffer is incomplete.' );
+
+		}
+
+	};
+	bridge = new XRWebGLBridge();
+	await bridge.init( {}, 0.65 );
+	document.createElement = createElement;
+	bridge.beginFrame();
+	for ( let eye = 0; eye < 2; eye ++ ) {
+
+		const module = GPU.device.createShaderModule( { code: `
+@vertex fn vs(@builtin(vertex_index) i:u32) -> @builtin(position) vec4f {
+	let p=vec2f(f32((i<<1u)&2u), f32(i&2u)); return vec4f(p*2.0-1.0,0.0,1.0);
+}
+@fragment fn fs(@builtin(position) p:vec4f) -> @location(0) vec4f {
+	var c=${ eye === 0 ? 'vec3f(1.0,0.0,0.0)' : 'vec3f(0.0,1.0,0.0)' };
+	if(p.y>=16.0){c=${ eye === 0 ? 'vec3f(0.0,0.0,1.0)' : 'vec3f(1.0,0.0,0.0)' };}
+	if(p.x>=16.0){${ eye === 0 ? 'c.g=1.0;' : 'c.b=1.0;' }} return vec4f(c,1.0);
+}` } );
+		const pipeline = GPU.device.createRenderPipeline( { layout: 'auto', vertex: { module, entryPoint: 'vs' }, fragment: { module, entryPoint: 'fs', targets: [ { format: bridge.format } ] }, primitive: { topology: 'triangle-list' } } );
+		const encoder = GPU.device.createCommandEncoder();
+		const pass = encoder.beginRenderPass( { colorAttachments: [ { view: bridge.target( 32, 32 ), loadOp: 'clear', storeOp: 'store', clearValue: [ 0, 0, 0, 1 ] } ] } );
+		pass.setPipeline( pipeline ); pass.draw( 3 ); pass.end();
+		GPU.device.queue.submit( [ encoder.finish() ] );
+		// Intentionally no await: production copies both eyes in the same XR callback.
+		bridge.present( { x: eye * 32, y: 0, width: 32, height: 32 } );
+
+	}
+	const gl = bridge.gl, pixels = {};
+	for ( const [ name, x, y, expected ] of [
+		[ 'leftTopLeft', 8, 24, [ 255, 0, 0, 255 ] ], [ 'leftTopRight', 24, 24, [ 255, 255, 0, 255 ] ],
+		[ 'leftBottomLeft', 8, 8, [ 0, 0, 255, 255 ] ], [ 'leftBottomRight', 24, 8, [ 0, 255, 255, 255 ] ],
+		[ 'rightTopLeft', 40, 24, [ 0, 255, 0, 255 ] ], [ 'rightTopRight', 56, 24, [ 0, 255, 255, 255 ] ],
+		[ 'rightBottomLeft', 40, 8, [ 255, 0, 0, 255 ] ], [ 'rightBottomRight', 56, 8, [ 255, 0, 255, 255 ] ],
+	] ) {
+
+		const pixel = new Uint8Array( 4 ); gl.readPixels( x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel );
+		pixels[ name ] = Array.from( pixel );
+		if ( expected.some( ( value, i ) => Math.abs( pixel[ i ] - value ) > 3 ) ) throw Error( `${ name }: ${ pixel } expected ${ expected }` );
+
+	}
+	await GPU.device.queue.onSubmittedWorkDone();
+	const validation = await GPU.device.popErrorScope();
+	if ( validation || errors.length ) throw Error( validation?.message || errors.join( '\n' ) );
+	gl.deleteTexture( bridge.layer.testTexture ); gl.deleteFramebuffer( bridge.layer.framebuffer );
+	bridge.dispose();
+	window.__xrBridgeResult = { state: 'passed', checks: 'Real WebGPU → WebGL canvas transfer, same-callback distinct eyes, all quadrants, vertical orientation, no graphics validation errors.', pixels };
+
+} catch ( error ) {
+
+	bridge?.dispose();
+	window.__xrBridgeResult = { state: 'failed', error: error.stack || String( error ) };
+
+}
+document.getElementById( 'result' ).textContent = JSON.stringify( window.__xrBridgeResult, null, 2 );
+</script>

@@ -3,6 +3,7 @@ import { FullscreenPass } from '../engine/render/FullscreenPass.js';
 import { FrameUniforms, G, setFrameCamera } from '../engine/render/Frame.js';
 import { Matrix4, Vector3 } from '../engine/math/index.js';
 import { reversedProjection } from './Locomotion.js';
+import { webglReversedProjection } from './XRWebGLBridge.js';
 
 // Use the existing scene materials and water, but a single tone-map pass instead
 // of desktop AO, temporal reconstruction, motion blur, bloom and lens effects.
@@ -25,7 +26,7 @@ export class XRRenderer {
 
 	}
 
-	render( views, rig ) {
+	render( views, rig, bridge = null ) {
 
 		const app = this.app, camera = app.camera;
 		const position = camera.position.clone(), quaternion = camera.quaternion.clone();
@@ -38,6 +39,7 @@ export class XRRenderer {
 		GPU.submit();
 		try {
 
+			bridge?.beginFrame();
 			const cleared = new Map();
 			for ( const { view, subImage } of views ) {
 
@@ -45,7 +47,7 @@ export class XRRenderer {
 				FrameUniforms.fields.frameIndex.value = GPU.frame;
 				this.world.multiplyMatrices( rig, new Matrix4().fromArray( view.transform.matrix ) );
 				this.world.decompose( camera.position, camera.quaternion, this.scale );
-				reversedProjection( camera.projectionMatrix, view.projectionMatrix );
+				( bridge ? webglReversedProjection : reversedProjection )( camera.projectionMatrix, view.projectionMatrix );
 				camera.projectionMatrixInverse.copy( camera.projectionMatrix ).invert();
 				camera.updateMatrixWorld();
 				const v = subImage.viewport;
@@ -55,16 +57,17 @@ export class XRRenderer {
 				app.sceneRenderer.render();
 				// No compositor depth is supplied: the scene uses reversed depth, while
 				// a projection layer expects ordinary depth. Scene depth stays private.
-				const descriptor = subImage.getViewDescriptor();
+				const descriptor = bridge ? null : subImage.getViewDescriptor();
 				let layers = cleared.get( subImage.colorTexture );
 				if ( ! layers ) cleared.set( subImage.colorTexture, layers = new Set() );
-				const layer = descriptor.baseArrayLayer || 0;
+				const layer = descriptor?.baseArrayLayer || 0;
 				this.output.render( {
-					colorViews: [ subImage.colorTexture.createView( descriptor ) ],
-					viewport: [ v.x, v.y, v.width, v.height, 0, 1 ], clear: layers.has( layer ) ? null : [ 0, 0, 0, 1 ],
+					colorViews: [ bridge ? bridge.target( v.width, v.height ) : subImage.colorTexture.createView( descriptor ) ],
+					viewport: [ bridge ? 0 : v.x, bridge ? 0 : v.y, v.width, v.height, 0, 1 ], clear: bridge || ! layers.has( layer ) ? [ 0, 0, 0, 1 ] : null,
 				} );
 				layers.add( layer );
 				GPU.submit();
+				bridge?.present( v );
 
 			}
 

@@ -44,7 +44,7 @@ test( 'resolution values are bounded; unsupported browsers have clear fallback m
 	assert.equal( projectionScale( '0.5' ), 0.5 );
 	assert.match( supportMessage( {} ), /HTTPS/ );
 	assert.match( supportMessage( { isSecureContext: true, navigator: { gpu: {} } } ), /WebXR/ );
-	assert.match( supportMessage( { isSecureContext: true, navigator: { gpu: {}, xr: {} } } ), /WebGPU in WebXR/ );
+	assert.match( supportMessage( { isSecureContext: true, navigator: { gpu: {}, xr: {} } } ), /presentation layer/ );
 	assert.equal( supportMessage( { isSecureContext: true, navigator: { gpu: {}, xr: {} }, XRGPUBinding: function () {} } ), null );
 
 } );
