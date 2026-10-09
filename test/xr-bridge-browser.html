@@ -8,6 +8,9 @@ import { XRWebGLBridge } from '/src/xr/XRWebGLBridge.js';
 
 window.__xrBridgeResult = { state: 'pending' };
 let bridge;
+let rejectedUploads = 0;
+const rejectGPUCanvas = new URLSearchParams( location.search ).has( 'rejectGPUCanvas' );
+const size = 2 * Math.floor( Math.max( 32, Math.min( 2048, Number( new URLSearchParams( location.search ).get( 'size' ) ) || 256 ) ) / 2 );
 try {
 
 	const adapter = await navigator.gpu.requestAdapter();
@@ -28,7 +31,21 @@ try {
 			element.getContext = ( type, ...options ) => {
 
 				const context = getContext( type, ...options );
-				if ( context && type.startsWith( 'webgl' ) ) context.makeXRCompatible = async () => {};
+				if ( context && type.startsWith( 'webgl' ) ) {
+					context.makeXRCompatible = async () => {};
+					const upload = context.texImage2D.bind( context );
+					context.texImage2D = ( ...args ) => {
+						if ( rejectGPUCanvas && args[ 5 ] === bridge?.staging ) {
+							// Generate a real INVALID_OPERATION to exercise the device failure
+							// branch, then restore the binding for the Canvas2D retry.
+							const texture = context.getParameter( context.TEXTURE_BINDING_2D );
+							context.bindTexture( context.TEXTURE_2D, null );
+							upload( ...args );
+							context.bindTexture( context.TEXTURE_2D, texture );
+							rejectedUploads ++;
+						} else upload( ...args );
+					};
+				}
 				return context;
 
 			};
@@ -44,7 +61,7 @@ try {
 			this.framebuffer = gl.createFramebuffer();
 			this.testTexture = gl.createTexture();
 			gl.bindTexture( gl.TEXTURE_2D, this.testTexture );
-			gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, 64, 32, 0, gl.RGBA, gl.UNSIGNED_BYTE, null );
+			gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, size * 2, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null );
 			gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST );
 			gl.bindFramebuffer( gl.FRAMEBUFFER, this.framebuffer );
 			gl.framebufferTexture2D( gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.testTexture, 0 );
@@ -65,24 +82,27 @@ try {
 }
 @fragment fn fs(@builtin(position) p:vec4f) -> @location(0) vec4f {
 	var c=${ eye === 0 ? 'vec3f(1.0,0.0,0.0)' : 'vec3f(0.0,1.0,0.0)' };
-	if(p.y>=16.0){c=${ eye === 0 ? 'vec3f(0.0,0.0,1.0)' : 'vec3f(1.0,0.0,0.0)' };}
-	if(p.x>=16.0){${ eye === 0 ? 'c.g=1.0;' : 'c.b=1.0;' }} return vec4f(c,1.0);
+	if(p.y>=${ size / 2 }.0){c=${ eye === 0 ? 'vec3f(0.0,0.0,1.0)' : 'vec3f(1.0,0.0,0.0)' };}
+	if(p.x>=${ size / 2 }.0){${ eye === 0 ? 'c.g=1.0;' : 'c.b=1.0;' }} return vec4f(c,1.0);
 }` } );
 		const pipeline = GPU.device.createRenderPipeline( { layout: 'auto', vertex: { module, entryPoint: 'vs' }, fragment: { module, entryPoint: 'fs', targets: [ { format: bridge.format } ] }, primitive: { topology: 'triangle-list' } } );
 		const encoder = GPU.device.createCommandEncoder();
-		const pass = encoder.beginRenderPass( { colorAttachments: [ { view: bridge.target( 32, 32 ), loadOp: 'clear', storeOp: 'store', clearValue: [ 0, 0, 0, 1 ] } ] } );
+		const pass = encoder.beginRenderPass( { colorAttachments: [ { view: bridge.target( size, size ), loadOp: 'clear', storeOp: 'store', clearValue: [ 0, 0, 0, 1 ] } ] } );
 		pass.setPipeline( pipeline ); pass.draw( 3 ); pass.end();
 		GPU.device.queue.submit( [ encoder.finish() ] );
 		// Intentionally no await: production copies both eyes in the same XR callback.
-		bridge.present( { x: eye * 32, y: 0, width: 32, height: 32 } );
+		bridge.gl.activeTexture( bridge.gl.TEXTURE1 );
+		bridge.gl.bindTexture( bridge.gl.TEXTURE_2D, bridge.layer.testTexture );
+		bridge.gl.useProgram( null );
+		bridge.present( { x: eye * size, y: 0, width: size, height: size } );
 
 	}
-	const gl = bridge.gl, pixels = {};
+	const gl = bridge.gl, pixels = {}, q = size / 4;
 	for ( const [ name, x, y, expected ] of [
-		[ 'leftTopLeft', 8, 24, [ 255, 0, 0, 255 ] ], [ 'leftTopRight', 24, 24, [ 255, 255, 0, 255 ] ],
-		[ 'leftBottomLeft', 8, 8, [ 0, 0, 255, 255 ] ], [ 'leftBottomRight', 24, 8, [ 0, 255, 255, 255 ] ],
-		[ 'rightTopLeft', 40, 24, [ 0, 255, 0, 255 ] ], [ 'rightTopRight', 56, 24, [ 0, 255, 255, 255 ] ],
-		[ 'rightBottomLeft', 40, 8, [ 255, 0, 0, 255 ] ], [ 'rightBottomRight', 56, 8, [ 255, 0, 255, 255 ] ],
+		[ 'leftTopLeft', q, 3*q, [ 255, 0, 0, 255 ] ], [ 'leftTopRight', 3*q, 3*q, [ 255, 255, 0, 255 ] ],
+		[ 'leftBottomLeft', q, q, [ 0, 0, 255, 255 ] ], [ 'leftBottomRight', 3*q, q, [ 0, 255, 255, 255 ] ],
+		[ 'rightTopLeft', 5*q, 3*q, [ 0, 255, 0, 255 ] ], [ 'rightTopRight', 7*q, 3*q, [ 0, 255, 255, 255 ] ],
+		[ 'rightBottomLeft', 5*q, q, [ 255, 0, 0, 255 ] ], [ 'rightBottomRight', 7*q, q, [ 255, 0, 255, 255 ] ],
 	] ) {
 
 		const pixel = new Uint8Array( 4 ); gl.readPixels( x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel );
@@ -93,9 +113,11 @@ try {
 	await GPU.device.queue.onSubmittedWorkDone();
 	const validation = await GPU.device.popErrorScope();
 	if ( validation || errors.length ) throw Error( validation?.message || errors.join( '\n' ) );
+	const transferMode = bridge.transferMode;
+	if ( rejectGPUCanvas && ( transferMode !== 'canvas2d' || rejectedUploads !== 1 ) ) throw Error( 'Rejected GPU canvas did not recover persistently via Canvas2D.' );
 	gl.deleteTexture( bridge.layer.testTexture ); gl.deleteFramebuffer( bridge.layer.framebuffer );
 	bridge.dispose();
-	window.__xrBridgeResult = { state: 'passed', checks: 'Real WebGPU → WebGL canvas transfer, same-callback distinct eyes, all quadrants, vertical orientation, no graphics validation errors.', pixels };
+	window.__xrBridgeResult = { state: 'passed', size, transferMode, rejectedUploads, checks: 'Real WebGPU → WebGL canvas transfer, restored bindings, same-callback distinct eyes, all quadrants, vertical orientation, no unexpected graphics validation errors.', pixels };
 
 } catch ( error ) {
 

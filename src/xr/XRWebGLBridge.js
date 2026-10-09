@@ -11,8 +11,8 @@ export function webglReversedProjection( out, projection ) {
 }
 
 // Present the existing WebGPU scene through the standard WebGL XR compositor.
-// Canvas uploads keep this on the browser's graphics path, without JS pixel
-// readback. The extra cross-API copy is a compatibility cost to measure on Quest.
+// Prefer a direct canvas upload, with a Canvas2D snapshot when the browser rejects
+// WebGPU canvases as WebGL sources. Both paths need performance testing on Quest.
 export class XRWebGLBridge {
 
 	async init( session, scale ) {
@@ -47,7 +47,7 @@ export class XRWebGLBridge {
 		gl.bindBuffer( gl.ARRAY_BUFFER, this.buffer );
 		gl.bufferData( gl.ARRAY_BUFFER, new Float32Array( [ - 1, - 1, 3, - 1, - 1, 3 ] ), gl.STATIC_DRAW );
 		gl.useProgram( this.program );
-		const position = gl.getAttribLocation( this.program, 'position' );
+		const position = this.positionAttribute = gl.getAttribLocation( this.program, 'position' );
 		gl.enableVertexAttribArray( position );
 		gl.vertexAttribPointer( position, 2, gl.FLOAT, false, 0, 0 );
 		this.texture = gl.createTexture();
@@ -65,6 +65,8 @@ export class XRWebGLBridge {
 		if ( ! this.context ) throw new Error( 'Could not create the VR compatibility WebGPU canvas.' );
 		this.format = navigator.gpu.getPreferredCanvasFormat();
 		this.context.configure( { device: GPU.device, format: this.format, alphaMode: 'opaque', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC } );
+		this.transferMode = 'direct';
+		this._checkError( 'graphics setup' );
 		return this;
 
 	}
@@ -92,6 +94,7 @@ export class XRWebGLBridge {
 		gl.bindFramebuffer( gl.FRAMEBUFFER, this.layer.framebuffer );
 		gl.clearColor( 0, 0, 0, 1 );
 		gl.clear( gl.COLOR_BUFFER_BIT );
+		this._checkError( 'framebuffer clear' );
 
 	}
 
@@ -106,12 +109,63 @@ export class XRWebGLBridge {
 	present( viewport ) {
 
 		const gl = this.gl;
+		// Upload into our own texture with no opaque XR framebuffer bound. Restore
+		// every binding used by the draw instead of relying on initialization state.
+		gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+		gl.activeTexture( gl.TEXTURE0 );
+		gl.bindTexture( gl.TEXTURE_2D, this.texture );
+		gl.pixelStorei( gl.UNPACK_FLIP_Y_WEBGL, true );
+		gl.pixelStorei( gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE );
+		this._checkError( 'texture binding' );
+		if ( this.transferMode === 'direct' ) {
+
+			let failure;
+			try { gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.staging ); }
+			catch ( error ) { failure = error; }
+			const error = gl.getError();
+			if ( failure || error !== gl.NO_ERROR ) {
+
+				if ( gl.isContextLost() ) throw new Error( 'The VR compatibility graphics context was lost.' );
+				this.directTransferFailure = failure?.message || 'WebGL ' + error;
+				this.transferMode = 'canvas2d';
+
+			}
+
+		}
+		if ( this.transferMode === 'canvas2d' ) {
+
+			if ( ! this.copyCanvas ) {
+
+				this.copyCanvas = document.createElement( 'canvas' );
+				this.copyContext = this.copyCanvas.getContext( '2d', { alpha: false } );
+				if ( ! this.copyContext ) throw new Error( 'VR canvas transfer recovery requires a Canvas2D context.' );
+
+			}
+			if ( this.copyCanvas.width !== this.staging.width ) this.copyCanvas.width = this.staging.width;
+			if ( this.copyCanvas.height !== this.staging.height ) this.copyCanvas.height = this.staging.height;
+			try { this.copyContext.drawImage( this.staging, 0, 0 ); }
+			catch ( error ) { throw new Error( 'VR compatibility Canvas2D snapshot failed: ' + error.message ); }
+			try { gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.copyCanvas ); }
+			catch ( error ) { throw new Error( 'VR compatibility Canvas2D texture upload failed: ' + error.message ); }
+			this._checkError( 'Canvas2D texture upload (direct source rejected: ' + this.directTransferFailure + ')' );
+
+		}
 		gl.bindFramebuffer( gl.FRAMEBUFFER, this.layer.framebuffer );
 		gl.viewport( viewport.x, viewport.y, viewport.width, viewport.height );
-		gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.staging );
+		gl.useProgram( this.program );
+		gl.bindBuffer( gl.ARRAY_BUFFER, this.buffer );
+		gl.enableVertexAttribArray( this.positionAttribute );
+		gl.vertexAttribPointer( this.positionAttribute, 2, gl.FLOAT, false, 0, 0 );
 		gl.drawArrays( gl.TRIANGLES, 0, 3 );
+		this._checkError( 'compositor draw' );
+
+	}
+
+	_checkError( stage ) {
+
+		const gl = this.gl;
 		const error = gl.getError();
-		if ( error !== gl.NO_ERROR ) throw new Error( 'VR compatibility canvas transfer failed (WebGL ' + error + ').' );
+		if ( error !== gl.NO_ERROR ) throw new Error( `VR compatibility ${ stage } failed (WebGL ${ error }).` );
 
 	}
 
@@ -133,6 +187,7 @@ export class XRWebGLBridge {
 		this.texture = this.buffer = this.program = null;
 		this.context = this.gl = null;
 		this.canvas = this.staging = null;
+		this.copyContext = this.copyCanvas = null;
 
 	}
 

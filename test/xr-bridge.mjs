@@ -11,7 +11,7 @@ close( new Vector3( 0, 0, - 0.06 ).applyMatrix4( reversed ).z, 1 );
 close( new Vector3( 0, 0, - 1000 ).applyMatrix4( reversed ).z, 0 );
 console.log( 'PASS WebGL asymmetric eye projection converts to reversed WebGPU depth without changing x/y.' );
 
-let calls, failContext = false, failTransfer = false, gate = null, deleted;
+let calls, failContext = false, rejectDirect = false, rejectCopy = false, failDraw = false, pendingError = 0, gate = null, deleted;
 const context = { configure() { calls.push( 'configure' ); }, unconfigure() { calls.push( 'unconfigure' ); }, getCurrentTexture() { return { createView: () => ( {} ) }; } };
 const gl = {
 	VERTEX_SHADER: 1, FRAGMENT_SHADER: 2, COMPILE_STATUS: 3, LINK_STATUS: 4, ARRAY_BUFFER: 5, STATIC_DRAW: 6, FLOAT: 7,
@@ -25,12 +25,20 @@ const gl = {
 	enableVertexAttribArray() {}, vertexAttribPointer() {}, createTexture: () => ( {} ), activeTexture() {}, bindTexture() {},
 	texParameteri() {}, pixelStorei() {}, uniform1i() {}, getUniformLocation: () => ( {} ), isContextLost: () => false,
 	bindFramebuffer( target, framebuffer ) { calls.push( [ 'framebuffer', framebuffer ] ); }, clearColor() {}, clear() { calls.push( 'clear' ); },
-	viewport( ...v ) { calls.push( [ 'viewport', ...v ] ); }, texImage2D( ...args ) { calls.push( [ 'upload', args[ 5 ] ] ); },
-	drawArrays() { calls.push( 'draw' ); }, getError: () => failTransfer ? 1282 : 0,
+	viewport( ...v ) { calls.push( [ 'viewport', ...v ] ); }, texImage2D( ...args ) {
+		calls.push( [ 'upload', args[ 5 ] ] );
+		if ( rejectDirect && args[ 5 ].isGPUCanvas || rejectCopy && args[ 5 ].is2DCanvas ) pendingError = 1282;
+	},
+	drawArrays() { calls.push( 'draw' ); if ( failDraw ) pendingError = 1282; },
+	getError() { const error = pendingError; pendingError = 0; return error; },
 	deleteTexture() { deleted.texture++; }, deleteBuffer() { deleted.buffer++; }, deleteProgram() { deleted.program++; },
 	getExtension: () => ( { loseContext() { calls.push( 'lose' ); } } ),
 };
-globalThis.document = { createElement: () => ( { width: 300, height: 150, getContext: type => type === 'webgpu' ? context : failContext ? null : gl } ) };
+globalThis.document = { createElement: () => ( { width: 300, height: 150, getContext( type ) {
+	if ( type === 'webgpu' ) { this.isGPUCanvas = true; return context; }
+	if ( type === '2d' ) { this.is2DCanvas = true; return { drawImage( ...args ) { calls.push( [ 'snapshot', ...args ] ); } }; }
+	return failContext ? null : gl;
+} } ) };
 const originalNavigator = Object.getOwnPropertyDescriptor( globalThis, 'navigator' );
 Object.defineProperty( globalThis, 'navigator', { configurable: true, value: { gpu: { getPreferredCanvasFormat: () => 'bgra8unorm' } } } );
 globalThis.GPUTextureUsage = { RENDER_ATTACHMENT: 16, COPY_SRC: 1 };
@@ -48,10 +56,32 @@ try {
 	assert.deepEqual( calls.find( c => c[ 0 ] === 'viewport' ), [ 'viewport', 640, 0, 640, 720 ] );
 	assert.equal( calls.find( c => c[ 0 ] === 'upload' )[ 1 ], bridge.staging );
 	assert.ok( calls.findIndex( c => c[ 0 ] === 'upload' ) < calls.indexOf( 'draw' ) );
-	failTransfer = true; assert.throws( () => bridge.present( { x: 0, y: 0, width: 640, height: 720 } ), /transfer failed/ ); failTransfer = false;
+	const firstUpload = calls.findIndex( c => c[ 0 ] === 'upload' );
+	assert.equal( calls.slice( 0, firstUpload ).filter( c => c[ 0 ] === 'framebuffer' ).at( - 1 )[ 1 ], null, 'canvas upload must not bind the opaque XR framebuffer' );
+	assert.equal( bridge.transferMode, 'direct' );
+	rejectDirect = true;
+	const beforeRecovery = calls.length;
+	bridge.present( { x: 0, y: 0, width: 640, height: 720 } );
+	assert.equal( bridge.transferMode, 'canvas2d' );
+	assert.equal( bridge.directTransferFailure, 'WebGL 1282' );
+	assert.deepEqual( calls.slice( beforeRecovery ).filter( c => c[ 0 ] === 'upload' ).map( c => c[ 1 ] ), [ bridge.staging, bridge.copyCanvas ] );
+	assert.equal( calls.find( c => c[ 0 ] === 'snapshot' )[ 1 ], bridge.staging );
+	assert.equal( bridge.copyCanvas.width, 640 ); assert.equal( bridge.copyCanvas.height, 720 );
+	bridge.target( 320, 240 );
+	const beforeNextEye = calls.length;
+	bridge.present( { x: 320, y: 0, width: 320, height: 240 } );
+	assert.equal( bridge.copyCanvas.width, 320 ); assert.equal( bridge.copyCanvas.height, 240 );
+	assert.deepEqual( calls.slice( beforeNextEye ).filter( c => c[ 0 ] === 'upload' ).map( c => c[ 1 ] ), [ bridge.copyCanvas ] );
+	assert.equal( calls.filter( c => c[ 0 ] === 'snapshot' ).length, 2, 'each eye must snapshot its own current image' );
+	rejectCopy = true;
+	assert.throws( () => bridge.present( { x: 0, y: 0, width: 320, height: 240 } ), /Canvas2D texture upload.*WebGL 1282/ );
+	rejectCopy = rejectDirect = false;
+	failDraw = true;
+	assert.throws( () => bridge.present( { x: 0, y: 0, width: 320, height: 240 } ), /compositor draw failed.*1282/ ); failDraw = false;
 	bridge.dispose(); bridge.dispose(); assert.deepEqual( deleted, { texture: 1, buffer: 1, program: 1 } );
 	assert.equal( calls.filter( c => c === 'unconfigure' ).length, 1 ); assert.equal( bridge.gl, null );
-	console.log( 'PASS compositor viewport, canvas upload before draw, transfer errors and idempotent resource cleanup.' );
+	assert.equal( bridge.copyCanvas, null ); assert.equal( bridge.copyContext, null );
+	console.log( 'PASS compositor viewport, upload-before-draw, 1282 recovery with fresh/resized eye snapshots, stage-specific failures and resource cleanup.' );
 
 	calls = []; failContext = true; const failed = new XRWebGLBridge();
 	await assert.rejects( failed.init( {}, 0.5 ), /WebGL context/ ); failed.dispose(); failContext = false;
