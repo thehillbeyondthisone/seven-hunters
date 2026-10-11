@@ -52,6 +52,7 @@ import { Rocks } from './world/Rocks.js';
 import { Debris } from './world/Debris.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
 import { RevealGulls } from './story/RevealGulls.js';
+import { WinterEcology } from './world/flannan/WinterEcology.js';
 import { Whale } from './world/marine/Whale.js';
 
 import { OceanFFT } from './ocean/OceanFFT.js';
@@ -533,6 +534,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.freeCam = qs.has( 'fly' );
 		// Only the three local gulls, without enabling Tidewater's tropical wildlife.
 		this.islandGulls = this.flannan && ! qs.has( 'noWildlife' ) && ! qs.has( 'lite' ) ? new RevealGulls( { scene, csm: this.csm } ) : null;
+		this.winterEcology = this.flannan && !qs.has('noWildlife') && !qs.has('lite') ? new WinterEcology({scene,csm:this.csm,terrain:this.terrainData}) : null;
 
 		// ---------------------------------------------------------------- post
 		await progress( 0.34, 'Preparing the shaders…' );
@@ -1011,6 +1013,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.boat.update( dt );
 		if ( this.wildlife ) this.wildlife.update( dt, this.camera, this.freeCam ? null : this.player );
 		this.islandGulls?.update();
+		this.winterEcology?.update(dt,this.camera,{daylight:1-G.night.value,wind:G.windSpeed.value,suppressed:!!this.story?.islandReveal?.active,paused:!!this.story?.ui.open||!!this.mobile?.paused||!!globalThis.document?.hidden});
 		if ( this.devArmory ) this.devArmory.update( dt );
 		this.playground?.update( dt );
 		if ( this.handLamp ) {

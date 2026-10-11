@@ -8,6 +8,8 @@ import { dressKeepersRoom, deskOilLamp } from './InteriorDressing.js';
 import { keeperTable, keeperChair, rangeDetails } from './InteriorCraft.js';
 import { nextRooms, haulingShed, KITCHEN, HAULING_SHED } from './NextRooms.js';
 import { ChimneySmoke } from './ChimneySmoke.js';
+import { gradeBothies, buildBothies } from './IslandHistory.js';
+import { winterCoverMaterial, buildWinterCover } from './WinterCover.js';
 import { Builder, Part, quad01Part, sagPoints } from '../village/GeoBuilder.js';
 import { windowUnit } from '../village/Buildings.js';
 import { lin, WOOD, HARD, C, bollard, ropeCoil, lantern } from '../Props.js';
@@ -42,7 +44,7 @@ export const STATION = {
 	compound: { x0: - 27, x1: 13, z0: - 6, z1: 21 }, // outer faces of the boundary wall
 	southGate: { x: - 12, z: 21, w: 3.4 },
 	eastGate: { x: 13, z: 6, w: 3.4 },
-	chapel: { x: - 8, z: 51 },
+	chapel: { x: - 35, z: 50 }, // NRHE grid offsets from the light, rotated approximately to true north
 	flagstaff: { x: 21, z: - 1 },
 };
 
@@ -1704,9 +1706,10 @@ function chapel( ctx, village, cx, cz, gy ) {
 		}
 		B.pop();
 	}
-	// The narrow opening remains dark; its existing dimensions are retained.
-	poly( B, 'hard', [ [xi0+.25,gy,d0], [xi0+.25,gy,d1], [xi0+.25,dh,d1], [xi0+.25,dh,d0] ],
-		q => [q[2],q[1]], { tint: [.008,.008,.008], data: HARD(.3,0,0,1) } );
+	// A real hollow interior and an earth/grit floor replace the black doorway card.
+	// The only opening remains the 0.45 x 0.95 m western doorway (2014 survey).
+	B.box( 'stone', (xi0+xi1)/2, gy-.04, 0, xi1-xi0, .08, zi1-zi0, { tint: lin(0x625e51), data: RUBBLE(.72) } );
+	B.box( 'stone', (xw+xi0)/2, gy-.025, (d0+d1)/2, xi0-xw, .05, d1-d0, { tint: lin(0x777365), data: RUBBLE(.41) } );
 	// Thin horizontal overlapping slabs form the corbelled slopes themselves.
 	// The roof envelope is retained as a reconstruction; modern rebuilding is
 	// documented in the archaeological record and does not date its 1901 state.
@@ -1725,7 +1728,10 @@ function chapel( ctx, village, cx, cz, gy ) {
 		}
 	}
 	B.pop();
-	colliders.addBox( new Vector3( cx+(xw+xe)/2,gy+1.2,cz+(zn+zs)/2 ), new Vector3( (xe-xw)/2,1.3,(zs-zn)/2 ), 0, { tag: 'chapel' } );
+	const block = (a,b,c,d,bottom=gy-.2,top=gy+2.5) => colliders.addBox(new Vector3(cx+(a+c)/2,(bottom+top)/2,cz+(b+d)/2),new Vector3((c-a)/2,(top-bottom)/2,(d-b)/2),0,{tag:'chapel-wall'});
+	block(xi0,zn,xi1,zi0);block(xi0,zi1,xi1,zs);block(xi1,zn,xe,zs);
+	block(xw,zn,xi0,d0);block(xw,d1,xi0,zs);block(xw,d0,xi0,d1,dh,gy+2.5);
+	colliders.addBox(new Vector3(cx-.05,gy-.04,cz),new Vector3(1.25,.04,.75),0,{walkable:true,solid:false,tag:'chapel-floor'});
 	village.footprints.push( { x: cx, z: cz, r: 3.2, kind: 'building' } );
 	village.buildings.push( { name: 'chapel', x: cx, z: cz, floorY: gy, roofTop: gy+2.5, stilts: false } );
 	return count;
@@ -1742,6 +1748,7 @@ export function buildStation( ctx, village ) {
 		village.textures.addStationSurfaces();
 		const T = village.textures.textures;
 		Object.assign( village.materials, { stationTimber: createStationTimber( T ), stationFloor: createStationTimber( T, true ), stationFlags: createStationFlags( T ), stationMasonry: createStationMasonry( T ), landingConcrete: createLandingConcrete( T ), landingRock: createLandingRock( T ), hard: createStationIron( T ) } );
+		village.materials.winterCover = winterCoverMaterial();
 
 	}
 
@@ -1765,7 +1772,8 @@ export function buildStation( ctx, village ) {
 	T.addPath( inSouth, { width: 1.8, mask: 0.9 } );
 	const ch = STATION.chapel, chY = mean( T, ch.x, ch.z, 2.5 );
 	T.flatten( ch.x, ch.z, 3.2, chY, 3 );
-	T.addPath( [ [ sg.x, sg.z + 2.5 ], [ - 13, 34 ], [ - 11.8, 45 ], [ ch.x - 2.9, ch.z + 0.25 ] ], { width: 0.9, mask: 0.7 } );
+	T.addPath( [ [ -45,27.5 ], [ ch.x - 4.8,38 ], [ ch.x - 3.6,46 ], [ ch.x - 2.9,ch.z + .25 ] ], { width: 0.9, mask: 0.6 } );
+	const bothySites = gradeBothies(T);
 	T.addPath( [ [ eg.x + 1.5, eg.z - 1.2 ], [ STATION.flagstaff.x - 0.8, STATION.flagstaff.z + 0.8 ] ], { width: 0.8, mask: 0.6 } );
 	// the tracks' grading lifts the ground near the heads of the flights: keep it under the treads
 	cutUnderFlight( T, E );
@@ -1791,7 +1799,11 @@ export function buildStation( ctx, village ) {
 	parts.masonry.chapel = chapel( ctx, village, ch.x, ch.z, chY );
 	parts.masonry.loose = islandStoneScatter( ctx.B, T, village.footprints, P.gneiss );
 	parts.marks.chapel = new Vector3( ch.x - 2.1, chY + 0.9, ch.z + 0.25 );
+	parts.history = { chapel: { x:ch.x,z:ch.z,floor:chY,interior:[2.5,1.5],door:[.45,.95],roof:'reconstructed, exact 1901 condition unknown' }, bothies:buildBothies(ctx,village,bothySites,P.gneiss) };
+	parts.marks.bothyLarge = new Vector3(bothySites[0].x+4,bothySites[0].floor+.7,bothySites[0].z);
+	parts.marks.bothySmall = new Vector3(bothySites[1].x,bothySites[1].floor+.7,bothySites[1].z-2.3);
 	haulingShed( ctx, village, parts );
+	parts.winterCover = buildWinterCover(ctx.B,T,village.footprints);
 
 	// a few of the lit windows light the yard at night (those facing it first)
 	lit.sort( ( a, b ) => b.dir.z - a.dir.z );

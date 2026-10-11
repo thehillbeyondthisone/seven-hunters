@@ -28,7 +28,9 @@ const srgb = ( r, g, b ) => `vec3f( ${ f( Math.pow( r, 2.2 ) ) }, ${ f( Math.pow
 
 export class BirdBatch {
 
-	constructor( { csm = null, capacity = 160 } = {} ) {
+	constructor( { csm = null, capacity = 160, plumage = 'tropical' } = {} ) {
+
+		this.plumage = plumage;
 
 		// ---- species rest shapes, one storage buffer (species-major)
 		const built = SPECIES.map( ( sp ) => buildBird( sp ) );
@@ -298,6 +300,18 @@ export class BirdBatch {
 		c = select( select( body, white, isTail ), select( wingBot, wingTop, top ), isWing );
 		c = select( c, select( ${ srgb( 0.12, 0.08, 0.08 ) }, ${ srgb( 0.42, 0.07, 0.07 ) }, hooded ), isBill );
 		c = select( c, ${ srgb( 0.16, 0.07, 0.07 ) }, isLeg );
+		${ this.plumage === 'flannan-winter' ? /* wgsl */`
+		// White-headed herring / great black-backed gulls, never the tropical black hood.
+		let darkBack = seed >= 0.65;
+		let winterMantle = select( ${ srgb(.66,.69,.70) }, ${ srgb(.10,.115,.12) }, darkBack );
+		let winterHead = mix(white,${ srgb(.65,.63,.59) },head*(fnz*.5+.5)*select(.17,.025,darkBack));
+		let winterBody = mix(winterHead,winterMantle,mantle);
+		let mirrors = smoothstep(.87,.92,u)*smoothstep(.99,.95,u)*smoothstep(.2,.6,v);
+		let winterTop = mix(mix(winterMantle,white,edge),mix(black,white,mirrors),tipK);
+		c = select(select(winterBody,white,isTail),select(wingBot,winterTop,top),isWing);
+		c = select(c,${ srgb(.85,.72,.30) },isBill);
+		c = select(c,${ srgb(.63,.43,.40) },isLeg);
+		` : '' }
 
 	} else if ( species == 1.0 ) {
 

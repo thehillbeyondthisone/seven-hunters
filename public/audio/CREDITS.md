@@ -4,6 +4,11 @@ The environmental sound recordings listed below come from [Freesound](https://fr
 **Creative Commons 0** (public domain dedication — no attribution required; credited here anyway).
 These recordings are not synthesised. Source: each sound's Freesound high-quality preview.
 
+Flannan's ambient January gull calls are procedural sound interpretations in
+`src/audio/WinterBirdCalls.js`, not field recordings or species-verified samples.
+They replace the randomly selected generic gull recordings on Flannan. No new audio
+recordings were downloaded for the older-island and winter-ecology pass.
+
 The separate hilltop music track, `the-three-note-reach.mp3`, was generated with Suno and supplied and selected by the user for the local game. It is not a Freesound recording or covered by the CC0 attribution above.
 
 Arrival study additions (`tools/audio/build-arrival.py`): six mono rowing excerpts from

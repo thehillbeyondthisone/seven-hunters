@@ -28,6 +28,8 @@ jobs:
         run: |
           node test/game-logic.mjs
           node test/flannan.mjs
+          node test/island-history.mjs
+          node test/ruin-inspection.mjs
           node test/demo-walk.mjs
           node test/demo-story.mjs
           node test/guidance.mjs

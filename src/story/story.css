@@ -194,6 +194,15 @@ body.is-island-reveal .tw-rail { opacity: 0; pointer-events: none; }
 
 .sh-page-wrap.is-on { opacity: 1; }
 
+/* Keep the low stone chamber visible above its optional history panel. */
+.sh-page-wrap.is-ruin { align-items:flex-end; justify-content:flex-end; background:none; padding:12px; }
+.is-ruin .sh-page { box-sizing:border-box; width:min(480px,100%); max-height:38vh; padding:16px 20px; transform:none; }
+.sh-page-wrap.is-ruin.is-on .sh-page { transform:none; }
+.is-ruin .sh-page-title { font-size:23px; margin:0 0 8px; }
+.is-ruin .sh-page-p { font-size:14px; line-height:1.45; margin:8px 0; }
+.is-ruin summary { cursor:pointer; font:14px/1.5 system-ui; }
+.is-ruin .sh-btn { margin-top:12px; min-height:44px; }
+
 .sh-page {
 	width: min(560px, 100%);
 	max-height: calc(100vh - 32px);

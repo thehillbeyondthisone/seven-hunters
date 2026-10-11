@@ -97,7 +97,7 @@ export class StoryUI {
 	}
 
 	// a page on the layer; resolves with what done( value ) is given
-	_page( build, { dismiss = true, cls = '', dismissKeys = [ 'Escape', 'KeyE', 'Enter' ] } = {} ) {
+	_page( build, { dismiss = true, cls = '', dismissKeys = [ 'Escape', 'KeyE', 'Enter' ], trapFocus = false, focusSelector = 'button:not(:disabled)' } = {} ) {
 
 		return new Promise( ( resolve ) => {
 
@@ -105,8 +105,12 @@ export class StoryUI {
 			const wrap = el( 'div', 'sh-page-wrap ' + cls );
 			const page = el( 'div', 'sh-page' );
 			wrap.append( page );
+			let settled = false;
 			const done = ( v ) => {
 
+				if ( settled ) return;
+				settled = true;
+				wrap.inert = true;
 				window.removeEventListener( 'keydown', key, true );
 				wrap.classList.remove( 'is-on' );
 				setTimeout( () => wrap.remove(), 350 );
@@ -117,6 +121,14 @@ export class StoryUI {
 
 			const key = ( e ) => {
 
+				if ( trapFocus && e.code === 'Tab' ) {
+					const buttons = [ ...page.querySelectorAll( focusSelector ) ].filter( b => ! b.closest( '[hidden]' ) );
+					const i = buttons.indexOf( document.activeElement );
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					buttons[ ( i + ( e.shiftKey ? -1 : 1 ) + buttons.length ) % buttons.length ]?.focus();
+					return;
+				}
 				if ( dismiss && dismissKeys.includes( e.code ) ) {
 
 					e.preventDefault();
@@ -132,6 +144,7 @@ export class StoryUI {
 			this.layer.append( wrap );
 			void wrap.offsetWidth;
 			wrap.classList.add( 'is-on' );
+			if ( trapFocus ) page.querySelector( 'button' )?.focus( { preventScroll: true } );
 
 		} );
 
@@ -406,6 +419,20 @@ export class StoryUI {
 			const back = el( 'button', 'sh-btn sh-btn-soft', 'Back to the watch' ); back.addEventListener( 'click', () => done( null ) );
 			page.append( chalk, back );
 		} );
+	}
+
+	ruinInspection( note ) {
+		const previousFocus=document.activeElement;
+		return this._page((page,done)=>{
+			page.setAttribute('role','dialog');page.setAttribute('aria-modal','true');page.setAttribute('aria-label',note.title);
+			page.append(el('h2','sh-page-title',note.title),el('p','sh-page-p',note.body[0]));
+			const history=el('details');history.append(el('summary','','History and reconstruction'));
+			for(const line of note.body.slice(1))history.append(el('p','sh-page-p',line));
+			const back=el('button','sh-btn','Step back');back.addEventListener('click',()=>done(null));
+			page.append(history,back);
+		},{cls:'is-ruin',trapFocus:true,focusSelector:'button:not(:disabled), summary',dismissKeys:['Escape','KeyE']}).finally(()=>{
+			if(previousFocus?.isConnected)previousFocus.focus?.({preventScroll:true});
+		});
 	}
 
 	read( { title, body } ) {

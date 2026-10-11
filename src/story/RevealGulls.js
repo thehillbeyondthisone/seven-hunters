@@ -12,7 +12,7 @@ export class RevealGulls {
 			const p = createPose( BIRD.GULL, .21 + i * .23 ); p.scale = 1.25; return p;
 		} );
 		this.elapsed = 0; this.origin = null; this.dir = null;
-		this.batch = scene ? new BirdBatch( { csm } ) : null;
+		this.batch = scene ? new BirdBatch( { csm, capacity:3, plumage:'flannan-winter' } ) : null;
 		if ( this.batch ) { this.batch.mesh.name = 'hilltop-gulls'; this.batch.mesh.visible = false; scene.add( this.batch.mesh ); }
 	}
 

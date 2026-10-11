@@ -513,9 +513,20 @@ export class Story {
 		} );
 
 		// out on the island
-		if ( m.chapel ) I.add( { id: 'chapel', at: m.chapel, reach: 2.2, size: 0.6, text: 'Teampull Beannachadh', use: read( S.NOTES.chapel ) } );
+		if ( m.chapel ) I.add( { id: 'chapel', at: m.chapel, reach: 2.2, size: 0.6, text: 'Look inside Teampull Beannachadh', use: () => this._inspectRuin('chapel',S.NOTES.chapel) } );
+		for(const id of ['bothyLarge','bothySmall'])if(m[id])I.add({id,at:m[id],reach:2.5,size:.7,text:'Look inside the old bothy',use:()=>this._inspectRuin(id,S.NOTES.bothies)});
 		if ( m.ropeBox ) I.add( { id: 'ropeBox', at: m.ropeBox, reach: 2.4, size: 0.8, text: 'The rope box', use: read( S.NOTES.ropeBox ) } );
 
+	}
+
+	async _inspectRuin(id,note) {
+		const history=this.station.parts.history;
+		if(!history)return this.ui.read(note);
+		const ch=history.chapel,s=id==='chapel'?ch:history.bothies.sites[id==='bothyLarge'?0:1];
+		const camera=this.app.camera,saved={position:camera.position.clone(),quaternion:camera.quaternion.clone()},moveCamera=!this.app.xr?.active;
+		// A reversible low inspection view; physical XR head position is never overridden.
+		if(moveCamera)this.ruinInspect={position:new Vector3(s.x+(id==='chapel'?-2.25:id==='bothyLarge'?2.9:0),s.floor+.62,s.z+(id==='chapel'?.245:id==='bothySmall'?-1.9:0)),target:new Vector3(s.x+.5,s.floor+.55,s.z)};
+		try{await this.ui.ruinInspection(note);}finally{this.ruinInspect=null;if(moveCamera){camera.position.copy(saved.position);camera.quaternion.copy(saved.quaternion);this.app.cameraCut?.();}}
 	}
 
 	_toggle( name ) {
@@ -1038,6 +1049,7 @@ export class Story {
 	}
 
 	update( dt ) {
+		if(this.ruinInspect){this.app.camera.position.copy(this.ruinInspect.position);this.app.camera.lookAt(this.ruinInspect.target);this.lamp.update(dt,0);return;}
 		this.keeper?.sync();
 
 		const app = this.app;

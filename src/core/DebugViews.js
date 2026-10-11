@@ -4,6 +4,11 @@ import { hazeDensityForVisibility } from '../post/AirHaze.js';
 // Named review cameras used to check every change from the same set of angles.
 // window.__view( name ) jumps there; window.__views lists them.
 export const VIEWS = {
+	historyChapel: {p:[-41,0,55],terrainEye:1.62,at:[-35,0,50],terrainTarget:1,fov:68,time:12.4},
+	historyDoor: {p:[-38.3,0,50.245],terrainEye:.68,at:[-34.3,0,50.245],terrainTarget:.48,fov:64,time:12.4},
+	historyBothies: {p:[-319,0,32],terrainEye:1.62,at:[-340,0,12],terrainTarget:1,fov:68,time:12.4},
+	historyChambers: {p:[-331,0,14],terrainEye:2.5,at:[-335,0,12],terrainTarget:.5,fov:80,time:12.4},
+	winterCover: {p:[-32.88073,0,43.29669],terrainEye:.6,at:[-33.23073,0,42.84669],terrainTarget:.07,fov:52,time:12.4},
 	// Interior craft and original documents, at the same human-scale positions in each review.
 	iRoom: { p:[-1.6,82.67,4.3],at:[-6.4,82.4,1.1],fov:72,time:14.2 },
 	iRoomNight: { p:[-1.6,82.67,4.3],at:[-6.4,82.4,1.1],fov:72,time:19 },
@@ -21,7 +26,7 @@ export const VIEWS = {
 	dReturn: { p: [ -157, 0, 44 ], terrainEye: 1.62, at: [ -2.1, 87, 10.5 ], fov: 62, time: 18.0, vis: 2.5 },
 	// Fitted stonework review, separate from normal player/story state.
 	stoneBoundary: { p: [ 18, 82.1, 18 ], at: [ 13, 80.9, 16 ], fov: 58, time: 12.4 },
-	stoneChapel: { p: [ -12.8, 73.42, 55.7 ], at: [ -8, 72.52, 51 ], fov: 62, time: 12.4 },
+	stoneChapel: { p: [ -41, 0, 55 ], terrainEye: 1.62, at: [ -35, 0, 50 ], terrainTarget: 1, fov: 62, time: 12.4 },
 	stoneScatter: { p: [ -3, 73.82, 59 ], at: [ -3.5, 71.5, 55.5 ], fov: 62, time: 12.4 },
 	beach: { p: [ 15, 3.0, - 58 ], yaw: Math.PI, pitch: - 0.08, time: 16.2 },
 	surf: { p: [ 12, 1.7, - 44 ], yaw: Math.PI + 0.25, pitch: - 0.02, time: 16.2 },

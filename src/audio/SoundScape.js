@@ -1,5 +1,6 @@
-// Sample-based sound for the island: real field recordings only (public/audio, sources and licences in
-// public/audio/CREDITS.md). Nothing is synthesised. Files are fetched and decoded after the first user
+// Sample-based ambience (public/audio, sources and licences in public/audio/CREDITS.md).
+// Flannan's January gull calls use procedural interpretations in WinterBirdCalls.js.
+// Files are fetched and decoded after the first user
 // gesture (resume()); boat, underwater, pier and night sounds load the first time they become audible.
 //
 // Surf is wave by wave, driven by the game's own shore waves (ShoreWaves): a CPU mirror of their phase
@@ -1129,6 +1130,8 @@ export class SoundScape {
 	// gulls and terns: each call from a real bird of the wildlife near the listener (the nearer, the
 	// likelier - and louder); without the wildlife, gulls from somewhere over the shore
 	_life( dt ) {
+
+		if(this.flannan){globalThis.__app?.winterEcology?.calls.update(dt,this);return;}
 
 		const e = this.env;
 		if ( e.day < 0.35 || e.u > 0.5 ) return;

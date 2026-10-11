@@ -7,6 +7,8 @@
     "dev:mobile": "node tools/mobile/serve.mjs",
     "test:mobile": "node test/mobile-input.mjs",
     "test:surfaces": "node test/station-surfaces.mjs",
+    "test:island-history": "node test/island-history.mjs && node test/ruin-inspection.mjs",
+    "shots:island-history": "node tools/shots/island-history.mjs after",
     "test:station-atmosphere": "node test/station-atmosphere.mjs",
     "test:mobile-render": "node test/mobile-render.mjs",
     "test:xr": "node test/xr-startup.mjs && node test/xr-adapter.mjs && node test/xr.mjs && node test/xr-session.mjs && node test/xr-bridge.mjs && node test/xr-bridge-session.mjs && node test/xr-render.mjs",
