@@ -1,0 +1,225 @@
+{
+  "title": "Lighthouse tender Hesperus (1896)",
+  "prepared": "2026-10-13",
+  "setting": "The relief tender of the Flannan story; game date 3 January 1901",
+  "scope": "Local study references for a distant ship model. Scans and photographs are retained unchanged and are git-ignored; no generated concepts are included.",
+  "identity": "Steel twin-screw steamer, Gourlay Brothers & Co, Dundee (Camperdown yard), yard no. 171, official number 104924, signal letters PMRW, registered Leith. Owner: Commissioners of Northern Lighthouses, 84 George Street, Edinburgh. Renamed Ascog 1939, broken up 1940.",
+  "notThisShip": [
+    "The 1873 iron clipper ship Hesperus (Orient Line). Often attached to the Flannan story in error; most Wikimedia Commons results are this ship.",
+    "Hesperus (II), the 1939 Caledon-built motor tender. All Hesperus photographs on grantonhistory.org, shipsnostalgia.com and the 1964 Ships of the Clyde entry are this later ship."
+  ],
+  "licence": {
+    "lloydsRegister": "Copyright Lloyd's Register. The Heritage Centre terms of use allow downloading extracts for the user's own non-commercial use, unmodified, with the notice retained. Not for redistribution. https://heritage.lrfoundation.org.uk/terms-of-use",
+    "ramseyPhotograph": "Copyright Manx National Heritage / Bridgeman Images; licensable through iMuseum. Local study copy only.",
+    "analogues": "Uncredited on the source page; site copyright David King. Local study copies only."
+  },
+  "records": [
+    {
+      "kind": "plan",
+      "priority": 1,
+      "files": ["lr-0126-rigging-plan-1896-07-16-a.jpg", "lr-0126-rigging-plan-1896-07-16-b.jpg"],
+      "title": "Rigging Plan, S.S. No. 171",
+      "date": "1896-07-16 (stamped 21-22 July 1896)",
+      "reference": "LRF-PUN-DUN124-0126-P",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/archive/110468425",
+      "observed": "Complete outboard starboard profile at 1/8 inch to the foot, bow to the right. Straight stem, elliptical counter stern. Two raked pole masts with gaffs and derricks, standing rigging and sails drawn. One raked funnel with a banded top. Two boats in davits on the bridge deck, wheelhouse and chart house forward of the funnel, steel deckhouse on the raised quarter deck, ports, rails, anchor, ensign and jack staffs. Dotted frame lines are drawn below the waterline; in the local scan the after side of the stern post is at px 221.5, frame 0 at about px 227 and the stem face at px 1875. Read in tiles at three to nine times enlargement: three shrouds a side on each mast and no ratlines drawn; forestay and fore topmast stay to the stem head, mainstay and main topmast stay to the after end of the boiler casing; one derrick on the mainmast and two on the foremast, all topped up; triangular trysails and staysails; a lantern on a bracket just above the fore lower masthead; four radial davits with heads turned aft; a tall cowl forward of the funnel; a winch abaft each hatch group, a windlass on the forecastle and a hand steering wheel at the stern; a hooded binnacle and a second pedestal instrument on the wheelhouse roof; a pennant at the main truck, a flag at the fore truck and an ensign at the staff. The figures 2 3/4, 2 and 2 3/8 in written over the main truck, fore truck and funnel are their rakes per foot. Sheet b is the verso, docketed 'Sail Plan'.",
+      "use": "Controlling silhouette for the model: mast heights and rake, funnel height and rake, boat and deckhouse positions.",
+      "confidence": "Builder's drawing for this hull, stamped by Lloyd's surveyors. A design drawing dated five months before completion; check details against the photograph."
+    },
+    {
+      "kind": "plan",
+      "priority": 1,
+      "files": ["lr-0124-profile-deck-plans-corrected-1896-07-16-a.jpg", "lr-0124-profile-deck-plans-corrected-1896-07-16-b.jpg"],
+      "title": "Corrected Profile and Deck Plans, Steel T.S.S. No. 171",
+      "date": "1896-07-16 (stamped 24 July 1896)",
+      "reference": "LRF-PUN-DUN124-0124-P",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/archive/110468426",
+      "observed": "Inboard profile plus raised quarter deck, bridge deck, forecastle deck, main deck, cabin sole and lower deck plans at 1/8 inch to the foot, with frame numbers and three small one-sided tank-end sections at frames 9, 17 and 89. Title block: length between perpendiculars 175 ft 0 in, breadth moulded 28 ft 0 in, depth moulded 14 ft 6 in. Labels include steel deckhouse, skylights, cargo hatches, engine and boiler casings, galley, teak companion, chart house and steam steering gear, captain's room, gangways, a buoy gangway on the starboard side, coal bunker and a hold space for gas tanks. The deck plans are structural: they draw no funnel, chart house, boats, windlass or bitts, and the engine and boiler casings are two separate openings on the bridge deck. Frame 0 is the fore side of the stern post, 6 in forward of the aft perpendicular. Sheet b is the verso, docketed 'Corrected Longitudinal Plan'.",
+      "use": "Deck outlines in plan, deckhouse footprints, hatch and casing positions, sheer and deck heights; tabulated in measurements.md. The frame 89 sketch is the only drawn section of the bow; the after-end sheet gives better sections aft.",
+      "confidence": "The corrected sheet supersedes the 19 May sheet. Read closely with gridded crops; fore-and-aft positions are tied to the frame numbers. Plan half-breadths read 0.1 to 0.15 m narrower in places than the midship section and the after-end sections, and the profile draws the bridge deck about 3 in higher than the written 6 ft 9 in."
+    },
+    {
+      "kind": "plan",
+      "priority": 1,
+      "files": ["lr-0125-midship-section-1896-05-19-a.jpg", "lr-0125-midship-section-1896-05-19-b.jpg"],
+      "title": "Midship Section, T.S.S. No. 171",
+      "date": "1896-05-19",
+      "reference": "LRF-PUN-DUN124-0125-P",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/archive/110468062",
+      "observed": "Half-section through the bridge and the engine and boiler casing, a half-section through the raised quarter deck and cabin sole further aft, and a part section forward, at 1/2 inch to the foot, with scantlings. Written figures include 14 ft 6 in depth at the lowest point, raised quarter deck 4 ft 0 in and bridge deck 6 ft 9 in above the main deck, 8 in round of beam, 4 ft 0 in bulwarks with a 9 x 2 1/2 in teak rail, 18 in casing coamings, frames spaced 22 in, a 70 ft bilge keel and two 3 x 1 1/2 in solid mouldings on the bridge side. An 'Equipment' block lists two 16 1/2 cwt and one 14 cwt stockless bowers, stream and kedge anchors, 195 fathoms of 1 5/16 in cable and the towline and warp. Sheet b is the verso docket.",
+      "use": "Hull cross-section at the widest point: bilge radius, tumblehome, deck camber and bulwark height. The written between-deck heights control the deck levels.",
+      "confidence": "Builder's drawing, two months older than the corrected profile. Text and dimensions transcribed in measurements.md; a few small figures (cabin sole height 7 ft 11 in, lower deck 6 ft 6 in) are read at medium confidence."
+    },
+    {
+      "kind": "plan",
+      "priority": 2,
+      "files": ["lr-0134-altered-after-end-1896-06-19-a.jpg", "lr-0134-altered-after-end-1896-06-19-b.jpg"],
+      "title": "Altered Arrangement at After End",
+      "date": "1896-06-19",
+      "reference": "LRF-PUN-DUN124-0134-P",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/archive/110468258",
+      "observed": "Scale 1/4 inch to the foot. Inboard profile from the taffrail to about frame 50 with frame numbers, plans of the cabin sole (frames 1 to 20) and the watertight flat (frames 11 to 29), full cross-sections at bulkheads 11 and 20, and a detail of the trimming tank's divisional bulkhead. The section at frame 11 is a straight-sided V up to the cabin sole; the section at frame 20 is wall-sided above a steep rise of floor. Ink notes move the tank bulkheads to frames 8 and 17, as drawn on the corrected profile.",
+      "use": "Stern shape and after sections, which the profile plans do not give. Also a second, larger-scale check on the deckhouse, skylights, after hatch, engine skylight and funnel casing.",
+      "confidence": "Builder's drawing, four weeks older than the corrected profile; its bulkhead positions are superseded but the hull form is not. Section and plan outlines extracted in measurements.md, with heights good to about 0.1 m."
+    },
+    {
+      "kind": "plan",
+      "priority": 2,
+      "files": ["lr-0130-mast-plan-1896-07-20-a.jpg", "lr-0130-mast-plan-1896-07-20-b.jpg"],
+      "title": "Mast Plan",
+      "date": "1896-07-20",
+      "reference": "LRF-PUN-DUN124-0130-P",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/archive/110468454",
+      "observed": "Foremast and mainmast drawn lying down as plain tapered steel tubes at 1/2 inch to the foot. Foremast 56 ft 8 1/2 in overall, housing 14 ft 2 1/2 in, partners to hounds 42 ft 6 in, 15 1/2 in at the partners; mainmast 49 ft 10 1/2 in overall, housing 10 ft 10 1/2 in, partners to hounds 39 ft 0 in, 14 1/2 in at the partners. 'Wooden Topmast' is written at the head of each with no dimensions, and no fittings are drawn. Sheet b is the verso docket.",
+      "use": "Lower mast lengths, taper and diameters. Topmast lengths have to be scaled from the rigging plan.",
+      "confidence": "Builder's drawing. Read in full; the head and heel diameters are small figures and rest partly on the survey report."
+    },
+    {
+      "kind": "plan",
+      "priority": 2,
+      "files": ["lr-0128-rudder-1896-07-20-a.jpg", "lr-0128-rudder-1896-07-20-b.jpg"],
+      "title": "Rudder Plan, T.S.S. No. 171",
+      "date": "1896-07-20",
+      "reference": "LRF-PUN-DUN124-0128-P",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/archive/110468455",
+      "observed": "Single-plate rudder, stern post and stern frame, with a pintle detail at 3 inches to the foot. Extreme length 23 ft 8 1/2 in, 5 in stock, head 3 ft 2 in above the wood quarter deck, plate 15/20 in thick, breadth abaft the stock given at 2 ft stations (1 ft 0 1/2 in, 2 ft 1 1/2 in, 3 ft 3 in, 3 ft 10 3/4 in, then about 4 ft 1 in at the widest). Sheet b is the verso docket with a surveyor's note.",
+      "use": "Underwater stern profile. Only matters if the model is ever seen close or in a trough.",
+      "confidence": "Builder's drawing. The upper stations were read at full size; the lower three ordinates only at reduced size."
+    },
+    {
+      "kind": "plan",
+      "priority": 3,
+      "files": ["lr-0135-profile-deck-plan-1896-05-19-a.jpg", "lr-0135-profile-deck-plan-1896-05-19-b.jpg"],
+      "title": "Profile and Deck Plan (cancelled first version)",
+      "date": "1896-05-19",
+      "reference": "LRF-PUN-DUN124-0135-P",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/archive/110468061",
+      "observed": "Earlier version of the profile and deck plans. The verso is docketed 'Cancelled Profile'.",
+      "use": "Comparison only. Do not model from this sheet.",
+      "confidence": "Superseded by LRF-PUN-DUN124-0124-P."
+    },
+    {
+      "kind": "plan",
+      "priority": 3,
+      "files": ["lr-0133-plumber-work-profile-1896-09-05-a.jpg", "lr-0133-plumber-work-profile-1896-09-05-b.jpg", "lr-0132-plumber-work-plan-1896-09-10.jpg", "lr-0131-bilge-tank-pumping-1896-09-02-a.jpg", "lr-0131-bilge-tank-pumping-1896-09-02-b.jpg", "lr-0127-main-boilers-1896-05-20-a.jpg", "lr-0127-main-boilers-1896-05-20-b.jpg"],
+      "title": "Internal arrangement plans: plumber work profile, gas tank arrangement, bilge and tank pumping, main boilers",
+      "date": "1896-05-20 to 1896-09-10",
+      "reference": "LRF-PUN-DUN124-0133-P, -0132-P, -0131-P, -0127-P",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/search/archive?related_vessel_id=14298",
+      "observed": "The gas tank sheet (0132) is titled 'Sketch shewing Arrangement of Gas Tanks' and notes that 'Gas is carried at a pressure of 11 atmospheres in 5 circular iron Tanks having a total capacity of 1500 cubic feet': two tanks 10 ft x 6 ft in the 'tween deck with a compressing engine between them under a hatch, and three tanks 10 ft x 6 ft 6 in in the hold, all between gas-tight bulkheads at frames 58 and 64. The plumber work profile (0133) is a full-length inboard profile with the piping; it labels the after deckhouse as saloon entrance and state room, and shows a sanitary tank at the companion on the bridge deck, a 4 in navy pump on the well deck at the bridge front, a fore peak air pipe at the stem and a W.C. supply tank under the forecastle. The pumping arrangement and boiler drawings were not read.",
+      "use": "The gas tank sheet explains the small hatch abaft the fore cargo hatch and documents the buoy-gas equipment. The plumber work profile adds a few deck fittings. The gas tank cross-section is one more hull section, not yet digitised.",
+      "confidence": "Builder's drawings. Catalogue title 'Plan of Plumber Work' for 0132 is a gas tank arrangement on the sheet itself. 0132 and 0133-a read; 0131 and 0127 unread."
+    },
+    {
+      "kind": "report",
+      "priority": 1,
+      "files": ["lr-0119-steel-steamer-report-1896-12-04-a.jpg", "lr-0119-steel-steamer-report-1896-12-04-b.jpg"],
+      "title": "Steel Steamer Report (first entry survey), Dundee report no. 6204",
+      "date": "1896-12-04",
+      "reference": "LRF-PUN-DUN124-0119-R",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/archive/110469341",
+      "observed": "Two decks with raised quarter deck; schooner rig, two masts; launched 22 October 1896; master James Ewing; destined voyage coasting. Register dimensions 175.0 x 28.1 x 13.85 ft, moulded depth 14 ft 7 in, round of beam 8 in. Raised quarter deck 53 ft, bridge deck 51.5 ft, forecastle 27.5 ft, with the quarter deck joined to the bridge. Steel lower masts, fore 56 ft 8 1/2 in and main 49 ft 10 1/2 in overall, 15 1/2 in and 14 1/2 in at the partners; pine topmasts and spars; 2 3/4 in steel wire shrouds and stays. Four boats, with no type, size or stowage given. Three Smith's patent stockless bower anchors. Clarke, Chapman windlass, no capstan. Teak engine room skylights on iron coamings. Cargo hatches 9 ft 2 in x 8 ft 0 in forward and 7 ft 4 in x 7 ft 0 in aft, 12 in coamings. Steel bulwarks 3 ft 9 in high with a 9 x 2 1/2 in teak main rail, two freeing ports a side forward, open bulwarks aft. Pitch pine weather decks. Surfaces preserved 'Outside by paint', no colour stated. Classed 100 A1 Steel, Well Deck, on 11 December 1896.",
+      "use": "The written specification behind the drawings: deck lengths, mast lengths, hatch sizes, boat count, deck and rail materials.",
+      "confidence": "Primary survey record. The masts, boats, hatch and bulwark entries on the second page were re-read at four times enlargement and are transcribed in measurements.md; first-page figures are still from a reduced scan and should be rechecked before they drive geometry."
+    },
+    {
+      "kind": "report",
+      "priority": 2,
+      "files": ["lr-0122-first-entry-form-1896-11-28.jpg"],
+      "title": "Form for Vessels of 100 Tons and Upwards (Registrar General's particulars)",
+      "date": "1896-11-28",
+      "reference": "LRF-PUN-DUN124-0122-F",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/archive/110469315",
+      "observed": "Official number 104924, signal letters PMRW, Leith 12/1896. Steam, twin screw, two decks, two masts, schooner rigged, elliptical stern, clincher build, straight stem, steel, five bulkheads. 175.0 x 28.1 x 13.85 ft. Displacement 910 tons. Two inverted direct-acting triple expansion engines, six cylinders, 24 in stroke, 140 NHP, 1100 IHP, 12 knots; two steel boilers at 170 lb. Gross 583.72, register 189.42 tons.",
+      "use": "Identity, speed for wake and smoke, and a check on the principal dimensions.",
+      "confidence": "Primary record. Cylinder diameters read as 14, 23 and 37 in; the Scottish Built Ships database gives 14, 26 and 37."
+    },
+    {
+      "kind": "report",
+      "priority": 3,
+      "files": ["lr-0123-electric-lighting-report-1896-12-01-a.jpg", "lr-0123-electric-lighting-report-1896-12-01-b.jpg", "lr-0121-machinery-report-1896-12-03-a.jpg", "lr-0121-machinery-report-1896-12-03-b.jpg", "lr-0118-classing-remarks-1896-12-08.jpg", "lr-0129-plans-forwarding-form-1896-11-28.jpg", "lr-0120-donkey-boiler-form-1896-11-04.jpg", "lr-0137-ship-forgings-form-1896-a.jpg", "lr-0137-ship-forgings-form-1896-b.jpg"],
+      "title": "Building-period reports and forms: electric lighting, machinery, classing remarks, plan forwarding, donkey boiler, forgings",
+      "date": "1896-11-04 to 1896-12-08",
+      "reference": "LRF-PUN-DUN124-0123-R, -0121-R, -0118-L, -0129-F, -0120-F, -0137-F",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/search/archive?related_vessel_id=14298",
+      "observed": "Electric lighting report, second page: the masthead light was electric, on the only exposed cable, lead covered and wire armoured; cargo light cables were portable, by socket and plug; there was a standard compass and a steering compass, 58 ft and 56 ft from the dynamo, and the searchlight's 20 ampere cable passed 7 ft from the standard compass and 10 ft from the steering compass. Signed by the electrical engineers (read as Lowdon Bros.) on 3 December 1896 and by the builders on 5 December. It gives no lamp positions and no searchlight position or maker. Machinery report, upper half of the first page: twin screw triple expansion, cylinders 14, 23 and 37 in by 24 in stroke, 130 revolutions, registered horse power 140 and nominal 165.8 by another rule; each screw 9 ft 2 in diameter, 11 ft 0 in pitch, three movable blades, 24 sq ft surface. The rest of the machinery report, the classing remarks and the three forms were not read.",
+      "use": "Lights for a night-time model (electric masthead light, portable cargo lights, searchlight clear of the compass) and the propellers. The rest is machinery detail.",
+      "confidence": "Primary records. Lighting report page 2 and the top of the machinery report read at near full size; the others unread."
+    },
+    {
+      "kind": "report",
+      "priority": 2,
+      "files": ["lr-gls184-0123-survey-repairs-1899-05-16.jpg", "lr-gls178-0009-survey-repairs-1897-05-28.jpg", "lr-gls178-0010-survey-engines-boilers-1897-05-22-a.jpg", "lr-gls178-0010-survey-engines-boilers-1897-05-22-b.jpg"],
+      "title": "Reports of Survey for Repairs, Glasgow, 1897 and 1899",
+      "date": "1897-05-22 to 1899-05-16",
+      "reference": "LRF-PUN-GLS178-0009-R, LRF-PUN-GLS178-0010-R, LRF-PUN-GLS184-0123-R",
+      "sourcePage": "https://heritage.lrfoundation.org.uk/collections/search/archive?related_vessel_id=14298",
+      "observed": "Not read during this pass.",
+      "use": "The 1899 report is the closest record to the game date. Read it for any alteration made between completion and January 1901.",
+      "confidence": "Primary records, unread."
+    },
+    {
+      "kind": "photograph",
+      "priority": 1,
+      "files": ["photo-ramsey-east-quay-southward.jpg"],
+      "title": "Lighthouse tender 'Hesperus' alongside East Quay, Ramsey harbour",
+      "date": "Catalogued 1890-1910; cannot be earlier than December 1896",
+      "reference": "Manx National Heritage PG/7850/098, glass plate negative, Francis Southward",
+      "sourcePage": "https://www.imuseum.im/search/collections/archive/mnh-museum-647879.html",
+      "downloadUrl": "https://9001.lt/1900/img/1896-1910_Hesperus.jpg",
+      "observed": "Port side, bow to the left, name legible on the bow with a badge ahead of it. Dark hull with a thin pale line near the waterline. Pale band along the bridge deck side with a row of ports. Pale funnel with no visibly darker top. Two raked masts with derricks. Two pale boats in davits abaft the funnel. Open rails on the forecastle and quarter deck, cowl ventilators, awning stanchions.",
+      "use": "The only photograph found of the ship as built. Confirms the rigging plan and supplies the tonal scheme, the bow badge and the as-fitted clutter.",
+      "confidence": "Identified by the holding archive and by the name on the bow. The local file is from the 9001.lt mirror already used for the interior pack, because the archive blocks scripted downloads; pixel match to the archive master is unchecked. A monochrome plate gives tone, not colour."
+    },
+    {
+      "kind": "analogue",
+      "priority": 3,
+      "files": ["analogues/granton-pharos-vi.jpg", "analogues/granton-may-at-islay.jpg", "analogues/granton-may-west-pier.jpg"],
+      "title": "Other Northern Lighthouse Board tenders: Pharos (VI) of 1874 and May",
+      "date": "Undated",
+      "sourcePage": "https://www.grantonhistory.org/harbour/lighthouse_vessels.htm",
+      "observed": "Small 700-pixel reproductions of fleet-mates.",
+      "use": "General fleet character only. Never a source for Hesperus geometry.",
+      "confidence": "Different ships. Which May is shown was not verified."
+    }
+  ],
+  "notObtained": [
+    {
+      "what": "Builder's display model, plate apparently reading 'Twin Screw Steamer Hesperus ... Gourlay Brothers & Co', in a museum in Oban",
+      "why": "The only colour evidence found: black topsides, red-brown underwater body, white upperworks and boats, plain buff funnel and masts. Seen only as a watermarked stock preview, which was not saved.",
+      "where": "https://www.alamy.com/a-model-of-the-northern-lighthouse-board-vessel-hesperus-displayed-in-a-glass-case-at-the-museum-in-oban-argyll-and-bute-scotland-uk-image213857590.html"
+    },
+    {
+      "what": "Photograph of SS Hesperus by Alexander Milne Riddle, Oban, registered 16 May 1902",
+      "why": "Closest dated photograph to January 1901. Catalogued but not digitised online.",
+      "where": "The National Archives, COPY 1/455/342, https://discovery.nationalarchives.gov.uk/details/r/C13392699"
+    },
+    {
+      "what": "General arrangement plans",
+      "why": "The NLB ship history says the Mitchell Library, Glasgow holds GA plans. Not online.",
+      "where": "https://www.nlb.org.uk/history/ships/"
+    },
+    {
+      "what": "Archive master of the Ramsey plate",
+      "why": "Higher resolution exists through Manx National Heritage and Bridgeman Images under licence.",
+      "where": "https://www.imuseum.im/search/collections/archive/mnh-museum-647879.html"
+    },
+    {
+      "what": "Lines plan or body plan",
+      "why": "None found. Hull form between the midship section and the ends must be faired from the sections at frames 9, 17 and 89 and the after-end sheet.",
+      "where": "Possibly within the Mitchell Library set"
+    }
+  ],
+  "conflicts": [
+    "Yard number: 171 on every drawing and in the survey report. One Scottish Built Ships list view shows 170.",
+    "Launch date: 22 October 1896 in the survey report and Scottish Built Ships. A search snippet quoting 22 December 1896 is wrong.",
+    "Nominal horsepower: 140 in the 1896 survey and registry form; 166 in the NLB ship history and Scottish Built Ships. The machinery report gives both: registered horse power 140, and 165.8 nominal 'as per Section 28', so they are two rules, not a disagreement.",
+    "Funnel diameter: about 2.0 m as drawn on the rigging plan, 1.69 m on the corrected inboard profile and 1.78 m on the after-end sheet. The outboard view probably shows an outer casing.",
+    "Gross tonnage: 583.72 in 1896; 599 in Scottish Built Ships, presumably a later remeasurement.",
+    "Depth: 14 ft 6 in moulded on the drawings, 14 ft 7 in moulded and 13.85 ft register depth in the survey report. These measure different things.",
+    "Bridge deck height: 6 ft 9 in above the main deck is written on the midship section and scales so on the after-end sheet; the corrected profile draws it about 7 ft 0 in.",
+    "Fore hatch breadth: drawn about 9 ft on the corrected deck plan and overwritten in ink 8 ft 0 in; the survey report gives 9 ft 2 in x 8 ft 0 in.",
+    "Main deck half-breadth amidships: 4.15 m scaled from the midship section, 4.0 to 4.06 m from the corrected deck plan.",
+    "Bulwark height: 4 ft 0 in on the midship section (from the deck beam), 3 ft 9 in in the survey report (from the wood deck). These agree once the 3 1/2 in planking is counted."
+  ]
+}

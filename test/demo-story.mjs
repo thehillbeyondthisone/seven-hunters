@@ -192,8 +192,6 @@ if ( process.argv.includes( '--weather-walk' ) ) {
 		}
 		keys.delete( 'KeyW' ); step( .2 );
 	}
-	const helix = [];
-	for ( let a = TOWER.start+.2; a < TOWER.landingFrom+.15; a += .25 ) helix.push( at( 1.3, a ) );
 	const H = TOWER.hatch, hc = Math.cos( H.angle ), hs = Math.sin( H.angle );
 	const hp = d => [ hc*H.r-hs*d, hs*H.r+hc*d ];
 	const top = hp( H.run+.15 ), topA = Math.atan2( top[1], top[0] );
@@ -211,7 +209,7 @@ if ( process.argv.includes( '--weather-walk' ) ) {
 		walk( [ [ w.windStand.x, w.windStand.z ] ], 'open yard vane' ); face( st.parts.windVane ); ok( w.wind(), 'walking round captures the vane from an open yard sightline' );
 		walk( [ [ 5, -3.6 ], [ 5, 4.6 ], [ .3, 4.6 ], [ -2.5, 3.2 ], at(4,TOWER.doorAngle), at(3,TOWER.doorAngle), at(1.8,TOWER.doorAngle) ], 'tower threshold' );
 		for ( const door of st.parts.doors ) { door.target = 1; door.open = 1; door.block.solid = false; }
-		walk( helix, 'spiral stair' ); walk( [ hp(-.05), hp(.8), top, at(1.7,topA+.35) ], 'iron hatch stair', .2 );
+		await story.towerTravel.go( true );
 		// Approach the winding square on this side of the hatch guard.
 		walk( [ at(1.9,Math.atan2(player.position.z,player.position.x)), ...arc( 1.9, Math.atan2(player.position.z,player.position.x), TOWER.crankAngle, -1 ) ], 'apparatus approach', .2 );
 		face( TOWER.crank ); keys.add('KeyE'); step(12); keys.delete('KeyE');
@@ -220,8 +218,8 @@ if ( process.argv.includes( '--weather-walk' ) ) {
 		face( new E.Vector3(500,0,100) ); keys.add('KeyE'); step(5); keys.delete('KeyE');
 		face(w.landmarkPosition('far')); ok(w.landmark('far'),'walking round checks Gallan Head');
 		face(w.landmarkPosition('near')); ok(w.landmark('near'),'walking round checks the nearby island');
-		walk( [ at(2.2,TOWER.galleryDoor),at(1.9,TOWER.galleryDoor),...arc(1.9,TOWER.galleryDoor,topA+.35,-1),top,hp(.8),hp(-.05) ], 'return through hatch', .2 );
-		walk( [...helix].reverse(), 'descending spiral stair' );
+		walk( [ at(2.2,TOWER.galleryDoor),at(1.9,TOWER.galleryDoor),...arc(1.9,TOWER.galleryDoor,topA+.35,-1) ], 'return to hatch', .2 );
+		await story.towerTravel.go( false );
 		walk( [ at(1.8,TOWER.doorAngle),at(3,TOWER.doorAngle),at(4,TOWER.doorAngle),[-2.5,3.2],[ROOM.slate.x,ROOM.slate.z+.9] ], 'return to slate' );
 		face(ROOM.slate); await item('slate').use();
 		ok( !!story.obs[round] && story.h < round+2.5, `${round} round chalked at ${clockText(story.h)} after ${(seconds-startSeconds).toFixed(0)} walking seconds; lamp remains lit` );
@@ -257,6 +255,11 @@ await story._readPapers();
 ok( story.flags.papersRead.includes( 'home' ), 'the optional personal letter is recorded as read' );
 story.save();
 const aboardSave = story.loadSave();
+let savedSummary;
+story.ui.savedWatch = async summary => { savedSummary = summary; return 'continue'; };
+await story.start();
+ok( savedSummary.date === story.dayText( aboardSave.h ) && savedSummary.time === clockText( aboardSave.h ) && savedSummary.objective === aboardSave.objective, 'resume screen describes the saved clock and objective' );
+ok( story.loadSave().h === aboardSave.h && story.aboard && ! story.paused, 'Continue resumes without replacing the saved watch' );
 step( 5 );
 story._restore( aboardSave );
 ok( story.aboard && Math.abs( story.arrival.elapsed - crossingSave ) < 0.001, 'a saved crossing resumes aboard at the same point' );
@@ -371,7 +374,7 @@ ok( handLamp.carried && ! item( 'handLamp' ).when(), 'the lantern taken' );
 }
 
 // First light: inspect, wind, light the burner, release the stop, verify the
-// real warm-up, then observe the driving weight from a walkable stair tread.
+// real warm-up, then observe the driving weight from the lantern hatch.
 ok( item( 'lens' ).text() === 'Examine the prepared lamp and optic', `before sunset the lens offers: '${ item( 'lens' ).text() }'` );
 await item( 'lens' ).use();
 ok( ! app.lamp.lit && story.flags.keeperDuty.inspected, 'inspection leaves the prepared lamp unlit' );
@@ -391,14 +394,12 @@ ok( app.lamp.glow > 0.9 && app.lamp.speed > 0.9, `after 20 s the flame is up (${
 ok( item( 'stool' ).text() === '', 'the watch skip does not bypass the first weight observation' );
 const lanternFeet = player.position.clone(), lanternYaw = player.yaw, lanternPitch = player.pitch;
 const drive = story.keeper.drive; drive.sync( app.lamp.wind );
-const weightTread = Array.from( { length: TOWER.count }, ( _, i ) => ( { a: TOWER.start + ( i + .5 ) * TOWER.dTread, y: TOWER.floor + ( i + 1 ) * TOWER.riser } ) )
-	.filter( t => Math.cos( t.a - TOWER.hatch.angle ) > .65 )
-	.sort( ( a, b ) => Math.abs( a.y + 1.62 - drive.at.y ) - Math.abs( b.y + 1.62 - drive.at.y ) )[ 0 ];
-player.position.set( Math.cos( weightTread.a ), weightTread.y, Math.sin( weightTread.a ) );
+const H = TOWER.hatch;
+player.position.set( Math.cos( H.angle ) * 1.7 + Math.sin( H.angle ) * .1, TOWER.deck, Math.sin( H.angle ) * 1.7 - Math.cos( H.angle ) * .1 );
 player.yaw = Math.atan2( player.position.x, player.position.z );
-player.pitch = Math.atan2( drive.at.y - weightTread.y - 1.62, 1 ); player._camY = null;
+player.pitch = Math.atan2( drive.at.y - TOWER.deck - 1.62, Math.hypot( player.position.x - drive.at.x, player.position.z - drive.at.z ) ); player._camY = null;
 step( .5 );
-ok( story.interact.current?.id === 'drivingWeight', 'the real upper stair pose can select the driving weight' );
+ok( story.interact.current?.id === 'drivingWeight', 'the supported hatch-head pose can select the driving weight' );
 await item( 'drivingWeight' ).use();
 step( 4 );
 ok( story.flags.keeperDuty.descentSeen, 'the weight actually descends while being watched' );
@@ -545,8 +546,13 @@ await item( 'berth' ).use();
 ok( story.beat === 'd2sleep' && ! story.next.state.sleepFrom, 'the berth cannot skip the evening watch before the small hours' );
 await item( 'chair' ).use(); await item( 'berth' ).use();
 ok( story.beat === 'd2sleep', 'rest requires a fully wound machine' );
+story.hand.carried = false; story.hand.lit = false; // Reproduce resting without first fetching the lantern.
 windFully(); await item( 'berth' ).use();
-ok( story.beat === 'd2wake' && Math.abs( story.h -story.next.state.sleepUntil ) < 1e-8 && Math.abs( story.next.state.sleepUntil -story.next.state.sleepFrom -2 ) < 1e-8 && app.lamp.lit && ! story.hand.lit && ! story.hand.carried && story.hand.rest.position.distanceTo( BERTH.lantern ) < 1e-8, 'two recorded hours asleep; the lighthouse burns and the lantern rests on the washstand' );
+ok( story.beat === 'd2wake' && Math.abs( story.h -story.next.state.sleepUntil ) < 1e-8 && Math.abs( story.next.state.sleepUntil -story.next.state.sleepFrom -2 ) < 1e-8 && app.lamp.lit && story.hand.lit && story.hand.carried && story.hand.glow === 1, 'two recorded hours asleep; wake with the storm lantern already lit and carried' );
+story.save();
+const oldWake = story.loadSave(); oldWake.hand = { carried: false, lit: false };
+story._restore( oldWake );
+ok( story.hand.carried && story.hand.lit && story.hand.glow === 1, 'older dark wake saves recover a lit storm lantern without restarting the watch' );
 windFully(); await item( 'chair' ).use(); await item( 'lens' ).use(); await item( 'journal' ).use();
 await item( 'kitchenStove' ).use(); await item( 'berth' ).use(); await item( 'lens' ).use(); windFully(); await exchange();
 ok( story.beat === 'd3bank' && story.watcher.log.some( l => /AFTER TWO/.test( l.text ) ), 'Cate reports the little light the evening after the player slept' );

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tower stairs and balcony · local review</title>
+<link rel="stylesheet" href="/src/ui/ui.css"><link rel="stylesheet" href="/src/story/story.css">
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#10191d}canvas{display:block}
+#review{position:fixed;top:12px;left:12px;z-index:110;max-width:600px;padding:12px;background:#10191de8;color:#eee4cf;font:14px/1.5 system-ui;border:1px solid #8b8574}
+#review p{margin:4px 0 10px}button{font:inherit;background:#25332e;color:#eee4cf;border:1px solid #8b8574;padding:7px;margin:2px;cursor:pointer}button:disabled{opacity:.4}
+</style></head><body><div id="app"></div><div id="fps" hidden></div>
+<div id="review"><p id="status">Loading the real station and renderer…</p><div id="controls" hidden>
+<button id="foot">Tower foot</button><button id="hatch">Lantern hatch</button><button id="use">Use stair shortcut</button>
+<button id="balcony">Balcony doorway</button><button id="clockwise">Walk clockwise</button><button id="counter">Walk anticlockwise</button>
+<p>WASD + mouse to explore. Look at either stair end and use E. This local review writes no saves.</p>
+</div></div>
+<script type="module">
+import { App } from '../src/App.js';
+import { UI } from '../src/ui/UI.js';
+import { AppUI } from '../src/ui/AppUI.js';
+import { Story } from '../src/story/Story.js';
+import { TOWER as T, updateDoor } from '../src/world/flannan/Station.js';
+const app = new App(), ui = new UI(), status = document.getElementById('status'), controls = document.getElementById('controls');
+app.qs.set('morningPreview',''); app.qs.set('noAudio','');
+await app.init((p,label,until)=>{ui.setLoading(p,label,until);status.textContent=label;});
+app.ui = new AppUI(app,ui);
+const s = app.story = new Story(app); s.save=()=>{}; s.loadSave=()=>null; s.ui.card=async()=>{};
+app.input.requestLock=()=>{};
+await s.start();
+const p=app.player, travel=s.towerTravel;
+const face=at=>{const dx=at.x-p.position.x,dz=at.z-p.position.z,dy=at.y-(p.position.y+1.62);p.yaw=Math.atan2(-dx,-dz);p.pitch=Math.atan2(dy,Math.hypot(dx,dz));p.update(0);};
+const place=at=>{app.input.reset();p.position.copy(at);p.velocity.set(0,0,0);p.grounded=true;p.mode='walk';p._camY=null;p.update(0);app.cameraCut();};
+const ready=up=>{place(up?travel.bottom:travel.top);face(s.interact.get(up?'towerUp':'towerDown').at);};
+let route=null;
+ready(true); app.start(); await ui.hideLoader(); controls.hidden=false;
+document.getElementById('foot').onclick=()=>ready(true);
+document.getElementById('hatch').onclick=()=>ready(false);
+document.getElementById('use').onclick=()=>{const up=travel.canUse(true);if(!travel.canUse(up))return;face(s.interact.get(up?'towerUp':'towerDown').at);app.input.pressed.add('KeyE');};
+const radial=(r,a,y=T.deck)=>new p.position.constructor(Math.cos(a)*r,y,Math.sin(a)*r);
+const lane=(T.gallery.ledgeOuter+T.gallery.rail-T.gallery.railTube)/2;
+const balcony=()=>{const d=s.doors.gallery[0];d.open=d.target=1;updateDoor(d,0);place(radial(1.8,T.galleryDoor));face(radial(lane,T.galleryDoor,T.deck+1.2));};
+document.getElementById('balcony').onclick=balcony;
+function circuit(direction){balcony();route={i:0,direction,points:[radial(lane,T.galleryDoor),...Array.from({length:160},(_,i)=>radial(lane,T.galleryDoor+direction*(i+1)/160*Math.PI*2)),radial(1.8,T.galleryDoor)],elapsed:0};}
+document.getElementById('clockwise').onclick=()=>circuit(1);
+document.getElementById('counter').onclick=()=>circuit(-1);
+let last=performance.now();
+function review(now){
+ const dt=Math.min(.1,(now-last)/1000);last=now;
+ for(const b of controls.querySelectorAll('button'))b.disabled=travel.active||!!route;
+ if(route){
+  route.elapsed+=dt;const q=route.points[route.i];
+  if(Math.abs(p.position.y-T.deck)>.04||route.elapsed>25){app.input.reset();status.textContent='FAIL: route lost its floor or stopped progressing.';route=null;}
+  else if(p.position.distanceTo(q)<.12){route.i++;if(route.i===route.points.length){app.input.reset();route=null;status.textContent='PASS: full balcony circuit and return through the gallery door.';}}
+  else{face(q.clone().setY(T.deck+1.45));app.input.keys.add('KeyW');status.textContent=`Walking ${route.direction===1?'clockwise':'anticlockwise'} · waypoint ${route.i+1}/${route.points.length} · radius ${Math.hypot(p.position.x,p.position.z).toFixed(2)} m`;}
+ }else if(travel.active)status.textContent='Taking the tower stair…';
+ else if(!status.textContent.startsWith('PASS')&&!status.textContent.startsWith('FAIL'))status.textContent=`${p.position.y>T.floor+1?'Lantern level':'Tower foot'} · ${p.prompt?.text||'Explore the tower'} · radius ${Math.hypot(p.position.x,p.position.z).toFixed(2)} m`;
+ requestAnimationFrame(review);
+}
+requestAnimationFrame(review);
+</script></body></html>

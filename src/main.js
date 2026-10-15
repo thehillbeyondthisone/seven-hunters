@@ -56,6 +56,12 @@ if ( app.qs.has( 'weatherObservationsPreview' ) ) {
 	document.querySelector( '.loader-tip-list.sh-only' ).innerHTML = '<p>Read the room barometer and the shaded thermometer outside the north wall.</p><p>Look up at the roof vane from the yard. From the balcony, watch open water and check both landmark bearings.</p><p>Return to the slate to chalk the captured readings. This study uses a separate save.</p><p>Use the named action button on touch screens; E interacts on desktop. Hold to observe the sea for four seconds.</p>';
 }
 
+if ( app.qs.has( 'morningPreview' ) ) {
+	document.querySelector( '.loader-kicker.sh-only' ).textContent = 'Eilean Mòr · Morning servicing study';
+	document.querySelector( '.loader-tagline.sh-only' ).textContent = 'Put out the light. Attend to the apparatus. Prepare the next evening.';
+	document.querySelector( '.loader-tip-list.sh-only' ).innerHTML = '<p>Extinguish and inspect. Fetch the can and service kit from the oil store.</p><p>Fill and cap the can, then carry it and the kit to the lantern shelf. Use the open service section to clean and prepare the apparatus.</p><p>Return the supplies, separate used cloths and sign the morning journal.</p><p>E uses an object on desktop; touch uses the named action button. Keep pressed for hand work. Papers explains the reconstructions. This study has its own save.</p>';
+}
+
 if ( app.qs.has( 'keeperPreview' ) ) {
 	document.querySelector( '.loader-kicker.sh-only' ).textContent = 'Eilean Mòr · Keeper’s duties study';
 	document.querySelector( '.loader-tagline.sh-only' ).textContent = 'A prepared lamp, the revolving optic, and the weight that drives it. Keep the evening light.';
@@ -129,6 +135,7 @@ app.init( ( p, text, until ) => ui.setLoading( p, text, until ) ).then( async ()
 
 		app.story = new ( await import( './story/Story.js' ) ).Story( app );
 		app.story.sound = app.stationSound;
+		if ( ! app.qs.has( 'bench' ) && ! app.qs.has( 'vr' ) ) app.story.setTitleView( true );
 
 	}
 	ui.setLoading( 1, 'Ready' );
@@ -151,7 +158,8 @@ app.init( ( p, text, until ) => ui.setLoading( p, text, until ) ).then( async ()
 	}
 	await ui.showStartOverlay( () => {
 
-		app.input.requestLock();
+		// Story screens need a free cursor. Capture it when their final page closes.
+		if ( ! app.story ) app.input.requestLock();
 		if ( app.audio ) app.audio.resume();
 		app.mobile?.start();
 

@@ -4,7 +4,7 @@ import { GPU } from '../engine/gpu/GPU.js';
 import { updateDoor } from '../world/flannan/Station.js';
 import { VIEWS } from '../core/DebugViews.js';
 import { Locomotion, ControllerInput, controllerState } from './Locomotion.js';
-import { projectionScale, supportMessage } from './PreviewOptions.js';
+import { projectionScale, supportMessage, xrSamples } from './PreviewOptions.js';
 import { XRRenderer } from './XRRenderer.js';
 import { SessionStats } from './SessionStats.js';
 import { XRWebGLBridge } from './XRWebGLBridge.js';
@@ -43,6 +43,7 @@ export class XRPreview {
 		this.session = null;
 		this.location = 0;
 		this.scale = projectionScale( app.qs.get( 'xrScale' ) );
+		this.sampleCount = app.qs.has( 'xrLegacy' ) ? 1 : xrSamples( app.qs.get( 'xrSamples' ) );
 		this.stats = new SessionStats( this.scale );
 		this._matrix = new Matrix4();
 		this._scale = new Vector3();
@@ -67,11 +68,13 @@ export class XRPreview {
 <p>Explore Eilean Mòr and the light station in VR or on desktop. This preview has simplified graphics and its own unsaved exploration mode.</p>
 <label>Start location <select class="xr-location"></select></label>
 <label>VR resolution <select class="xr-scale"><option value="0.5">Low · 50%</option><option value="0.65">Balanced · 65%</option><option value="0.85">Higher · 85%</option><option value="1">Full · 100%</option></select></label>
+<label>Edge smoothing <select class="xr-samples"><option value="4">Smooth edges · 4×</option><option value="1">Off · more performance</option></select></label>
 <div class="xr-actions"><button type="button" class="xr-enter" disabled>Checking VR…</button><button type="button" class="xr-desktop">Explore on desktop</button></div>
 <p class="xr-status" role="status" aria-live="polite"></p>
 <details class="xr-capabilities"><summary>VR compatibility details</summary><p class="xr-features"></p><p class="xr-browser"></p><button type="button" class="xr-recheck">Recheck VR</button></details>
 <details><summary>Quest controls</summary><p>Left stick: walk · Right stick: turn 30°<br>Right trigger: open or close a nearby door / gate<br>A: next location · B: recenter · Left Y: exit VR</p><p>Head movement is tracked. There is no added head bob, swimming, boat ride, telescope or story interface in this first preview.</p></details>
-<details class="xr-diagnostics" hidden><summary>Last VR session</summary><p class="xr-metrics"></p><p>Intervals include browser scheduling. CPU time measures frame submission; GPU time, comfort and tracking quality require headset testing.</p></details>
+<details class="xr-diagnostics" hidden><summary>Last VR session</summary><p class="xr-metrics"></p><p>Intervals include browser scheduling. GPU samples cover both eye render passes, excluding simulation, shadows and compatibility transfer. Transfer CPU time includes the browser upload call; it is not a separate GPU measurement.</p></details>
+<details><summary>Performance comparison</summary><p>Use the same location and resolution for each comparison.</p><a class="xr-compare" href="./?vr&xrLegacy">Compare previous VR graphics</a> · <a class="xr-no-grass" href="./?vr&noVeg">Test without grass</a></details>
 <a class="xr-normal" href="./?desktop">Return to the normal game</a>`;
 		this.enterButton = root.querySelector( '.xr-enter' );
 		this.status = root.querySelector( '.xr-status' );
@@ -93,7 +96,18 @@ export class XRPreview {
 			this.scaleSelect.append( option );
 		}
 		this.scaleSelect.value = this.scale;
-		this.scaleSelect.addEventListener( 'change', () => { this.scale = projectionScale( this.scaleSelect.value ); } );
+		const comparisons = () => {
+			const legacy = this.app.qs.has( 'xrLegacy' );
+			root.querySelector( '.xr-compare' ).href = `./?vr${ legacy ? '' : '&xrLegacy' }&xrScale=${ this.scale }`;
+			root.querySelector( '.xr-compare' ).textContent = legacy ? 'Use improved VR graphics' : 'Compare previous VR graphics';
+			root.querySelector( '.xr-no-grass' ).href = `./?vr&noVeg${ legacy ? '&xrLegacy' : '' }&xrScale=${ this.scale }&xrSamples=${ this.sampleCount }`;
+		};
+		this.scaleSelect.addEventListener( 'change', () => { this.scale = projectionScale( this.scaleSelect.value ); comparisons(); } );
+		const samples = root.querySelector( '.xr-samples' );
+		samples.value = this.sampleCount;
+		samples.disabled = this.app.qs.has( 'xrLegacy' );
+		samples.addEventListener( 'change', () => { this.sampleCount = xrSamples( samples.value ); comparisons(); } );
+		comparisons();
 		this.enterButton.addEventListener( 'click', () => this.enter() );
 		root.querySelector( '.xr-recheck' ).addEventListener( 'click', () => this._checkSupport() );
 		root.querySelector( '.xr-desktop' ).addEventListener( 'click', () => {
@@ -219,9 +233,12 @@ export class XRPreview {
 			this.space = space;
 			// Reuse the output pipeline on re-entry instead of compiling it and
 			// allocating another binding set for every visit to VR.
-			if ( this.rendererFormat !== format ) {
-				this.renderer = new XRRenderer( this.app, format );
+			if ( this.rendererFormat !== format || this.rendererSamples !== this.sampleCount ) {
+				this.renderer?.dispose?.();
+				this.renderer = new XRRenderer( this.app, format, { sampleCount: this.sampleCount } );
 				this.rendererFormat = format;
+				this.rendererSamples = this.sampleCount;
+				await this.renderer.prewarm?.();
 			}
 			await GPU.pipelinesReady();
 			if ( this.session !== session ) return;
@@ -245,6 +262,7 @@ export class XRPreview {
 			this.root.hidden = true;
 			this.lastTime = null;
 			this.stats = new SessionStats( this.scale, session.frameRate || 72 );
+			this.renderer.timer?.reset();
 			this.paused = false;
 			const rates = session.supportedFrameRates;
 			if ( rates && Array.from( rates ).includes( 72 ) ) session.updateTargetFrameRate( 72 ).catch( () => {} );
@@ -310,7 +328,7 @@ export class XRPreview {
 				try { this.app.frame( dt ); }
 				finally { this.renderingFrame = null; }
 				this.stats.frameRate = frame.session.frameRate || this.stats.frameRate;
-				this.stats.record( interval, performance.now() - t0, LOCATIONS[ this.location ][ 0 ] );
+				this.stats.record( interval, performance.now() - t0, LOCATIONS[ this.location ][ 0 ], this.renderer.metrics );
 
 			} else {
 
@@ -393,6 +411,7 @@ export class XRPreview {
 		this.layer?.destroy?.();
 		this.lastBoundaryErrorCount = this.bridge?.boundaryErrorCount || 0;
 		this.lastBoundaryErrors = this.bridge?.lastBoundaryErrors || [];
+		this.lastTransferMode = this.bridge?.transferMode || 'none';
 		this.bridge?.dispose();
 		this.bridge = null;
 		this.layer = null;
@@ -422,9 +441,12 @@ export class XRPreview {
 		this.status.textContent = this.failure ? 'VR stopped: ' + this.failure : 'Returned to desktop. Choose another location or resolution to explore again.';
 		const diagnostics = this.root.querySelector( '.xr-diagnostics' );
 		if ( wasActive && this.stats.frames ) {
-			const report = this.lastReport = this.stats.report();
+			const report = this.lastReport = { ...this.stats.report(), backend: this.renderMode, transferMode: this.lastTransferMode,
+				renderPath: appPath( this ), gpuTimingAvailable: !! GPU.hasTimestamp };
 			diagnostics.hidden = false;
 			this.root.querySelector( '.xr-metrics' ).textContent = `${ this.renderMode }. ${ report.frames } frames at ${ Math.round( report.scale * 100 ) }% resolution. Last ${ report.sampleWindow } frames: 95th percentile interval ${ report.intervalP95Ms.toFixed( 1 ) } ms; CPU ${ report.cpuP95Ms.toFixed( 1 ) } ms. ${ report.longIntervals } long intervals; ${ report.pauses } tracking / overlay pauses.`;
+			const timing = ms => Number.isFinite( ms ) ? ms.toFixed( 2 ) + ' ms' : 'not measured';
+			this.root.querySelector( '.xr-metrics' ).textContent += ` ${ report.renderPath }; ${ report.sampleCount || 1 }× samples; transfer: ${ report.transferMode }. Eye encoding p95: ${ timing( report.eyeCpuP95Ms ) }; transfer call p95: ${ timing( report.transferCpuP95Ms ) }. GPU eye rendering: ${ report.gpuTimingMeasured ? report.gpuEyeP95Ms.toFixed( 2 ) + ' ms p95 (' + report.gpuSamples + ' samples)' : 'not measured' }. Grass: ${ report.grassTrianglesPerEye || 0 } triangles per eye.`;
 			if ( this.lastBoundaryErrorCount ) this.root.querySelector( '.xr-metrics' ).textContent += ` ${ this.lastBoundaryErrorCount } pending WebGL errors recorded before frame commands (last: ${ this.lastBoundaryErrors.join( ', ' ) }).`;
 		}
 		this.failure = null;
@@ -432,3 +454,5 @@ export class XRPreview {
 	}
 
 }
+
+function appPath( preview ) { return preview.app.qs?.has( 'xrLegacy' ) ? 'previous HDR pass' : 'Quest forward pass'; }

@@ -11,7 +11,7 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":%PORT% .*LISTENING"')
 )
 
 echo Starting Flannan at http://127.0.0.1:%PORT%/
-call npm run dev
+call npm run dev -- --open
 
 if errorlevel 1 (
     echo.

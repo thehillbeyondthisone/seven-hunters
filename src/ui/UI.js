@@ -2116,6 +2116,7 @@ export class UI {
 
 		// collapsed state: a slim rail of tab icons
 		const rail = this.rail = h( 'nav', 'tw-rail tw-glass tw-interactive', { 'aria-label': 'Settings' } );
+		rail.hidden = ! this.tidewater;
 		const open = h( 'button', 'tw-rail-btn tw-rail-open', { type: 'button', 'aria-label': 'Open settings', 'data-tip': 'Settings (H)', 'data-tip-side': 'left', html: icon( 'sliders' ) } );
 		open.addEventListener( 'click', () => this.togglePanel( true ) );
 		this.railTabs = h( 'div', 'tw-rail-tabs' );
@@ -2198,6 +2199,7 @@ export class UI {
 			<div class="tw-start-inner">
 				${ brandMark( 'tw-start-mark' ) }
 				<div class="tw-start-title">${ this.brand }</div>
+				${ this.tidewater ? '' : '<p class="sh-start-place">Eilean Mòr · Flannan Isles · January 1901</p><p class="sh-start-invite">An island to explore. A light to keep. A story across the water.</p>' }
 				<button type="button" class="tw-start-cta"><span class="tw-start-pulse" aria-hidden="true"></span>${ icon( 'mouse' ) }<span>${ this.tidewater ? 'Click to explore' : 'Click to begin' }</span></button>
 				<div class="tw-start-keys">
 					<span><span class="tw-wasd"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>Move</span>

@@ -93,3 +93,63 @@ node artifacts/surface-pass/review.mjs mobile dFloor,stoneBoundary,fApproach
 `node artifacts/surface-pass/review.mjs before` can reproduce the earlier scene
 without changing the working application. The comparison and exports remain
 local; no publication was performed.
+
+## Distant yard fence
+
+The south boundary's 16–18 mm palings fall below one pixel in the opening view.
+Individual triangles then form false diagonal patterns and crawl with temporal
+jitter. `YardFence.js` keeps the original rods and finials nearby and blends to
+an analytically filtered fence as their projected width drops from 1.3 to 0.65
+pixels. The filtered view integrates bar coverage over each pixel and averages
+repetition that can no longer be resolved. It follows render resolution and
+field of view without changing the global anti-aliasing settings. The detailed
+geometry still casts shadows. This adds two fence draws and four proxy triangles;
+it uses the existing iron textures.
+
+Reproduce the isolated WebGPU check with:
+
+```powershell
+node tools/shots/fence-stability.mjs
+```
+
+At 1280 × 720, eight jitter positions reduced the distant fence's mean pixel
+variation from 13.08 to 1.21 in 8-bit channel values (90.8%). This measures the
+spatial filtering before temporal accumulation, with a fixed sky background;
+it is not a whole-scene performance measurement. Close and distant shaders
+passed GPU validation. Outputs are in `artifacts/fence-stability/`.
+
+`/test/fence-browser.html?noAudio` provides the actual station renderer with
+close/opening camera buttons and an anti-aliasing toggle. It does not start a
+watch or write saves. The actual title view and the close fence were also
+visually reviewed in the browser; physical headset behavior remains untested.
+
+## Limewash under direct light — 12 October 2026
+
+Close lamp lighting made the buff quoins and white walls look smooth because
+the shallow normal map had little directional contrast, and the albedo only
+carried broad colour variation. Limewash now combines restrained wash-coat,
+trowel, sand and pore masks in its albedo, with slightly stronger shallow relief.
+The aggregate mask uses the previously constant alpha channel of `limeA`.
+One additional sample of that same map provides broader wash variation without
+adding textures, draw calls or geometry. Roughness remains approximately
+0.83–0.98. This applies to the station's shared plaster finish, including its
+buff trim and interior plaster; bare stone and timber keep their own finishes.
+
+The local [lighting comparison](http://127.0.0.1:5189/artifacts/surface-lighting/index.html)
+preserves five matched before/after views: the corner by night and by day,
+frontal and grazing lamp light, and interior plaster. Original source files are
+preserved in `artifacts/surface-lighting/original/`. The baseline captures are
+protected against accidental overwriting. Capture the current materials with:
+
+```powershell
+node tools/shots/surface-lighting.mjs after
+npm run test:surfaces -- artifacts/surface-lighting/maps
+$env:WEBGPU_DEFAULT_LIMITS = '1'
+$env:SURFACE_REVIEW_MOBILE = '1'
+node tools/shots/surface-lighting.mjs mobile
+```
+
+The mobile profile forces the 16 sampled-texture limit and checks the actual
+scene shaders; this is distinct from physical phone or headset validation.
+Surface microstructure remains an artistic reconstruction. All comparisons
+and changes in this pass are local.

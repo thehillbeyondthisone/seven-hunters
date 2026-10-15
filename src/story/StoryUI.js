@@ -31,6 +31,7 @@ export class StoryUI {
 	constructor( { input = null } = {} ) {
 
 		this.input = input;
+		document.body.classList.add( 'sh-game' );
 		this.root = el( 'div', 'sh-root' );
 		this.objective = el( 'div', 'sh-objective' );
 		this.clockEl = el( 'div', 'sh-clock' );
@@ -55,23 +56,33 @@ export class StoryUI {
 		this.guidePulse = el( 'span', 'sh-guide-pulse' );
 		this.guidePulse.innerHTML = '<i></i><i></i><b></b>';
 		this.guideArrow = el( 'span', 'sh-guide-arrow' );
-		this.guideArrow.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 8 L6 3 L10 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+		this.guideArrow.innerHTML = '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 3 L25 23 L14 18 L3 23 Z" fill="currentColor" stroke="#142029" stroke-width="2.5" stroke-linejoin="round"/></svg>';
 		this.guideLabel = el( 'span', 'sh-guide-label' );
 		this.guideEl.append( this.guidePulse, this.guideMark, this.guideArrow, this.guideLabel );
+		this.safetyEl = el( 'div', 'sh-safety' ); this.safetyEl.hidden = true; this.safetyEl.setAttribute( 'role', 'status' );
 		this.root.append( this.vignette, this.objective, this.guideEl, this.stripEl, this.arrivalEl, this.layer, this.revealSkip );
+		this.root.append( this.safetyEl );
 		document.body.append( this.root );
 		this.modal = 0;
 
 	}
 
 	// ---- modal plumbing
+	safety( text ) {
+		const copy = this.input?.touchMode ? touchInstruction( text || '' ) : text || '';
+		if ( this.safetyEl.textContent !== copy ) this.safetyEl.textContent = copy;
+		this.safetyEl.hidden = ! copy;
+	}
 
 	_open() {
 
+		if ( ! this.modal ) this._inputWasEnabled = this.input?.enabled;
 		this.modal ++;
 		this.root.classList.add( 'is-modal' );
+		this.objective.setAttribute( 'aria-hidden', 'true' );
 		if ( document.exitPointerLock && document.pointerLockElement ) document.exitPointerLock();
 		if ( this.input ) this.input.enabled = false;
+		this.input?.reset?.();
 
 	}
 
@@ -80,11 +91,12 @@ export class StoryUI {
 		this.modal = Math.max( 0, this.modal - 1 );
 		if ( this.modal ) return;
 		this.root.classList.remove( 'is-modal' );
+		this.objective.removeAttribute( 'aria-hidden' );
 		if ( this.input ) {
 
-			this.input.enabled = true;
+			this.input.enabled = this._inputWasEnabled !== false;
 			this.input.keys.clear();
-			this.input.requestLock();
+			if ( this.input.enabled ) this.input.requestLock();
 
 		}
 
@@ -161,14 +173,18 @@ export class StoryUI {
 			if ( kicker ) c.append( el( 'div', 'sh-card-kicker', kicker ) );
 			if ( title ) c.append( el( 'div', 'sh-card-title', title ) );
 			for ( const l of lines ) c.append( el( 'p', 'sh-card-line', l ) );
-			const more = el( 'div', 'sh-card-more', this.input?.touchMode ? 'Tap to continue' : 'Click to continue' );
+			const more = el( 'button', 'sh-card-more', this.input?.touchMode ? 'Tap to continue' : 'Click to continue' );
+			more.type = 'button';
+			more.setAttribute( 'aria-label', 'Continue' );
 			c.append( more );
 			this.layer.append( c );
 			void c.offsetWidth;
 			c.classList.add( 'is-on' );
 			const t0 = performance.now();
+			let closed = false;
 			const go = ( e ) => {
 
+				if ( closed ) return;
 				if ( performance.now() - t0 < 600 + wait ) return;
 				if ( e.type === 'keydown' && e.code !== 'Space' && e.code !== 'Enter' ) return;
 				if ( e.type === 'keydown' ) {
@@ -178,6 +194,8 @@ export class StoryUI {
 
 				}
 
+				closed = true;
+				c.inert = true;
 				c.removeEventListener( 'click', go );
 				window.removeEventListener( 'keydown', go, true );
 				c.classList.remove( 'is-on' );
@@ -189,6 +207,7 @@ export class StoryUI {
 
 			c.addEventListener( 'click', go );
 			window.addEventListener( 'keydown', go, true );
+			more.focus( { preventScroll: true } );
 
 		} );
 
@@ -220,11 +239,57 @@ export class StoryUI {
 
 	}
 
+	// Two seconds in either direction: a step/turn, fade through black, then
+	// settle at the destination. Move only at full black, with input locked.
+	async travel( text, move, animate = () => {} ) {
+
+		this._open();
+		const f = el( 'div', 'sh-fade' );
+		f.style.transition = 'none';
+		f.style.background = '#050708';
+		f.append( el( 'p', 'sh-fade-text', text ) );
+		this.layer.append( f );
+		try {
+			await new Promise( ( resolve, reject ) => {
+				const start = performance.now();
+				let arrived = false;
+				const frame = now => {
+					try {
+						const progress = Math.min( 1, ( now - start ) / 2000 );
+						const opacity = Math.min( 1, progress / .325, ( 1 - progress ) / .325 );
+						f.style.opacity = String( opacity );
+						if ( progress >= .5 && ! arrived ) { f.style.opacity = '1'; move(); arrived = true; }
+						animate( progress, arrived );
+						if ( progress < 1 ) requestAnimationFrame( frame ); else resolve();
+					} catch ( error ) { reject( error ); }
+				};
+				requestAnimationFrame( frame );
+			} );
+
+		} finally {
+
+			f.remove();
+			this._close();
+
+		}
+
+	}
+
 	// ---- HUD
 
 	guidance( target, camera, hasPrompt = false ) {
 
-		const pos = target && projectGuidance( target.at, camera, window.innerWidth, window.innerHeight );
+		let insets;
+		if ( this.input?.touchMode ) {
+			const actions = document.querySelector( '.sm-actions' )?.getBoundingClientRect();
+			const moveHint = document.querySelector( '.sm-move-hint' )?.getBoundingClientRect();
+			const objective = this.objective.getBoundingClientRect();
+			const style=globalThis.getComputedStyle?.(this.root),safe=side=>parseFloat(style?.getPropertyValue(`--sh-safe-${side}`))||0;
+			insets={left:Math.max(44,safe('left')+22),right:Math.max(44,safe('right')+22),top:Math.max(94,safe('top')+30,Number.isFinite(objective?.bottom)?objective.bottom+22:94),bottom:Math.max(86,safe('bottom')+30)};
+			if ( Number.isFinite( actions?.top ) && actions.width > 0 ) insets.bottom=Math.max(insets.bottom,window.innerHeight-actions.top+30);
+			if ( Number.isFinite( moveHint?.top ) && moveHint.width > 0 ) insets.bottom=Math.max(insets.bottom,window.innerHeight-moveHint.top+30);
+		}
+		const pos = target && projectGuidance( target.at, camera, window.innerWidth, window.innerHeight, insets );
 		const hidden = ! pos || this.open || hasPrompt && pos.onScreen && pos.distance < 3;
 		this.guideEl.classList.toggle( 'is-visible', ! hidden );
 		if ( hidden ) return;
@@ -243,7 +308,7 @@ export class StoryUI {
 		this.guideEl.style.left = `${ pos.x.toFixed( 1 ) }px`;
 		this.guideEl.style.top = `${ pos.y.toFixed( 1 ) }px`;
 		this.guideEl.classList.toggle( 'is-edge', ! pos.onScreen );
-		this.guideEl.classList.toggle( 'has-label', pinging || pos.onScreen && pos.distance < 12 );
+		this.guideEl.classList.toggle( 'has-label', pinging || ! pos.onScreen && ! this.input?.touchMode || pos.onScreen && pos.distance < 12 );
 		this.guideEl.classList.toggle( 'label-right', pos.x < 130 );
 		this.guideEl.classList.toggle( 'label-left', pos.x > window.innerWidth - 130 );
 		this.guideArrow.style.transform = `translate(-50%, -50%) rotate(${ pos.angle.toFixed( 1 ) }deg)`;
@@ -341,7 +406,8 @@ export class StoryUI {
 
 					page.append( el( 'h2', 'sh-page-title', paper.title ) );
 					if ( paper.sources ) page.append( el( 'p', 'sh-paper-kind', 'Historical background · Written for the game' ) );
-					for ( const p of paper.body ) page.append( el( 'p', 'sh-page-p', p ) );
+					if ( paper.chapters ) this._chapterReader( page, paper );
+					else for ( const p of paper.body ) page.append( el( 'p', 'sh-page-p', p ) );
 					const details = el( 'details', 'sh-paper-source' );
 					details.append( el( 'summary', '', 'History and story · About this document' ), el( 'p', '', paper.provenance ) );
 					const sources = paper.sources || ( paper.source ? [ { label: paper.sourceLabel || 'Northern Lighthouse Board transcript', url: paper.source } ] : [] );
@@ -421,6 +487,41 @@ export class StoryUI {
 		} );
 	}
 
+	_chapterReader( page, paper ) {
+		page.classList.add( 'sh-field-guide' );
+		const nav = el( 'nav', 'sh-reader-tabs' ); nav.setAttribute( 'aria-label', 'Field guide chapters' );
+		const article = el( 'article', 'sh-reader-article' ); article.tabIndex = -1;
+		const pager = el( 'div', 'sh-reader-pager' );
+		const previous = el( 'button', 'sh-btn is-quiet', 'Previous' ), next = el( 'button', 'sh-btn', 'Next chapter' );
+		let index = 0;
+		const render = ( n, moveFocus = false ) => {
+			index = n;
+			const chapter = paper.chapters[ index ];
+			article.replaceChildren( el( 'div', 'sh-reader-kicker', chapter.kicker ), el( 'h3', '', chapter.heading ) );
+			for ( const text of chapter.paragraphs ) article.append( el( 'p', 'sh-page-p', text ) );
+			article.append( el( 'p', 'sh-reader-takeaway', chapter.takeaway ) );
+			if ( index === paper.chapters.length - 1 ) {
+				const details = el( 'details', 'sh-paper-source' );
+				details.append( el( 'summary', '', 'Sources and reconstruction notes' ), el( 'p', '', paper.provenance ) );
+				for ( const source of paper.sources || [] ) {
+					const link = el( 'a', '', source.label ); link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+					const row = el( 'p' ); row.append( link ); details.append( row );
+				}
+				article.append( details );
+			}
+			for ( const [ i, b ] of [ ...nav.children ].entries() ) b.setAttribute( 'aria-current', i === index ? 'page' : 'false' );
+			previous.disabled = index === 0; next.hidden = index === paper.chapters.length - 1;
+			if ( moveFocus ) article.focus( { preventScroll: true } );
+			page.scrollTop = 0;
+		};
+		paper.chapters.forEach( ( chapter, i ) => {
+			const button = el( 'button', '', chapter.title ); button.addEventListener( 'click', () => render( i ) ); nav.append( button );
+		} );
+		previous.addEventListener( 'click', () => render( index - 1, true ) );
+		next.addEventListener( 'click', () => render( index + 1, true ) );
+		pager.append( previous, next ); page.append( nav, article, pager ); render( 0 );
+	}
+
 	ruinInspection( note ) {
 		const previousFocus=document.activeElement;
 		return this._page((page,done)=>{
@@ -435,17 +536,28 @@ export class StoryUI {
 		});
 	}
 
-	read( { title, body } ) {
+	read( paper ) {
+		if ( this._readPromise ) return this._readPromise;
+		const { title, body, chapters } = paper;
+		const previousFocus = document.activeElement;
+		const openedAt = performance.now();
 
-		return this._page( ( page, done ) => {
+		this._readPromise = this._page( ( page, done ) => {
 
 			page.append( el( 'h2', 'sh-page-title', title ) );
-			for ( const p of body ) page.append( el( 'p', 'sh-page-p', p ) );
-			const b = el( 'button', 'sh-btn', 'Put it down' );
-			b.addEventListener( 'click', () => done( null ) );
+			if ( chapters ) this._chapterReader( page, paper );
+			else for ( const p of body ) page.append( el( 'p', 'sh-page-p', p ) );
+			const b = el( 'button', 'sh-btn sh-reader-close', chapters ? 'Back to the lamp' : 'Put it down' );
+			// The reader's close button can appear beneath the opening click. Do not
+			// let the second half of a double-click immediately put the guide away.
+			b.addEventListener( 'click', () => { if ( ! chapters || performance.now() - openedAt > 500 ) done( null ); } );
 			page.append( b );
 
+		}, { trapFocus: true, dismissKeys: chapters ? [ 'Escape' ] : [ 'Escape', 'KeyE', 'Enter' ] } ).finally( () => {
+			this._readPromise = null;
+			if ( previousFocus?.isConnected ) previousFocus.focus?.( { preventScroll: true } );
 		} );
+		return this._readPromise;
 
 	}
 
@@ -502,6 +614,62 @@ export class StoryUI {
 		}, { cls: 'is-archive', dismissKeys: [ 'Escape', 'KeyE' ] } ).then( value => { previousFocus?.focus?.(); return value; } );
 	}
 
+	savedWatch( { date, time, objective = '', entry = '' } ) {
+
+		return this._page( ( page, done ) => {
+
+			page.classList.add( 'sh-save' );
+			page.setAttribute( 'role', 'dialog' );
+			page.setAttribute( 'aria-modal', 'true' );
+			page.setAttribute( 'aria-labelledby', 'sh-save-title' );
+			const cover = el( 'div', 'sh-save-cover' );
+			cover.append( el( 'p', 'sh-save-eyebrow', 'Eilean Mòr · January 1901' ) );
+			const mark = el( 'div', 'sh-save-mark' );
+			mark.setAttribute( 'aria-hidden', 'true' );
+			mark.innerHTML = '<svg viewBox="0 0 120 136" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M39 119h42M44 113l5-66h22l5 66M44 47h32M47 38h26v9H47zM46 38l14-9 14 9M60 22v7M56 113V99h8v14M55 61h10v10H55zM54 80h12M51 42h18M12 43l25-7M83 36l25 7M10 59l27-12M83 47l27 12M17 124c15-7 27 7 43 0s28 7 43 0"/><circle cx="60" cy="42" r="3"/></svg>';
+			const title = el( 'h1', 'sh-save-title', 'Seven Hunters' ); title.id = 'sh-save-title';
+			cover.append( mark, title, el( 'p', 'sh-save-subtitle', 'The keeper’s journal' ), el( 'span', 'sh-save-cover-rule' ), el( 'p', 'sh-save-quote', 'A light to keep.\nA watch to return to.' ) );
+			const paper = el( 'div', 'sh-save-paper' );
+			paper.append( el( 'p', 'sh-save-eyebrow', 'Your saved watch' ), el( 'h2', 'sh-save-heading', 'Return to the island' ), el( 'p', 'sh-save-date', date ) );
+			const stamp = el( 'div', 'sh-save-stamp' );
+			stamp.append( el( 'span', 'sh-save-time', time ), el( 'span', 'sh-save-stamp-label', 'Island time\nProgress saved' ) );
+			paper.append( stamp );
+			if ( objective ) {
+				const duty = el( 'div', 'sh-save-duty' );
+				duty.append( el( 'span', 'sh-save-eyebrow', 'Next duty' ), el( 'p', '', this.input?.touchMode ? touchInstruction( objective ) : objective ) );
+				paper.append( duty );
+			}
+			if ( entry ) {
+				const last = el( 'div', 'sh-save-entry' );
+				last.append( el( 'span', 'sh-save-eyebrow', 'Last journal entry' ), el( 'p', '', entry ) );
+				paper.append( last );
+			}
+			const actions = el( 'div', 'sh-save-actions' );
+			const resume = el( 'button', 'sh-save-continue', 'Continue the watch' ); resume.type = 'button';
+			const arrow = el( 'span', '', '→' ); arrow.setAttribute( 'aria-hidden', 'true' ); resume.append( arrow );
+			resume.addEventListener( 'click', () => done( 'continue' ) );
+			const restart = el( 'button', 'sh-save-restart', 'Begin a new watch' ); restart.type = 'button';
+			actions.append( resume, restart );
+			const confirm = el( 'div', 'sh-save-confirm' ); confirm.hidden = true;
+			confirm.setAttribute( 'role', 'group' ); confirm.setAttribute( 'aria-label', 'Confirm a new watch' );
+			confirm.append( el( 'h3', '', 'Begin again?' ), el( 'p', '', 'This replaces your saved watch and returns you to the landing boat.' ) );
+			const keep = el( 'button', 'sh-save-continue', 'Keep this watch' ); keep.type = 'button';
+			const replace = el( 'button', 'sh-save-restart', 'Replace save & begin again' ); replace.type = 'button';
+			const back = () => { confirm.hidden = true; actions.hidden = false; restart.focus(); };
+			keep.addEventListener( 'click', back );
+			replace.addEventListener( 'click', () => done( 'new' ) );
+			confirm.append( keep, replace );
+			restart.addEventListener( 'click', () => { actions.hidden = true; confirm.hidden = false; keep.focus(); } );
+			page.addEventListener( 'keydown', e => {
+				if ( e.code === 'Escape' && ! confirm.hidden ) { e.preventDefault(); e.stopPropagation(); back(); }
+			} );
+			paper.append( actions, confirm, el( 'p', 'sh-save-footnote', 'Your watch saves automatically in this browser.' ) );
+			page.append( cover, paper );
+
+		}, { cls: 'is-save', dismiss: false, trapFocus: true } );
+
+	}
+
 	choose( { title, intro = '', options, cancel = 'Not now' } ) {
 
 		return this._page( ( page, done ) => {
@@ -528,7 +696,7 @@ export class StoryUI {
 
 			}
 
-		}, { cls: 'is-choose' } );
+		}, { cls: 'is-choose', dismiss: !! cancel, trapFocus: ! cancel } );
 
 	}
 
@@ -626,7 +794,7 @@ export class StoryUI {
 	}
 
 	// the last screen: the page as written, and play again
-	end( { heading, rows, lines, credits } ) {
+	end( { heading, rows, lines, credits, next = null } ) {
 
 		this._open();
 		const c = el( 'div', 'sh-end' );
@@ -656,6 +824,11 @@ export class StoryUI {
 
 		} );
 		side.append( again, stay );
+		if ( next ) {
+			const onward = el( 'button', 'sh-btn', next.label );
+			onward.addEventListener( 'click', () => { c.remove(); this._close(); next.use(); } );
+			side.prepend( onward );
+		}
 		c.append( page, side );
 		this.layer.append( c );
 		void c.offsetWidth;

@@ -57,7 +57,7 @@ export class LensFlare {
 			cloudGlare: [ 'f32', 0 ], // optional soft flare from the low sun diffused by cloud
 			anamorphic: [ 'f32', 0 ], // cinematic horizontal streak, halo and amplified ghosts
 			sunUV: [ 'vec2f', new Vector2( 0.5, 0.5 ) ],
-			inView: [ 'f32', 0 ], // 0..1, fades as the sun leaves the frame
+			inView: [ 'f32', 0 ], // 0..1, includes a fading fringe beyond the frame
 			aboveWater: [ 'f32', 1 ],
 			aspect: [ 'f32', 16 / 9 ],
 			discPx: [ 'f32', 6 ], // sun disc radius in depth-buffer pixels
@@ -99,6 +99,8 @@ export class LensFlare {
 			workgroupSize: [ 1, 1, 1 ],
 			code: /* wgsl */`
 fn flareSkyTap( p: vec2f, size: vec2i ) -> f32 {
+	// Offscreen depth is unavailable; the nearest border supplies an approximate
+	// mask, so a wall at the sun-facing edge still blocks the glare.
 	let q = clamp( vec2i( p ), vec2i( 0 ), size - 1 );
 	// reversed depth: the sky is at 0
 	return select( 0.0, 1.0, textureLoad( flareDepth, q, 0 ) < 1e-7 );
@@ -202,16 +204,17 @@ ${ ghosts }
 	let glow = exp( rq * -5.0 ) * 0.05 + exp( rq * -40.0 ) * 0.4;
 	let burst = spikes + vec3f( fine + glow );
 
-	// Cylindrical lens elements spread the sun into a frame-spanning streak.
+	// Cylindrical lens elements spread the sun into a short, softly tapered streak.
 	// A narrow white core sits inside a cooler, softer shoulder; both stay on
 	// the sun's screen height as the cutscene camera turns. Widths have a pixel
 	// floor so the streak remains visible at small display sizes.
 	let ax = abs( q.x );
+	let streakEnd = 1.0 - smoothstep( 0.12, 0.46, ax );
 	let coreWidth = max( px * 1.25, 0.0014 ) + ax * 0.001;
 	let vertical = q.y / coreWidth;
-	let core = exp( -vertical * vertical ) * exp( -ax / 0.62 );
-	let shoulder = exp( -vertical * vertical / 16.0 ) * exp( -ax / 0.48 );
-	let stretched = q / vec2f( 0.42, 0.028 );
+	let core = exp( -vertical * vertical ) * exp( -ax / 0.20 ) * streakEnd;
+	let shoulder = exp( -vertical * vertical / 16.0 ) * exp( -ax / 0.16 ) * streakEnd;
+	let stretched = q / vec2f( 0.18, 0.028 );
 	let veil = exp( -dot( stretched, stretched ) );
 	let streak = core * vec3f( 7.0, 24.0, 90.0 )
 		+ shoulder * vec3f( 1.0, 7.0, 40.0 ) + veil * vec3f( 2.0, 3.0, 8.0 );
@@ -230,11 +233,18 @@ ${ ghosts }
 		const d = this.uniforms.fields.sunDir.value.copy( this.sunDir.value || this.sunDir );
 		camera.updateMatrixWorld();
 		const v = _v.copy( camera.position ).addScaledVector( d, 1000 ).project( camera );
-		const ahead = _f.set( 0, 0, - 1 ).applyQuaternion( camera.quaternion ).dot( d ) > 0.05;
+		const facing = _f.set( 0, 0, - 1 ).applyQuaternion( camera.quaternion ).dot( d );
 		this.sunUV.value.set( v.x * 0.5 + 0.5, 0.5 - v.y * 0.5 );
-		// fade out over the last 5% before the frame edge (no pop when the sun leaves the view)
-		const edge = Math.max( Math.abs( v.x ), Math.abs( v.y ) );
-		this.inView.value = ahead ? MathUtils.clamp( ( 1.0 - edge ) / 0.1, 0, 1 ) : 0;
+		// Bright light still reaches the lens just beyond the sensor's bounds.
+		// Keep full admission to the edge, then fade over an angular fringe;
+		// NDC margins alone become much narrower on portrait/mobile cameras.
+		const tanV = Math.tan( MathUtils.degToRad( camera.getEffectiveFOV() ) * 0.5 );
+		const tanH = tanV * camera.aspect;
+		const outside = Math.max( 0, Math.atan( Math.abs( v.x ) * tanH ) - Math.atan( tanH ),
+			Math.atan( Math.abs( v.y ) * tanV ) - Math.atan( tanV ) );
+		const fringe = MathUtils.degToRad( 14 + MathUtils.clamp( this.anamorphic.value, 0, 2 ) * 12 );
+		this.inView.value = facing > 0 ? ( 1 - MathUtils.smoothstep( outside, 0, fringe ) )
+			* MathUtils.smoothstep( facing, 0.02, 0.18 ) : 0;
 		this.aboveWater.value = aboveWater ? 1 : 0;
 		this.aspect.value = camera.aspect;
 		this.dt.value = Math.min( dt, 0.1 );

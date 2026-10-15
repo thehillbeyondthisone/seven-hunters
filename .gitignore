@@ -6,3 +6,6 @@ dist
 /.local/
 /tools/audio/raw/
 /artifacts/arrival-atmosphere/audio-runtime/
+/artifacts/
+/tmp/
+*.blend1

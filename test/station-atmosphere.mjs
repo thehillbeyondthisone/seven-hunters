@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { Vector3, Color, PerspectiveCamera } from '../src/engine/index.js';
 import { stationAcoustics } from '../src/world/flannan/StationAcoustics.js';
-import { stationLightBounds } from '../src/world/flannan/StationLighting.js';
+import { stationLightBounds, handLampBounds } from '../src/world/flannan/StationLighting.js';
 import { ROOM, TOWER } from '../src/world/flannan/Station.js';
 import { LocalLights, localLightsModule, addVillageLights } from '../src/materials/LocalLights.js';
 import { Lamp } from '../src/station/Lamp.js';
@@ -33,6 +33,11 @@ for ( let r = 2.04; r <= 3; r += .01 ) {
 assert.equal( stationAcoustics( p ).shelter, 0, 'walkway is exposed' );
 
 const lights = new LocalLights(); G.night.value = 1;
+const H = T.hatch, hatchFlame = new Vector3( Math.cos( H.angle ) * 1.5, T.deck + .8, Math.sin( H.angle ) * 1.5 );
+assert( handLampBounds( hatchFlame ).min[ 1 ] < T.landing - 1, 'handheld flame reaches the visible teaching weight through the hatch' );
+assert( stationLightBounds( hatchFlame ).min[ 1 ] > T.deck - 1, 'fixed lantern-room lights retain their floor mask' );
+const awayFromHatch = new Vector3( -hatchFlame.x, hatchFlame.y, -hatchFlame.z );
+assert( handLampBounds( awayFromHatch ).min[ 1 ] > T.deck - 1, 'handheld spill is limited to the hatch vicinity' );
 const source = { position: new Vector3( -6, T.floor + 1.4, 1 ), color: new Color( 1, .7, .4 ), intensity: 4, range: 5, kind: 'lamp', dir: new Vector3( 0, -1, 0 ), cosInner: .2, cosOuter: -.7, flicker: .025 };
 addVillageLights( lights, { getLightSources: () => [ source ] } );
 const light = lights.sources[ 0 ]; light.bounds = stationLightBounds( light.position );

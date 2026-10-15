@@ -5,6 +5,7 @@ import { GroundBounce } from '../materials/GroundBounce.js';
 import { STYLES, STYLE_NAMES } from '../style/Styles.js';
 import { SETTINGS } from '../sky/Setting.js';
 import { hazeDensityForVisibility } from '../post/AirHaze.js';
+import { saveCameraBob } from '../player/CameraComfort.js';
 
 // Binds the Tidewater UI (panel + HUD) to the running app.
 const SEA = {
@@ -203,6 +204,7 @@ export class AppUI {
 
 		}
 		const view = cam.addFolder( 'View', { icon: 'camera' } );
+		view.addToggle( { label: 'Camera bob', object: app.settings, key: 'cameraBob', tooltip: 'Head motion while walking and during tower journeys. Saved on this device.', onChange: saveCameraBob } );
 		view.addSelect( { label: 'Boat camera', object: s, key: 'camMode', options: [ { label: '1st person', value: 'first' }, { label: '3rd person', value: 'third' } ], onChange: ( v ) => { app.player.camMode = v; } } );
 		view.addSlider( { label: 'Field of view', object: s, key: 'fov', min: 35, max: 100, step: 1, unit: '°', onChange: ( v ) => {
 
@@ -318,9 +320,9 @@ export class AppUI {
 
 		const mode = app.story?.aboard ? 'Aboard the landing boat' : p.mode === 'boat' ? `Boat · ${ p.camMode === 'first' ? '1st' : '3rd' } person`
 			: p.mode === 'deck' ? 'On deck'
-			: p.mode === 'swim' ? ( app.camera.position.y < ( app.cameraWaterHeight ?? 0 ) - 0.3 ? 'Diving' : 'Swimming' ) : 'Walking';
+			: p.mode === 'swim' ? ( app.keeperSafety ? 'Struggling in the sea' : app.camera.position.y < ( app.cameraWaterHeight ?? 0 ) - 0.3 ? 'Diving' : 'Swimming' ) : 'Walking';
 		ui.setMode( mode );
-		if ( p.prompt ) ui.setPrompt( p.prompt.key, p.prompt.text, p.prompt.hold && ! p.prompt.hideProgress ? p.prompt.progress : null );
+		if ( p.prompt && ! app.story?.ui.open && ! app.story?.signal ) ui.setPrompt( p.prompt.key, p.prompt.text, p.prompt.hold && ! p.prompt.hideProgress ? p.prompt.progress : null );
 		else ui.setPrompt( null );
 
 		const b = app.boatCtl;

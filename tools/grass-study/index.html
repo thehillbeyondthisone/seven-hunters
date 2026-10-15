@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seven Hunters · Grass studies</title><link rel="stylesheet" href="./style.css"></head>
+<body>
+<header><a class="wordmark" href="./">SEVEN HUNTERS <span>Field studies / 01</span></a><span class="badge">ISOLATED PREVIEW</span></header>
+<main>
+  <div class="intro"><div><p class="eyebrow">THE GROUND BENEATH THE WATCH</p><h1>A little more life on the coast.</h1><p>Two real source implementations. Small winter plots. Try them before choosing the island’s grass.</p></div><div class="sample-label">Eilean Mòr<br><span>January · exposed maritime grassland</span></div></div>
+  <nav aria-label="Grass project"><button class="selected" data-project="field" aria-pressed="true"><small>01</small> Field Grass <span>Clumps &amp; footprints</span></button><button data-project="terra" aria-pressed="false"><small>02</small> Terra <span>Blades &amp; light</span></button><button data-project="grassworks" aria-pressed="false"><small>03</small> Grassworks <span>Official live demo ↗</span></button></nav>
+  <section class="comparison">
+    <div class="stage-wrap"><div class="stage-top"><span id="plot-label">FIELD GRASS / WINTER COAST</span><span id="engine-status" role="status">Preparing the patch…</span></div><iframe id="plot" title="Interactive Field Grass test plot" src="./field.html"></iframe><div class="stage-bottom"><span>Drag to orbit · scroll to get closer</span><span>8.6 m scatter <b>│</b> marker = 1 m</span></div></div>
+    <aside>
+      <p class="eyebrow">LOOK CLOSER</p><h2 id="project-title">Three.js Field Grass</h2><p id="project-desc">Seven-blade clumps, layered gusts, and a footprint wake that settles back into the wind.</p>
+      <label for="height">Blade height <output id="height-label">18 cm</output></label><input id="height" type="range" min="8" max="55" step="1" value="18">
+      <label for="wind">Coastal wind</label><select id="wind"><option value="0.35">Sheltered</option><option value="1" selected>Exposed</option><option value="1.8">Strong</option></select>
+      <label for="palette">Colour treatment</label><select id="palette"><option value="winter">Winter olive &amp; straw</option><option value="green">Greener comparison</option></select>
+      <div class="buttons"><button id="view">Closer view</button><button id="pause">Pause motion</button></div><button class="walk" id="walk">Walk through the patch</button>
+      <p class="detail" id="feature-note">Watch the pale marker part the grass and leave a short recovering wake.</p>
+      <div class="credit"><a id="source" href="https://github.com/matthew-kissinger/threejs-field-grass" target="_blank" rel="noreferrer">View actual project source ↗</a><span id="license">Matthew Kissinger · MIT · source preview 0.1.0</span></div>
+    </aside>
+  </section>
+  <section id="commercial" hidden><div class="commercial-copy"><p class="eyebrow">THE THIRD CONTENDER</p><h2>Grassworks, running its own code.</h2><p>The author’s live demo is the honest comparison without a licensed source copy. Choose <strong>Sheep Fescue</strong>, then reduce Grass Height and try Wind. Its scene and lighting differ from the local plots.</p><a class="external" href="https://grassworks.techredux.co/demo" target="_blank" rel="noreferrer">Open the official live demo ↗</a><p class="detail">Commercial source · no purchase or main-game integration made.</p></div><div class="commercial-mark">03<span>GRASSWORKS</span><em>Fine blades · LOD · terrain masks</em></div></section>
+  <footer><p><strong>A reconstruction study.</strong> Short, fine, wind-exposed grass and muted winter colour are art direction for the coast, not a measured botanical reconstruction of 1901.</p><p>The game’s vegetation and saves are unchanged. No project has been committed or adopted.</p></footer>
+  <details><summary>What is actually running?</summary><p>Field Grass calls the upstream scatter, tuft geometry, TSL material, and interaction field directly. Terra calls the upstream grass mesh generator and both GLSL shaders directly, with its original Three.js runtime. The common test scene, shorter/narrower blades, procedural ground textures, and controls were written for this comparison. No original Terra artwork or audio is used.</p><p>Source revisions, file references, and integration limits are in <a href="./README.md">the study notes</a>. These samples do not measure the main game’s performance.</p></details>
+</main><script type="module" src="./lab.js"></script>
+</body></html>

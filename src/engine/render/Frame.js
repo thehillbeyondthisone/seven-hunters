@@ -25,6 +25,7 @@ const FRAME_FIELDS = {
 	resolution: [ 'vec2f', new Vector2( 1, 1 ) ],
 	invResolution: [ 'vec2f', new Vector2( 1, 1 ) ],
 	outputResolution: [ 'vec2f', new Vector2( 1, 1 ) ],
+	viewportOrigin: [ 'vec2f', new Vector2() ],
 	// sub-pixel jitter in NDC units (applied in viewProj)
 	jitter: [ 'vec2f', new Vector2() ],
 	// last frame's jitter (NDC): last frame's buffers were rendered with it (prevViewProjNoJitter + this)
@@ -84,7 +85,7 @@ const FRAME_FIELDS = {
 };
 
 const CAMERA_FIELDS = [ 'view', 'proj', 'viewProj', 'invView', 'invProj', 'invViewProj', 'viewProjNoJitter', 'prevViewProjNoJitter',
-	'cameraPos', 'near', 'prevCameraPos', 'far', 'resolution', 'invResolution', 'jitter', 'prevJitter', 'reversedDepth' ];
+	'cameraPos', 'near', 'prevCameraPos', 'far', 'resolution', 'invResolution', 'viewportOrigin', 'jitter', 'prevJitter', 'reversedDepth' ];
 
 // The main frame block (main camera; also what compute shaders see).
 export const FrameUniforms = new UniformBlock( 'Frame', FRAME_FIELDS, { label: 'frame' } );
@@ -133,7 +134,7 @@ export const GRAVITY = 9.81;
 const _m = new Matrix4();
 
 // Write the camera state for a draw. `jitter` in pixels (internal resolution).
-export function setFrameCamera( camera, width, height, { jitterX = 0, jitterY = 0, prevViewProj = null, prevCameraPos = null, block = FrameUniforms } = {} ) {
+export function setFrameCamera( camera, width, height, { jitterX = 0, jitterY = 0, viewportX = 0, viewportY = 0, prevViewProj = null, prevCameraPos = null, block = FrameUniforms } = {} ) {
 
 	const F = block.fields;
 	camera.updateMatrixWorld();
@@ -158,6 +159,7 @@ export function setFrameCamera( camera, width, height, { jitterX = 0, jitterY = 
 	F.near.value = camera.near;
 	F.far.value = camera.far;
 	F.resolution.value = new Vector2( width, height );
+	F.viewportOrigin.value = new Vector2( viewportX, viewportY );
 	F.invResolution.value = new Vector2( 1 / width, 1 / height );
 	F.prevJitter.value = F.jitter.value ? F.jitter.value.clone() : new Vector2();
 	F.jitter.value = new Vector2( jx, jy );

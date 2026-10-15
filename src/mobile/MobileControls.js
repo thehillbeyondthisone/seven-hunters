@@ -1,4 +1,5 @@
 import { mobileAction, stickMotion } from './MobileOptions.js';
+import { saveCameraBob } from '../player/CameraComfort.js';
 
 const paths = {
 	lamp: 'M8 7V5a4 4 0 0 1 8 0v2M7 8h10l1 11H6L7 8Zm-2 13h14M9 4h6M10 10v6m4-6v6',
@@ -128,7 +129,7 @@ export class MobileControls {
 	start() { this.started = true; }
 	resumeAudio() { this.app.audio?.resume(); }
 	get paused() { const ui = this.app.ui.ui; return this.menuOpen || !! this.app.devMenu?.open || ui.panelOpen || ! ui.helpEl.hidden; }
-	get available() { const s = this.app.story; return this.started && ! this.paused && ! s?.paused && ! s?.ui.open && ! s?.islandReveal?.active && s?.beat !== 'intro' && s?.beat !== 'end' && ! this.app.ui.ui.photoMode; }
+	get available() { const s = this.app.story; return this.started && ! this.paused && ! s?.paused && ! s?.ui.open && ! s?.islandReveal?.active && ! s?.lampStudy?.active && s?.beat !== 'intro' && s?.beat !== 'end' && ! this.app.ui.ui.photoMode; }
 
 	setDrawer( open ) {
 		this.drawer.hidden = ! open;
@@ -190,22 +191,27 @@ export class MobileControls {
 		menu.setAttribute( 'role', 'dialog' ); menu.setAttribute( 'aria-modal', 'true' ); menu.setAttribute( 'aria-label', 'Watch paused' );
 		menu.innerHTML = `<section><div class="sm-menu-kicker">SEVEN HUNTERS</div><h2>The watch is paused.</h2>
 			<p>On the boat, tap Go to landing, then Step ashore. Read papers opens your packet. Ashore, drag on the left to walk and on the right to look. Tools holds your equipment.</p>
-			<button data-menu="resume">Return to the watch</button><button data-menu="experiences">Experiences</button><button data-menu="sound">Sound</button><button data-menu="graphics">Graphics settings</button>
+			<button data-menu="resume">Return to the watch</button><button data-menu="experiences">Experiences</button><button data-menu="sound">Sound</button><button data-menu="bob" aria-pressed="false">Camera bob</button><button data-menu="graphics">Graphics settings</button>
 			<small>Landscape gives you the clearest view.</small></section>`;
 		document.body.append( menu );
 		menu.querySelector( '[data-menu="resume"]' ).addEventListener( 'click', () => { this.pause( false ); this.resumeAudio(); } );
 		menu.querySelector( '[data-menu="experiences"]' ).addEventListener( 'click', () => { this.pause( false ); this.app.devMenu?.show(); } );
 		menu.querySelector( '[data-menu="sound"]' ).addEventListener( 'click', () => { const audio = this.app.audio; if ( audio ) audio.setMuted( ! audio.muted ); this.refreshSound(); } );
+		menu.querySelector( '[data-menu="bob"]' ).addEventListener( 'click', () => {
+			this.app.settings.cameraBob = ! this.app.settings.cameraBob;
+			saveCameraBob( this.app.settings.cameraBob ); this.refreshBob();
+		} );
 		menu.querySelector( '[data-menu="graphics"]' ).addEventListener( 'click', () => { this.pause( false ); this.app.ui.ui.togglePanel( true ); } );
 		menu.addEventListener( 'keydown', event => { if ( event.key === 'Escape' ) this.pause( false ); } );
 	}
 	refreshSound() { const audio = this.app.audio; const b = this.menu.querySelector( '[data-menu="sound"]' ); b.textContent = audio?.muted ? 'Turn sound on' : 'Mute sound'; b.disabled = ! audio; }
+	refreshBob() { const b = this.menu.querySelector( '[data-menu="bob"]' ), on = this.app.settings.cameraBob !== false; b.textContent = `Camera bob: ${ on ? 'On' : 'Off' }`; b.setAttribute( 'aria-pressed', String( on ) ); }
 	pause( open ) {
 		this.menuOpen = open; this.menu.hidden = ! open; this.resetGestures(); this.setDrawer( false );
 		if ( open ) {
 			const story = this.app.story;
 			if ( story && story.beat !== 'intro' && story.beat !== 'end' ) story.save();
-			this.refreshSound(); this.menu.querySelector( '[data-menu="resume"]' ).focus();
+			this.refreshSound(); this.refreshBob(); this.menu.querySelector( '[data-menu="resume"]' ).focus();
 		}
 	}
 
@@ -216,7 +222,7 @@ export class MobileControls {
 		} else if ( this.blockedInput ) {
 			this.blockedInput = false;
 			const s = this.app.story;
-			if ( ! s?.ui.open && ! s?.signal && ! s?.paused ) this.input.enabled = true;
+			if ( ! s?.ui.open && ! s?.signal && ! s?.paused && ! s?.lampStudy?.active ) this.input.enabled = true;
 		}
 	}
 

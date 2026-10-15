@@ -43,6 +43,6 @@ export function mobileAction( app ) {
 		detail: story.arrival.ready ? 'Leave the boat' : 'Skip the crossing', kind: 'landing' };
 	const prompt = app.player?.prompt;
 	if ( prompt ) return { label: prompt.text, detail: prompt.hold ? 'Keep pressed' : 'Tap to interact', kind: 'key', key: 'KeyE',
-		hold: !! prompt.hold, progress: prompt.hideProgress ? 0 : prompt.progress ?? 0, target: story?.interact?.current?.id };
+		hold: !! prompt.hold, progress: prompt.hideProgress ? 0 : prompt.progress ?? 0, target: prompt.safetyTarget || story?.interact?.current?.id };
 	return { label: 'Look at an object', kind: 'none', disabled: true };
 }

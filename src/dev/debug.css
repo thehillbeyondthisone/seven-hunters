@@ -38,6 +38,9 @@
 .is-mobile .sh-debug-launch { top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); right:auto; min-height:40px; font-size:14px; }
 /* Keep debug beside the original glass settings panel on desktop. */
 @media (min-width:660px) {
+ html:not(.is-mobile):has(.sh-debug:not([hidden])) .tw-root[data-panel='closed'] .tw-rail {
+  right:268px;
+ }
  html:not(.is-mobile):has(.tw-root[data-panel='open']) .sh-debug,
  html:not(.is-mobile):has(.tw-root[data-panel='open']) .sh-debug-launch {
   right:calc(var(--tw-panel-w) + 2 * var(--tw-3));

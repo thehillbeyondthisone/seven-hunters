@@ -71,6 +71,11 @@ fn hookLocalLights( s: Surface, P: vec3f, N: vec3f, V: vec3f, acc: ptr<function,
 	let rough = clamp( s.roughness, 0.03, 1.0 );
 	for ( var i = 0; i < localLights.count; i++ ) {
 		let p = localLights.pos[ i ];
+#if LANTERN_SELF_LIGHT
+		// The carried lantern uses its own finite-source response at centimetre
+		// distances, while still reflecting the room's other real light sources.
+		if ( distance( p.xyz, mat.flamePos ) < 0.015 ) { continue; }
+#endif
 		let d = p.xyz - P;
 		let d2 = dot( d, d );
 		if ( d2 < p.w ) {

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fence stability review</title>
+<style>html,body{margin:0;overflow:hidden;background:#131c21}canvas{display:block}nav{position:fixed;z-index:200;bottom:14px;left:14px;background:#131c21ed;color:#eee;padding:12px;font:14px system-ui}button{padding:8px;margin-left:8px}#fps{display:none}</style>
+<div id="app"></div><div id="fps"></div>
+<nav><span id="state">Loading station…</span><button id="aa" disabled>Turn smoothing off</button><button id="view" disabled>Inspect up close</button></nav>
+<script type="module">
+import { App } from '../src/App.js';
+import { Story } from '../src/story/Story.js';
+const app = new App(), state = document.getElementById('state'), aa = document.getElementById('aa'), view = document.getElementById('view');
+app.qs.set('noAudio','');
+await app.init((p,label)=>{state.textContent=label || `${Math.round(p*100)}%`});
+app.ui = {ui:{photoMode:false,toast(){}},update(){}};
+const story = app.story = new Story(app);
+story.setTitleView(true);
+// No Story.start or save writes: this is only a camera/material review.
+let close = false;
+const titleCamera = story._titleCamera.bind(story);
+story._titleCamera = () => {
+  if (!close) return titleCamera();
+  app.camera.position.set(-5,82.2,24);
+  app.camera.lookAt(0,82,20.75);
+  app.camera.fov=62; app.camera.updateProjectionMatrix();
+};
+const status=()=>{state.textContent=`${close?'Close fence':'Opening angle'} · ${app.post.aaMode==='none'?'smoothing off':'SMAA + 8 temporal samples'}`};
+aa.onclick=()=>{app.post.aaMode=app.post.aaMode==='none'?'smaataa':'none';app.cameraCut();aa.textContent=app.post.aaMode==='none'?'Turn smoothing on':'Turn smoothing off';status()};
+view.onclick=()=>{close=!close;story._titleCamera();app.cameraCut();view.textContent=close?'Opening angle':'Inspect up close';status()};
+aa.disabled=view.disabled=false;status();
+app.start();
+</script></html>

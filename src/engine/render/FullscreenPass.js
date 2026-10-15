@@ -33,7 +33,7 @@ struct FSIn { @builtin( position ) pos: vec4f, @location( 0 ) uv: vec2f };
 
 export class FullscreenPass {
 
-	constructor( { label = 'fullscreen', modules = [], bindings = {}, code, colorFormats = [ 'rgba16float' ], blend = 'none', defines = {}, depthFormat = null, depthCompare = 'always', depthWrite = false, depth = 0, writeMasks = null, blends = null } ) {
+	constructor( { label = 'fullscreen', modules = [], bindings = {}, code, colorFormats = [ 'rgba16float' ], blend = 'none', defines = {}, depthFormat = null, depthCompare = 'always', depthWrite = false, depth = 0, writeMasks = null, blends = null, sampleCount = 1 } ) {
 
 		this.label = label;
 		this.colorFormats = colorFormats;
@@ -52,6 +52,7 @@ export class FullscreenPass {
 				writeMask: writeMasks ? writeMasks[ i ] : GPUColorWrite.ALL,
 			} ) ) },
 			primitive: { topology: 'triangle-list' },
+			multisample: { count: sampleCount },
 		};
 		if ( depthFormat ) desc.depthStencil = { format: depthFormat, depthCompare, depthWriteEnabled: depthWrite };
 		this.handle = GPU.renderPipeline( desc );

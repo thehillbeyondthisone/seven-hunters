@@ -365,6 +365,7 @@ export class MeshRenderer {
 			layout,
 			vertex: { module, entryPoint: 'vs', buffers: vl.buffers.map( ( b ) => b.layout ) },
 			primitive: { topology: material.topology, cullMode, frontFace: 'ccw' },
+			multisample: { count: pass.sampleCount || 1 },
 		};
 		if ( src.hasFragment ) desc.fragment = { module, entryPoint: 'fs', targets };
 		if ( pass.depthFormat ) desc.depthStencil = {
@@ -488,13 +489,13 @@ export class MeshRenderer {
 			kind: 'main', late: false, colorFormats: [], depthFormat: null, depthCompare: 'greater-equal',
 			frameBlock: FrameUniforms, layerMask: 0xffffffff, ...pass,
 		};
-		pass.passKey = `${ pass.kind }.${ pass.late ? 1 : 0 }.${ pass.colorFormats.join( ',' ) }.${ pass.depthFormat }.${ pass.depthCompare }.${ pass.cullOverride || '' }.${ pass.defines ? JSON.stringify( pass.defines ) : '' }`;
+		pass.passKey = `${ pass.kind }.${ pass.late ? 1 : 0 }.${ pass.colorFormats.join( ',' ) }.${ pass.depthFormat }.${ pass.depthCompare }.${ pass.cullOverride || '' }.${ pass.sampleCount || 1 }.${ pass.defines ? JSON.stringify( pass.defines ) : '' }`;
 		const lists = pass.items || this.collect( scene, pass );
 		const enc = GPU.getEncoder();
 		const colorAttachments = ( pass.colorViews || [] ).map( ( view, i ) => {
 
 			const clear = pass.clearColors ? pass.clearColors[ i ] : null;
-			return { view, loadOp: clear ? 'clear' : 'load', storeOp: 'store', clearValue: clear || [ 0, 0, 0, 0 ] };
+			return { view, ...( pass.resolveTargets?.[ i ] ? { resolveTarget: pass.resolveTargets[ i ] } : {} ), loadOp: clear ? 'clear' : 'load', storeOp: 'store', clearValue: clear || [ 0, 0, 0, 0 ] };
 
 		} );
 		const desc = { label: pass.label || pass.kind, colorAttachments };

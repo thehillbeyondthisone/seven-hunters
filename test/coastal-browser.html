@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Coast and isolation · browser acceptance</title>
+<link rel="stylesheet" href="/src/ui/ui.css"><link rel="stylesheet" href="/src/story/story.css"><link rel="stylesheet" href="/src/mobile/mobile.css">
+<style>#route-review{position:fixed;bottom:12px;left:12px;z-index:105;width:min(500px,85vw);padding:10px;background:#101b24e8;color:#f3ead8;font:15px/1.4 system-ui}#route-review button{font:inherit;padding:9px 14px;color:inherit;background:#263b46;border:1px solid #c6b992}#route-review p{margin:8px 0}</style></head><body><div id="app"></div><div id="fps" hidden></div>
+<div id="route-review"><p id="route-status">Loading the real scene and renderer…</p><button id="route-run" hidden>Run the returning-light walking review</button></div>
+<script type="module">
+import {App} from '../src/App.js';import {UI} from '../src/ui/UI.js';import {AppUI} from '../src/ui/AppUI.js';import {Story} from '../src/story/Story.js';import {walkReturningLight} from './helpers/coastal-route.mjs';
+const app=new App(),ui=new UI(),status=document.querySelector('#route-status'),run=document.querySelector('#route-run');app.qs.set('returningLightPreview','');app.qs.set('noAudio','');
+const raf=requestAnimationFrame.bind(window),caf=cancelAnimationFrame.bind(window);window.requestAnimationFrame=cb=>document.hidden?setTimeout(()=>cb(performance.now()),16):raf(cb);window.cancelAnimationFrame=id=>{clearTimeout(id);caf(id);};
+await app.init((p,label,until)=>{ui.setLoading(p,label,until);status.textContent=label;});app.ui=new AppUI(app,ui);const s=app.story=new Story(app);s.save=()=>{};s.loadSave=()=>null;app.input.requestLock=()=>{};await s.returningLight.begin(true);app.start();await ui.hideLoader();run.hidden=false;
+status.textContent='Automated walking review in the real browser. Read and answer the actual pages as they appear. This review writes no saves.';
+run.onclick=async()=>{run.hidden=true;const player=app.player,keys=app.input.keys;const step=seconds=>{for(let t=0;t<seconds-1e-8;t+=1/60){app.keeperSafety.beforeFrame(1/60);player.update(1/60);s.update(1/60);app.keeperSafety.afterFrame();app.input.endFrame();}};
+const face=at=>{const d=at.clone().sub(app.camera.position).normalize();player.yaw=Math.atan2(-d.x,-d.z);player.pitch=Math.asin(d.y);player.update(0);app.camera.updateMatrixWorld();};
+try{await walkReturningLight({app,s,player,keys,step,face,yield:()=>new Promise(resolve=>setTimeout(resolve,16)),checkpoint:async label=>{status.textContent=`Browser walking review · ${label}`;await new Promise(resolve=>setTimeout(resolve,150));}});status.textContent='PASS · complete browser walking route, selectable actions, two real conversations, ridge/channel observations and signed journal. No saves written.';}
+catch(error){keys.clear();status.textContent=`FAIL · ${error.message}`;console.error(error);run.hidden=false;}
+};
+</script></body></html>

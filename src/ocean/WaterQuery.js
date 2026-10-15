@@ -86,7 +86,7 @@ fn waterQueryCameraState() -> vec4f { return waterQueryResults[ 0 ]; }
 		const SH = !! ( S.shore && S.terrain );
 		this._heightModule = new ShaderModule( {
 			name: 'waterQueryHeight',
-			deps: [ commonModule, fft.module, S.attenuationModule, S.terrain && S.terrain.module, SH && S.shore.module, S.wake && S.wake.module, S.extremeSea && S.extremeSea.module ],
+			deps: [ commonModule, fft.module, S.attenuationModule, S.terrain && S.terrain.module, SH && S.shore.module, S.wake && S.wake.module, S.extremeSea && S.extremeSea.module, S.coastal && S.coastal.module ],
 			uniforms: S.params,
 			uniformName: 'waterSurface',
 			code: /* wgsl */`
@@ -108,7 +108,7 @@ fn waterQueryHeightAtXZ( p: vec2f ) -> f32 {
 	for ( var i = 0; i < 2; i++ ) {
 		x0 = p - waterQueryDispAt( x0, depth ).xz;
 	}
-	return frame.seaLevel + waterQueryDispAt( x0, depth ).y;
+	return frame.seaLevel + waterQueryDispAt( x0, depth ).y${ S.coastal ? ' + coastalSample( p ).x' : '' };
 }
 `,
 		} );
@@ -181,6 +181,15 @@ fn main( @builtin( global_invocation_id ) gid: vec3u ) {
 
 	}
 
+	// Keep authored local wash current while the offshore FFT readback is in flight.
+	currentHeight( i, position, height = this.cpu[ i * 4 ] ) {
+		const coast = this.surface.coastal;
+		if ( ! coast ) return height;
+		if ( ! this.resultCoast ) return Math.max( height, coast.sample( position ).surfaceHeight );
+		const previous = { x: this.resultInputs[ i * 4 ], z: this.resultInputs[ i * 4 + 1 ] };
+		return height - coast.sample( previous, this.resultCoast ).height + coast.sample( position ).height;
+	}
+
 	// last read-back results: { height, nx, nz, floor }
 	get( i, out = {} ) {
 
@@ -211,6 +220,7 @@ fn main( @builtin( global_invocation_id ) gid: vec3u ) {
 				this._pending = false;
 				this.latency += ( Math.min( G.time.value - this._issued, 0.25 ) - this.latency ) * 0.2;
 				this.resultTime = this._issued;
+				this.resultCoast = this._issuedCoast;
 				this.resultInputs.set( this._issueInputs );
 				this.version ++;
 
@@ -219,6 +229,7 @@ fn main( @builtin( global_invocation_id ) gid: vec3u ) {
 
 				this._pending = true;
 				this._issued = issued;
+				this._issuedCoast = this.surface.coastal?.save();
 
 			}
 

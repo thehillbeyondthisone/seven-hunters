@@ -1,5 +1,6 @@
 import { Vector3 } from '../engine/math/index.js';
 import { sunDirectionFromTime } from './Sky.js';
+import { REFERENCE_STAR_TIME } from './StarCoordinates.js';
 
 // Where and when the world is set.
 //
@@ -89,7 +90,7 @@ export class Setting {
 	constructor( key = 'tidewater' ) {
 
 		this.dayOffset = 0;
-		this.result = { sun: new Vector3(), moon: new Vector3(), moonIllumination: 1, declination: 0, dated: false };
+		this.result = { sun: new Vector3(), moon: new Vector3(), moonIllumination: 1, declination: 0, dated: false, ut: REFERENCE_STAR_TIME };
 		this.set( key );
 
 	}
@@ -123,6 +124,8 @@ export class Setting {
 		r.dated = base !== null;
 		if ( ! r.dated ) {
 
+			// An illustrative J2000 sidereal day for undated Tidewater; the legacy sun/moon remain.
+			r.ut = REFERENCE_STAR_TIME + ( Math.floor( this.dayOffset ) * 24 + hours - 12 - this.lon / 15 ) * 3600000;
 			sunDirectionFromTime( hours, this.lat, this.declination, r.sun );
 			r.moon.set( - r.sun.x, Math.abs( r.sun.y ) * 0.8 + 0.25, - r.sun.z ).normalize();
 			r.moonIllumination = 1;
@@ -133,6 +136,7 @@ export class Setting {
 
 		// local solar time -> universal time (the equation of time, a few minutes, is ignored)
 		const ut = base + ( Math.floor( this.dayOffset ) * 24 + hours - this.lon / 15 ) * 3600000;
+		r.ut = ut;
 		const n = daysSinceJ2000( ut );
 		const se = sunEcliptic( n ), me = moonEcliptic( n );
 		const sq = equatorial( se ), mq = equatorial( me );

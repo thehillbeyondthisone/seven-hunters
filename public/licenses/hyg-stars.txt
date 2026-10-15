@@ -1,0 +1,23 @@
+HYG Stellar Database v4.1 - bright star subset
+Creator: David Nash / Astronexus
+
+Source: https://github.com/astronexus/HYG-Database
+Current upstream: https://codeberg.org/astronexus/hyg
+Pinned source: https://raw.githubusercontent.com/astronexus/HYG-Database/c7f7f883fe678cc7680169a50ccd7dcc49b060ce/hyg/CURRENT/hygdata_v41.csv
+Acquired: 2026-10-12
+
+This data and the adapted subset in src/sky/data/bright-stars.json are
+licensed under Creative Commons Attribution-ShareAlike 4.0 International.
+License: https://creativecommons.org/licenses/by-sa/4.0/
+Full license text: CC-BY-SA-4.0.txt in this directory.
+Upstream license notice: https://github.com/astronexus/HYG-Database/blob/c7f7f883fe678cc7680169a50ccd7dcc49b060ce/LICENSE
+
+Changes: selected all catalog stars of visual magnitude <= 6.5, omitted Sol,
+converted right ascension from hours to degrees, omitted unused fields,
+and represented the subset as compact JSON arrays. Source J2000.0 positions,
+proper motions, visual magnitudes, and B-V colors are retained.
+
+The original data and this subset are supplied without warranties;
+see Section 5 of the linked license. Attribution does not imply endorsement.
+
+The catalog data is licensed separately from the application's source code.

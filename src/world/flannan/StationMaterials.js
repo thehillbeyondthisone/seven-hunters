@@ -112,10 +112,15 @@ export function createStationMasonry( T ) {
 	let limeUV = uv / 1.6 + vec2f( data.x * .37, data.x * .13 );
 	let paint = textureSample( stationlimeN, smpAnisoRepeat, limeUV );
 	let lime = textureSample( stationlimeA, smpAnisoRepeat, limeUV );
+	let body = textureSample( stationlimeA, smpAnisoRepeat, uv / 5.3 + vec2f( data.x * .71, data.x * .23 ) ).r;
 	let stone = in.vs.vTint * ( 0.73 + id * 0.45 ) * ( 0.96 + grain * 0.08 );
 	let jointCol = in.vs.vTint * 0.48;
 	var raw = mix( stone, jointCol, mortar * 0.78 );
-	let kept = in.vs.vTint * ( 0.96 + lime.r * 0.08 ) * ( 1.0 - wash.r * 0.018 - lime.g * 0.012 );
+	// Chalk/sand and overlapping wash coats stay visible under frontal lamplight.
+	// These are material masks, without directional shadows baked into the colour.
+	let limeTone = 1.0 + ( lime.r - 0.5 ) * 0.12 + ( lime.b - 0.5 ) * 0.10
+		+ ( lime.a - 0.5 ) * 0.08 + ( body - 0.5 ) * 0.06;
+	let kept = in.vs.vTint * limeTone * ( 1.0 - wash.r * 0.018 - lime.g * 0.065 );
 	var col = mix( raw, kept, plaster );
 	let foot = 1.0 - smoothstep( 0.04, 0.42, uv.y );
 	col *= 1.0 - foot * mix( 0.12, 0.045, plaster );

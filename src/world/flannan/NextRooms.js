@@ -3,6 +3,7 @@ import { lin, WOOD, HARD, ropeCoil } from '../Props.js';
 import { deskOilLamp } from './InteriorDressing.js';
 import { keeperTable, keeperChair, rangeDetails, berthBedding, clothSurface } from './InteriorCraft.js';
 import { Builder } from '../village/GeoBuilder.js';
+import { stationCraft, interiorDoorFrame } from './StationCraft.js';
 
 // Playable reconstruction, not a recovered station plan or inventory.
 export const KITCHEN = { x0: -5.4, x1: 1.2, z0: 6, z1: 10.5, door: new Vector3() };
@@ -34,15 +35,9 @@ export function nextRooms( ctx, parts, floor, ceiling, palette, makeDoor ) {
 		wall( -2.8, z - 0.15, -1.6, z + 0.15, F + 2.15 );
 		B.box( 'stationFloor', -2.2, F - 0.02, z, 1.2, 0.04, 0.65, { grain: 0, ...wood } );
 		colliders.addBox( new Vector3( -2.2, F - 0.1, z ), new Vector3( 0.6, 0.1, 0.34 ), 0, { walkable: true, solid: false, tag: 'floor' } );
-		for ( const x of [ -2.8, -1.6 ] ) B.box( 'stationTimber', x, F + 1.08, z - 0.19, 0.09, 2.16, 0.05, { grain: 1, tint: palette.trim, data: WOOD( 0.44, 0, 1 ) } );
-		B.box( 'stationTimber', -2.2, F + 2.18, z - 0.19, 1.4, 0.14, 0.05, { grain: 0, tint: palette.trim, data: WOOD( 0.45, 0, 1 ) } );
+		interiorDoorFrame( B, F, z, palette );
 		parts.doors.push( makeDoor( ctx, { name, hinge: new Vector3( -2.76, F, z ), ry: 0, swing: -1.6, width: 1.12, height: 2.08,
-			leaf: L => {
-				const painted = { tint: palette.door, data: WOOD( 0.74, 0.02, 1 ) };
-				L.box( 'stationTimber', 0.56, 1.04, 0, 1.12, 2.08, 0.045, { grain: 1, ...painted } );
-				for ( const y of [ 0.1, 0.9, 1.98 ] ) L.box( 'stationTimber', 0.56, y, -0.03, 1.08, 0.12, 0.025, { grain: 0, ...painted } );
-				L.cyl( 'hard', 1.02, 0.98, -0.06, 0.025, 0.025, 0.06, { rx: Math.PI / 2, segs: 10, tint: lin( 0x9d814e ), data: HARD( 0.44, 0, 0.7, 0.4 ) } );
-			} } ) );
+			leaf: L => stationCraft( L, 'interiorDoor' ) } ) );
 		R.door.set( -2.2, F + 1, z );
 	}
 	// The existing thick exterior walls already have inside faces and cut windows.

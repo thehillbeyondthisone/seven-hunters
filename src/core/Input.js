@@ -19,6 +19,7 @@ export class Input {
 
 		window.addEventListener( 'keydown', ( e ) => {
 
+			if ( ! this.enabled ) return;
 			if ( e.target && ( e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' ) ) return;
 			if ( ! this.keys.has( e.code ) ) this.pressed.add( e.code );
 			this.keys.add( e.code );
@@ -64,6 +65,8 @@ export class Input {
 		document.addEventListener( 'pointerlockchange', () => {
 
 			this.locked = document.pointerLockElement === dom;
+			// A lock requested by the preceding screen may arrive after a modal opens.
+			if ( this.locked && ! this.enabled ) document.exitPointerLock?.();
 
 		} );
 
@@ -71,7 +74,7 @@ export class Input {
 
 	requestLock() {
 
-		if ( this.touchMode ) return;
+		if ( this.touchMode || ! this.enabled ) return;
 		if ( ! this.locked ) this.dom.requestPointerLock?.()?.catch?.( () => {} );
 
 	}

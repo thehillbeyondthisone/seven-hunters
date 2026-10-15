@@ -2,8 +2,12 @@ import { ShaderModule, UniformBlock } from '../engine/gpu/Shader.js';
 import { FullscreenPass } from '../engine/render/FullscreenPass.js';
 import { SCENE_FORMATS, DEPTH_FORMAT } from '../engine/render/SceneRenderer.js';
 import { commonModule } from '../engine/render/wgsl/common.js';
-import { Vector3, MathUtils } from '../engine/math/index.js';
+import { Vector3, Matrix3, MathUtils } from '../engine/math/index.js';
 import { SUN_ANGULAR_RADIUS } from './Atmosphere.js';
+import { StorageBuffer } from '../engine/gpu/Texture.js';
+import catalog from './data/bright-stars.json' with { type: 'json' };
+import { buildStarIndex, STAR_GRID, STAR_SUPPORT } from './CatalogStars.js';
+import { worldToEquatorialMatrix, precessJ2000, REFERENCE_STAR_TIME } from './StarCoordinates.js';
 
 // Sky radiance: atmosphere (sky view LUT) + sun disk, stars, moon and moonlit sky, composited with
 // the clouds.
@@ -21,9 +25,9 @@ import { SUN_ANGULAR_RADIUS } from './Atmosphere.js';
 //   fn skyViewRadiance( dir: vec3f ) -> vec3f             main view (full resolution view clouds)
 // `sky.background`: the scene background for SceneRenderer.background (draw( renderPassEncoder )).
 
-const STAR_CELLS = 160; // cells per half cube face (one star candidate per cell, ~9 px at 25 px/deg)
-const STAR_SIGMA = 0.1; // star PSF (cells, ~1 px)
-const MW = new Vector3( 0.3, 0.2, 1 ).normalize(); // pole of the Milky Way band
+// ICRS north galactic pole: the faint artistic band shares the catalog's orientation.
+const MW_RA = 192.85948 * Math.PI / 180, MW_DEC = 27.12825 * Math.PI / 180;
+const MW = new Vector3( Math.cos( MW_DEC ) * Math.cos( MW_RA ), Math.cos( MW_DEC ) * Math.sin( MW_RA ), Math.sin( MW_DEC ) );
 // reflections spread point sources over rough water: only a trace of the stars survives
 const STAR_REFLECTION = 0.08;
 
@@ -44,6 +48,9 @@ export class Sky {
 			moonDir: [ 'vec3f', new Vector3( - 0.3, 0.5, 0.8 ).normalize() ],
 			sunDiskIntensity: [ 'f32', 1 ],
 			starIntensity: [ 'f32', 0 ],
+			darkAdaptation: [ 'f32', 0 ],
+			worldToStars: [ 'mat3x3f', new Matrix3() ],
+			galacticPole: [ 'vec3f', MW.clone() ],
 			// 1: the moon disc shows its phase (lit by the true sun, src/sky/Setting.js); 0: a full disc
 			moonShade: [ 'f32', 0 ],
 			// brightness of the moonlit sky (the moon's illuminated fraction; 1 = full)
@@ -52,10 +59,36 @@ export class Sky {
 		this.sunDiskIntensity = this.params.fields.sunDiskIntensity;
 		this.moonDir = this.params.fields.moonDir;
 		this.starIntensity = this.params.fields.starIntensity;
+		this.darkAdaptation = this.params.fields.darkAdaptation;
 		this.moonShade = this.params.fields.moonShade;
 		this.moonLight = this.params.fields.moonLight;
+		this._starEpochDay = null;
+		this.starCatalog = null;
+		this.setStarTime( REFERENCE_STAR_TIME, 24, 0 );
 		this._module = null;
 		this._background = null;
+
+	}
+
+	// Same UT, location and azimuth as the dated sun/moon. The daily rebuild applies
+	// proper motion and precession; only the small orientation matrix changes per frame.
+	setStarTime( utMs, lat, lon, azimuth = 0 ) {
+
+		worldToEquatorialMatrix( utMs, lat, lon, azimuth, this.params.fields.worldToStars.value );
+		const day = Math.floor( utMs / 86400000 );
+		if ( day === this._starEpochDay ) return;
+		this._starEpochDay = day;
+		const epoch = ( day + .5 ) * 86400000;
+		precessJ2000( MW, epoch, this.params.fields.galacticPole.value );
+		const index = buildStarIndex( catalog.stars, epoch );
+		this.starIndex = index;
+		if ( ! this.starCatalog || index.data.byteLength > this.starCatalog.byteLength ) {
+
+			if ( this.starCatalog ) this.starCatalog.destroy();
+			this.starCatalog = new StorageBuffer( { label: 'HYG bright stars', count: Math.ceil( index.data.length / 4 * 1.1 ), type: 'vec4f', data: index.data } );
+
+		} else if ( this.starCatalog.gpu ) this.starCatalog.write( index.data );
+		else this.starCatalog.pendingData = index.data;
 
 	}
 
@@ -80,14 +113,8 @@ export class Sky {
 			deps,
 			uniforms: this.params,
 			uniformName: 'skyParams',
+			bindings: { skyCatalog: { storage: () => this.starCatalog, access: 'read', type: 'vec4f' } },
 			code: /* wgsl */`
-// hash without sine (D. Hoskins): keeps full precision for large integer coordinates
-fn skyHash13( p: vec3f ) -> f32 {
-	var p3 = fract( p * vec3f( 0.1031, 0.1030, 0.0973 ) );
-	p3 += dot( p3, p3.yzx + 33.33 );
-	return fract( ( p3.x + p3.y ) * p3.z );
-}
-
 // Sun disk radiance along dir (already includes atmospheric transmittance).
 fn skySunDisk( dir: vec3f ) -> vec3f {
 	let cosA = dot( dir, atmosphereParams.sunDir ); // the real sun (frame.sunDir is the moon at night)
@@ -138,44 +165,54 @@ fn skyStyleClouds( c: vec4f, dir: vec3f ) -> vec4f {
 	return mix( c, vec4f( col * q, 1.0 - q ), k );
 }
 
-// Stars: one candidate per cell of a cube-face grid, jittered inside it, with a power law
-// magnitude distribution (few bright stars, many faint ones), denser along the Milky Way. They
-// come out after civil twilight: the brightest first, the faintest once the sky is fully dark.
+// A cube grid indexes the HYG catalog in the mean equatorial frame of date.
+// The duplicated border candidates keep complete star profiles across cell and face seams.
+fn skyStarCell( d: vec3f ) -> u32 {
+	let a = abs( d );
+	var face: u32;
+	var uv: vec2f;
+	if ( a.x >= a.y && a.x >= a.z ) {
+		face = select( 0u, 1u, d.x < 0.0 ); uv = d.yz / a.x;
+	} else if ( a.y >= a.z ) {
+		face = select( 2u, 3u, d.y < 0.0 ); uv = d.xz / a.y;
+	} else {
+		face = select( 4u, 5u, d.z < 0.0 ); uv = d.xy / a.z;
+	}
+	let cell = vec2u( clamp( floor( ( uv * 0.5 + 0.5 ) * ${ f( STAR_GRID ) } ), vec2f( 0.0 ), vec2f( ${ f( STAR_GRID - 1 ) } ) ) );
+	return face * ${ STAR_GRID * STAR_GRID }u + cell.y * ${ STAR_GRID }u + cell.x;
+}
+
+// The catalog supplies positions, magnitudes, B-V colours and proper motions.
+// Twilight, moonlight, horizon extinction and subtle scintillation control visibility.
 fn skyStars( dir: vec3f ) -> vec3f {
-	// cube face coordinates
-	let a = abs( dir );
-	let onX = a.x > a.y && a.x > a.z;
-	let onY = a.y > a.z;
-	let face = select( select( sign( dir.z ) + 8.0, sign( dir.y ) + 5.0, onY ), sign( dir.x ) + 2.0, onX );
-	let uv = select( select( dir.xy / a.z, dir.xz / a.y, onY ), dir.yz / a.x, onX ) * ${ f( STAR_CELLS ) };
-	let cell = vec3f( floor( uv ), face );
-	let h = skyHash13( cell );
-	let bx = dot( dir, vec3f( ${ f( MW.x ) }, ${ f( MW.y ) }, ${ f( MW.z ) } ) ) * 4.0;
-	let band = exp( - bx * bx );
-	// the cell holds a star with probability P (higher along the Milky Way); an independent
-	// uniform u ranks its brightness: N( < m ) ~ 10^( m / 2 ), brightest about magnitude -1
-	let has = h < band * 0.035 + 0.025;
-	let uc = max( skyHash13( cell + 7.7 ), 2e-4 );
-	let m = log2( uc ) * 0.602 + 6.5;
-	// limiting magnitude: -1 when the sun is 6 deg below the horizon, 6.5 below 16 deg
+	if ( dir.y <= 0.0 ) { return vec3f( 0.0 ); }
+	let eq = normalize( skyParams.worldToStars * dir );
+	let range = skyCatalog[ skyStarCell( eq ) ];
 	let dark = 1.0 - smoothstep( -0.28, -0.1, atmosphereParams.sunDir.y );
-	let vis = smoothstep( m - 0.6, m + 0.6, dark * 7.5 - 1.0 ) * select( 0.0, 1.0, has );
-	// angular distance to the star (isotropic whatever the cube face distortion), in cells
-	let sp = ( floor( uv ) + vec2f( skyHash13( cell + 3.1 ), skyHash13( cell + 5.7 ) ) * 0.4 + 0.3 ) / ${ f( STAR_CELLS ) };
-	let sdir = normalize( select( select( vec3f( sp, sign( dir.z ) ), vec3f( sp.x, sign( dir.y ), sp.y ), onY ), vec3f( sign( dir.x ), sp ), onX ) );
-	let d = length( dir - sdir ) * ${ f( STAR_CELLS ) };
-	// flux relative to a magnitude 6.5 star; bright stars look bigger (glare), not just clipped
-	let flux = pow( uc, -0.8 );
-	let size = log2( flux ) * 0.08 + 1.0;
-	let psf = exp( d * d / ( size * size ) * ${ f( - 0.5 / ( STAR_SIGMA * STAR_SIGMA ) ) } ) / ( size * size );
-	// subtle scintillation, stronger low in the sky
-	let tw = sin( frame.time * ( skyHash13( cell + 13.3 ) * 9.0 + 5.0 ) + h * 60.0 ) * mix( 0.18, 0.06, sat( dir.y * 2.0 ) ) + 1.0;
-	let col = mix( vec3f( 1.0, 0.8, 0.6 ), vec3f( 0.75, 0.85, 1.0 ), skyHash13( cell + 17.0 ) ) * 0.5 + 0.5;
-	let star = col * ( psf * flux * vis * tw * 0.0075 );
-	// diffuse glow of the Milky Way
-	let glow = vec3f( 0.55, 0.6, 0.75 ) * ( band * dark * 0.0035 );
-	// atmospheric extinction toward the horizon
-	return ( star + glow ) * skyParams.starIntensity * smoothstep( 0.0, 0.2, dir.y );
+	let limit = dark * ( 7.5 + skyParams.darkAdaptation * 0.7 ) - 1.0 - 0.9 * skyParams.moonLight * smoothstep( 0.0, 0.3, skyParams.moonDir.y );
+	// A pixel-scale point spread also keeps magnified stars pinpoints in the telescope.
+	let pixelAngle = 2.0 * abs( frame.invProj[ 1 ].y ) * frame.invResolution.y;
+	let baseSigma = clamp( pixelAngle * 0.38, 0.000035, 0.00045 );
+	var star = vec3f( 0.0 );
+	for ( var j = 0u; j < u32( range.y ); j ++ ) {
+		let at = u32( range.x ) + j * 2u;
+		let s = skyCatalog[ at ];
+		let d = length( eq - s.xyz );
+		if ( d > ${ f( STAR_SUPPORT ) } ) { continue; }
+		let col = skyCatalog[ at + 1u ];
+		let vis = smoothstep( s.w - 0.6, s.w + 0.6, limit );
+		let flux = pow( 10.0, 0.4 * ( 6.5 - s.w ) );
+		let size = 1.0 + log2( flux ) * 0.08;
+		let sigma = baseSigma * size;
+		let psf = exp( -0.5 * d * d / ( sigma * sigma ) ) / ( size * size );
+		let tw = 1.0 + sin( frame.time * ( 5.0 + col.w * 9.0 ) + col.w * 60.0 ) * mix( 0.18, 0.06, sat( dir.y * 2.0 ) );
+		star += col.rgb * ( psf * flux * vis * tw * 0.0075 );
+	}
+	let bx = dot( eq, skyParams.galacticPole ) * 4.0;
+	// Broad artistic glow only: the discrete stars above all come from the catalog.
+	let glow = vec3f( 0.55, 0.6, 0.75 ) * ( exp( -bx * bx ) * dark * 0.0035 );
+	let extinction = exp( -0.14 * ( 1.0 / max( dir.y, 0.03 ) - 1.0 ) );
+	return ( star + glow ) * skyParams.starIntensity * extinction * smoothstep( 0.0, 0.025, dir.y );
 }
 
 fn skyMoon( dir: vec3f ) -> vec3f {

@@ -34,7 +34,7 @@ const HELM_REACH = 0.75; // m from the helm seat to take the wheel
 //   boat : at the helm, driving; V toggles helm (1st person) / chase (3rd person) camera, E stands up
 export class Player {
 
-	constructor( { camera, input, terrain, colliders, query, boat, reef = null, audio = null } ) {
+	constructor( { camera, input, terrain, colliders, query, boat, reef = null, audio = null, comfort = null } ) {
 
 		this.camera = camera;
 		this.input = input;
@@ -44,6 +44,7 @@ export class Player {
 		this.boat = boat;
 		this.reef = reef;
 		this.audio = audio;
+		this.comfort = comfort;
 
 		this.mode = 'walk';
 		this.camMode = 'third';
@@ -136,12 +137,15 @@ export class Player {
 	// ------------------------------------------------------------------ update
 
 	update( dt ) {
+		this.prompt = null;
+		if ( this.safety && ( this.safety.paused || this.safety.state === 'dead' ) ) return;
 
 		const inp = this.input;
 		this.query.setPoint( this.slot, this.position.x, this.position.z );
 		this.waterH = this.waterHeight();
+		if ( this.safety ) this.waterH = this.safety.waterHeight( this.waterH );
 		this.waterMean = this.waterMean === null ? this.waterH : this.waterMean + ( this.waterH - this.waterMean ) * ( 1 - Math.exp( - dt / 4 ) );
-		this.prompt = null;
+		if ( this.safety ) this.waterMean = this.waterH;
 
 		if ( this.mode === 'boat' ) {
 
@@ -177,12 +181,13 @@ export class Player {
 		const prevMode = this.mode;
 		const prevY = this.position.y, wasGrounded = this.grounded;
 		if ( this.mode === 'walk' ) this.updateWalk( dt );
+		else if ( this.safety ) this.safety.updateSwim( dt );
 		else this.updateSwim( dt );
 
 		// camera. Wading out of your depth, finding your feet again or climbing out on a ladder
 		// changes the eye height: ease the view there (critically damped) instead of jumping
 		const eye = this.position.clone();
-		if ( this.mode === 'walk' ) eye.y += EYE + Math.sin( this.bob ) * 0.035 * ( 1 - 0.6 * this.wade );
+		if ( this.mode === 'walk' ) eye.y += EYE + ( this.comfort?.cameraBob === false ? 0 : Math.sin( this.bob ) * 0.035 * ( 1 - 0.6 * this.wade ) );
 		else eye.y += SWIM_EYE;
 		if ( this._camY === null || this.camera.position.y !== this._camY ) {
 
@@ -238,8 +243,8 @@ export class Player {
 		const depth = this.waterH - this.position.y; // water depth at the feet
 		const wade = THREE.MathUtils.clamp( depth / 1.2, 0, 1 );
 		this.wade = wade;
-		const sprint = this.canSprint?.() !== false && ( inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' ) );
-		const speed = ( sprint ? 6.2 : 3.0 ) * THREE.MathUtils.lerp( 1, 0.42, wade );
+		const sprint = this.canSprint?.() !== false && ( ! this.safety || depth < .08 && ! this.carryingHeavy ) && ( inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' ) );
+		const speed = ( sprint ? 6.2 : 3.0 ) * THREE.MathUtils.lerp( 1, 0.42, wade ) * ( this.safety?.speedScale ?? 1 ) * ( this.carryingHeavy ? .8 : 1 );
 		const accel = this.grounded ? 14 : 2.5;
 		const k = 1 - Math.exp( - accel * dt );
 		// A planted walker stays put. Water currents belong to swimming.
@@ -256,6 +261,7 @@ export class Player {
 		this.velocity.y -= 9.81 * dt;
 		// water drag while wading
 		if ( depth > 0 ) this.velocity.multiplyScalar( Math.exp( - dt * depth * 0.8 ) );
+		this.safety?.applyWalk( dt );
 
 		const p = this.position;
 		const old = p.clone();
@@ -297,7 +303,7 @@ export class Player {
 		// out of your depth -> swim. Wading in, the body lifts into the floating position at the
 		// surface and the view eases down to it (update()); falling in off the pier plunges under
 		// and floats back up.
-		if ( this.waterMean - p.y > SWIM_DEPTH ) {
+		if ( this.waterMean - p.y > SWIM_DEPTH && ! ( this.safety?.state === 'braced' && this.grounded ) ) {
 
 			const wadedIn = this.grounded;
 			this.mode = 'swim';
@@ -753,7 +759,7 @@ export class Player {
 		}
 
 		// camera: eye above the feet, following the boat's motion
-		const eyeL = _v.set( p.x, p.y + EYE + Math.sin( this.bob ) * 0.02, p.z );
+		const eyeL = _v.set( p.x, p.y + EYE + ( this.comfort?.cameraBob === false ? 0 : Math.sin( this.bob ) * 0.02 ), p.z );
 		b.toWorld( eyeL, this.camera.position );
 		this._camY = this.camera.position.y;
 		this.deckBase( _q );

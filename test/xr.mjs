@@ -3,7 +3,8 @@ import { Matrix4, Quaternion, Vector3 } from '../src/engine/math/index.js';
 import { Colliders } from '../src/world/Colliders.js';
 import { Locomotion, ControllerInput, axis, heading, controllerState, reversedProjection } from '../src/xr/Locomotion.js';
 import { SessionStats } from '../src/xr/SessionStats.js';
-import { configurePreview, projectionScale, supportMessage } from '../src/xr/PreviewOptions.js';
+import { eyeTimestampMs } from '../src/xr/GPUTimer.js';
+import { configurePreview, projectionScale, supportMessage, xrSamples } from '../src/xr/PreviewOptions.js';
 import { XRPreview, pickDoor } from '../src/xr/XRPreview.js';
 
 const near = ( a, b, epsilon = 1e-6 ) => assert.ok( Math.abs( a - b ) < epsilon, `${ a } != ${ b }` );
@@ -42,6 +43,8 @@ test( 'resolution values are bounded; unsupported browsers have clear fallback m
 
 	for ( const v of [ null, '', 'NaN', '0.1', '-1', '2' ] ) assert.equal( projectionScale( v ), 0.65 );
 	assert.equal( projectionScale( '0.5' ), 0.5 );
+	assert.equal( xrSamples( '1' ), 1 );
+	for ( const v of [ null, '0', '2', '4', 'NaN' ] ) assert.equal( xrSamples( v ), 4 );
 	assert.match( supportMessage( {} ), /HTTPS/ );
 	assert.match( supportMessage( { isSecureContext: true, navigator: { gpu: {} } } ), /WebXR/ );
 	assert.match( supportMessage( { isSecureContext: true, navigator: { gpu: {}, xr: {} } } ), /presentation layer/ );
@@ -146,7 +149,28 @@ test( 'Quest diagnostics keep bounded samples and distinguish CPU from GPU timin
 	assert.equal( report.maxCpuMs, 20 );
 	assert.equal( report.longIntervals, 1 );
 	assert.equal( report.gpuTimingMeasured, false );
+	assert.equal( report.gpuEyeP95Ms, null );
+	assert.equal( report.eyeCpuP95Ms, null );
+	for ( let i = 0; i < 200; i ++ ) {
+		const metrics = { eyeCpuMs: 2, transferCpuMs: .5, sampleCount: 4, grassTrianglesPerEye: 24576, gpu: { sequence: i, ms: 8 } };
+		stats.record( 1000 / 72, 4, 'yard', metrics );
+		stats.record( 1000 / 72, 4, 'yard', metrics ); // unchanged async sample counts once
+	}
+	stats.record( 1000 / 72, 4, 'yard', { gpu: { sequence: 999, ms: NaN } } );
+	const sampled = stats.report();
+	assert.equal( sampled.gpuSamples, 128 );
+	assert.equal( sampled.gpuEyeP95Ms, 8 );
+	assert.equal( sampled.eyeCpuP95Ms, 2 );
+	assert.equal( sampled.transferCpuP95Ms, .5 );
 
+} );
+
+test( 'GPU eye timestamps exclude submission gaps, handle overlap and reject unusable samples', () => {
+	assert.equal( eyeTimestampMs( [ 0n, 2000000n, 5000000n, 8000000n ] ), 5 );
+	assert.equal( eyeTimestampMs( [ 0n, 4000000n, 2000000n, 6000000n ] ), 6 );
+	assert.equal( eyeTimestampMs( [ 0n, 6000000n, 2000000n, 4000000n ] ), 6 );
+	assert.equal( eyeTimestampMs( [ 100n, 100n, 100n, 100n ] ), null );
+	assert.equal( eyeTimestampMs( [ 200n, 100n, 300n, 400n ] ), null );
 } );
 
 test( 'snap turning pivots at the head and fires once until the stick is released', () => {

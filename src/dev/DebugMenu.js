@@ -5,11 +5,12 @@ import './debug.css';
 export class DebugMenu {
 	constructor( app ) {
 		this.app = app; this.open = false;
+		app.ui.ui.rail.hidden = true;
 		this.panel = document.createElement( 'section' ); this.panel.className = 'sh-debug'; this.panel.hidden = true;
 		this.panel.setAttribute( 'role', 'dialog' ); this.panel.setAttribute( 'aria-modal', String( !! app.isMobile ) ); this.panel.setAttribute( 'aria-label', 'Simulation debug menu' );
 		this.panel.innerHTML = `<header><strong>Seven Hunters · Debug</strong><button type="button" data-close aria-label="Close debug menu">×</button></header>
 		<details class="sh-debug-experiences"><summary>Experiences</summary><nav aria-label="Available experiences">
-		<a href="./">Normal watch</a><a href="./?arrivalPreview">Boat arrival</a><a href="./?islandRevealPreview">First look back</a><a href="./?keeperPreview">Keeper duties</a><a href="./?chapterPreview=kitchen">Day two · kitchen</a>
+		<a href="./">Normal watch</a><a href="./?arrivalPreview">Boat arrival</a><a href="./?islandRevealPreview">First look back</a><a href="./?keeperPreview">Keeper duties</a><a href="./?morningPreview">Morning servicing</a><a href="./?morningPreview=familiar">A familiar dawn</a><a href="./?chapterPreview=kitchen">Day two · kitchen</a>
 		<details><summary>Later chapters · spoilers</summary><a href="./?chapterPreview=report">Cate’s report</a><a href="./?chapterPreview=remote">West hauling shed</a><a href="./?chapterPreview=return">The walk home</a><a href="./?chapterPreview=after">Next clear evening</a></details>
 		<a href="./?nostory">Explore Eilean Mòr</a><a href="./?weatherPreview">The Atlantic Watch</a><a href="./?seaDread&seaWeather=gale">The Black Atlantic</a><a href="./?simulation&seaWeather=settled&debug">Simulation lab</a><a href="./?devWeapons&devTargets">Minigun & buoys</a><a href="./water-preview.html">Water comparison</a><a href="./?setting=tidewater">Tidewater</a>
 		<a href="./?playground">Keeper’s Playground · gravity grabber</a><a href="./?playground&disco">Lighthouse disco</a>
@@ -147,12 +148,14 @@ export class DebugMenu {
 		a.mobile?.resetGestures(); a.mobile?.setDrawer( false );
 		this.panel.setAttribute( 'aria-modal', String( this.compact ) );
 		this.open = true; this.panel.hidden = false; a.input.enabled = false; a.input.reset();
+		a.ui.ui.rail.hidden = false;
 		if ( document.pointerLockElement ) document.exitPointerLock();
 		this.sync(); this.panel.querySelector( '[data-close]' ).focus();
 	}
 	close( capture = true ) {
 		if ( ! this.open ) return;
 		this.open = false; this.panel.hidden = true; this.app.input.reset(); this.app.input.enabled = this.previousEnabled && ! this.app.story?.islandReveal?.active;
+		this.app.ui.ui.rail.hidden = true;
 		this.previousFocus?.focus?.();
 		if ( capture && this.previousEnabled && ! this.app.ui.ui._start && ! this.app.ui.ui.panelOpen ) this.app.input.requestLock();
 	}

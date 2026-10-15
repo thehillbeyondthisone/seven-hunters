@@ -58,6 +58,24 @@ The game takes inspiration from *Firewatch* in its atmosphere, exploration, and 
 
 You can disable objective markers in **H → Camera → Keeping the watch**. The night saves automatically in this browser; returning offers to continue or begin again. Reading pages pauses the story clock, and some prompts let you wait until the next event.
 
+After the 6 January chapter, **Keep the next clear watch** continues into the
+returning-light investigation on 8–9 January. You can study Eilean Tighe from
+your own shore or stay with the station duties, then report what you observed.
+
+The sea is dangerous in normal desktop and touch story play. At designated
+intact landing rails, hold the interaction action to brace. If swept into the
+water, reach nearby rungs or shallow footing quickly; hold the named climbing
+action to recover. The storm lantern goes out on immersion. Death offers
+**Retry from safety**, restoring the last safe watch checkpoint.
+
+To travel between lighthouse levels, look at the bottom of the spiral stair or the lantern hatch and use **E** (or the named touch action). Each journey takes two seconds, with a gentle step and turn through a fade. The stairs are scenery; the travel actions are the only way between levels. The driving-weight lesson is viewed down through the hatch from the lantern floor.
+
+The two stair guards are authored gameplay additions, not documented historical fittings. This travel flow applies to the normal desktop/touch story; the separate experimental VR exploration preview retains its location controls.
+
+**Camera bob** is optional: Settings (H) → Camera → View, or Camera bob in the touch pause menu. The choice is saved on this device and controls walking bob and tower head motion. Reduced-motion devices start with it off; the two-second travel fade remains.
+
+Outside at night, put out the storm lantern with **L** (or Tools · Lantern) and let your eyes adjust for about five seconds: the landscape and faint stars gradually become clearer. Relighting the lantern quickly removes the effect. After the two-hour rest, you wake with your storm lantern lit and in hand.
+
 ### Touch controls
 
 - **Drag on the left** to walk; **drag on the right** to look. Use both thumbs together.
@@ -128,6 +146,7 @@ There are also separate exploration and development routes:
 | [Explore the island](https://thehillbeyondthisone.github.io/seven-hunters/?nostory) | Walk around without the story schedule |
 | [Sea and weather preview](https://thehillbeyondthisone.github.io/seven-hunters/?weatherPreview) | An experimental cycle from settled conditions to an Atlantic gale |
 | [Boat arrival preview](https://thehillbeyondthisone.github.io/seven-hunters/?arrivalPreview) | Try the opening with a separate preview save |
+| [Coast and isolation reviews](https://thehillbeyondthisone.github.io/seven-hunters/coast-and-isolation.html) | Returning light, dangerous landing, and isolated storm preparation/lookout/return scenes, each with a separate save |
 | [Tidewater](https://thehillbeyondthisone.github.io/seven-hunters/?setting=tidewater) | The original island fishing game retained in the codebase |
 
 An experimental WebXR exploration preview is documented in [VR-PREVIEW.md](docs/VR-PREVIEW.md). It has not been certified for physical headset performance, controls, or comfort. Exploration and development previews use separate saves or no watch save.

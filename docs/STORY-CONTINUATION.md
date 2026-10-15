@@ -1,6 +1,6 @@
 # Seven Hunters: fixed story and the next watch
 
-Author document, including spoilers. The new playable stretch runs from the first journal on 4 January through the clear evening on 6 January 1901. The later month, revelation, storm and relief below are the fixed writing direction, not implemented chapters.
+Author document, including spoilers. Normal progression now continues through the returning-light investigation on 8–9 January 1901. The later month, revelation and relief below remain the fixed writing direction. The storm is a separate playable review scene, not yet connected to those later chapters.
 
 ## The whole story
 
@@ -8,14 +8,63 @@ Walter believes competent work will keep things under control. Cate believes wat
 
 1. **The first watch, 3 January:** approach by boat, the withdrawal of human company, ordinary lightkeeping, first contact, fog, the islet light and the gate. Existing playable opening.
 2. **A place at the table, 4–6 January:** kitchen, stores, daylight inspection of the upper hauling shed, a sleeping berth, Cate's report of a small light while Walter slept, the remote chain job and smoke at home. On the next clear evening he asks whether she saw the house. This is the playable continuation.
-3. **Things worth keeping, next selected watch:** unpack the camera and discover ordinary belongings in the other bedrooms. Photograph the landing damage and familiar station views. Mary asks for ordinary news; Cate becomes someone Walter wants to spend time signalling.
-4. **An unreliable distance, mid-posting:** several days of fog interrupt contact. A fragment begins like a familiar group and ends before it can become a message. On the next clear evening Cate says she was away at that time. The received fragment remains exactly as received; Walter cannot quote a completed sentence.
-5. **What she told them:** Cate admits she reported reassurance in December when weather prevented her from seeing the light. She cannot know whether reporting sooner would have saved anyone. The admission happens in every playthrough. Walter can be angry, compassionate or guarded.
-6. **The coming weather:** open the workshop, repair a weakness established earlier, bring up oil, secure the station and recognise the unsafe lower landing route. Cate promises to report a loss of contact honestly this time.
-7. **The extra large sea:** a light below the west landing resembles distress. Walter investigates from the upper lookout. The sea destroys the route below; he must return and keep the station operating. Cate reports that she cannot confirm his safety. No mandatory descent into a clearly condemned route.
-8. **Someone comes:** relief lands. Walter hands over a functioning station and the player's journal. The developed photographs show ordinary machinery and a vulnerable landing: evidence of how small the human foothold was, with no figure revealed as a final jump scare. Walter writes Mary an ordinary letter. The last exchange with Cate resolves their relationship; the possibility of another presence remains unsettled.
+3. **The returning light, 8–9 January:** the Eilean Tighe light appears at its established location. Walter can observe, ask Cate and investigate from his own shore by daylight, or continue his duties. Only witnessed bearing, apparent location, duration and vessel observations enter his evidence. Cate cannot identify its source. This chapter is playable.
+4. **Things worth keeping, a later selected watch:** unpack the camera and discover ordinary belongings in the other bedrooms. Photograph the landing damage and familiar station views. Mary asks for ordinary news; Cate becomes someone Walter wants to spend time signalling.
+5. **An unreliable distance, mid-posting:** several days of fog interrupt contact. A fragment begins like a familiar group and ends before it can become a message. On the next clear evening Cate says she was away at that time. The received fragment remains exactly as received; Walter cannot quote a completed sentence. Lower routes become unsafe and relief is delayed; an upper return remains usable.
+6. **What she told them:** Cate admits she reported reassurance in December when weather prevented her from seeing the light. She cannot know whether reporting sooner would have saved anyone. The admission happens in every playthrough. Walter can be angry, compassionate or guarded.
+7. **The coming weather:** open the workshop, repair a weakness established earlier, bring up oil, secure the station and recognise the unsafe lower landing route. Cate promises to report a loss of contact honestly this time.
+8. **The extra large sea:** a light below the west landing resembles distress. Walter investigates from the upper lookout. The sea destroys the route below; he must return and keep the station operating. Cate reports that she cannot confirm his safety. No mandatory descent into a clearly condemned route.
+9. **Someone comes:** relief lands. Walter hands over a functioning station and the player's journal. The developed photographs show ordinary machinery and a vulnerable landing: evidence of how small the human foothold was, with no figure revealed as a final jump scare. Walter writes Mary an ordinary letter. The last exchange with Cate resolves their relationship; the Eilean Tighe light remains unresolved.
 
 These are selected watches across roughly a month. Quiet days are dated transitions. Later dialogue and photography interactions still need writing and implementation; their emotional outcome and the above sequence are fixed.
+
+### The returning light, 8–9 January
+
+After the 6 January chapter page, **Keep the next clear watch** opens 8 January.
+Light and wind the apparatus, then look southeast from the balcony. The explicit
+objective and directional marker identify Eilean Tighe. The sighting remains
+available until Walter observes it or deliberately leaves it to keep watch.
+The first-night light hint and subsequent gate notification remain explicit.
+
+The islet light retains its established x/z bearing. Its height is now tied to
+the rendered ridge, because the old 44.6 m point was below the current terrain.
+Three seconds of actual looking acknowledges the sighting; time, bearing and
+the duration actually observed are stored as evidence. Cate's dialogue says the light has returned only
+when Walter witnessed the first-night sighting. Cate cannot identify its source
+or see that shore from Gallan Head. She explicitly advises investigation from
+Eilean Mòr, with no crossing of the channel.
+
+At daylight Walter chooses between station duties and a shore investigation.
+The marked headland has walkable terrain and clear sightlines to both the ridge
+and channel. Through the telescope, four-second observations separately record
+the ridge and whether a vessel is visible in the channel. Returning advances
+through an explicit afternoon transition; Walter lights and winds the next
+evening's apparatus before reporting. Journal remarks include only observations
+actually made. The light's source remains unresolved, including at eventual
+relief. It never sends a completed message or changes cause with dialogue choices.
+
+The west-landing light in the later storm remains the loose service lantern.
+It is geographically and causally separate from Eilean Tighe; Walter may suspect
+a connection, but the writing never establishes one. Cate's storm exchange is
+**I CAN SEE THE LIGHT. I CANNOT SEE YOU.** She reports uncertainty honestly.
+
+### The confined island and the later arc
+
+Keep the existing photography/personal-belongings watch, fog interruption and
+Cate's admission before the coming-weather preparations. Declining the shore
+investigation changes disclosure and journal evidence, not access to that arc.
+As the sea rises, the lower landings become unsafe; the upper tramway remains a
+usable way home. Required objectives never demand descending a condemned route.
+The storm destroys the lower west landing while Walter watches from above; he
+returns, maintains the apparatus and signals Cate. Death during play is a failed
+attempt restored from safety, not an alternate canonical ending. Walter survives
+to relief, the photographs retain their ordinary evidentiary role, and the final
+letter to Mary is ordinary. No culprit is revealed for the islet light.
+
+`coast-and-isolation.html` opens three separate-save reviews: the returning light,
+the dangerous landing and the storm preparation/lookout/return scene. The storm
+review explicitly ends before relief. Connecting the remaining selected watches,
+photograph capture and the relief ending is subsequent work.
 
 ## Causes and evidence
 

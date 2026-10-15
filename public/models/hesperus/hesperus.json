@@ -1,0 +1,1685 @@
+{
+	"format": "hesperus-model",
+	"version": 1,
+	"generator": "tools/ships/hesperus_export.py",
+	"source": "hesperus.blend",
+	"units": "metres",
+	"axes": {
+		"engine": "+X port, +Y up, +Z forward (bow); right-handed; triangles counter-clockwise from outside",
+		"model": "+X forward, +Y port, +Z up; origin at frame 0 on the keel",
+		"mapping": "engine = ( modelY, modelZ - 3, modelX - 25.2 )",
+		"origin": "midships on the load waterline",
+		"modelOrigin": [
+			25.2,
+			0.0,
+			3.0
+		]
+	},
+	"waterlineY": 0.0,
+	"modelWaterlineZ": 3.0,
+	"keelY": -3.0,
+	"midships": [
+		0.0,
+		0.0,
+		0.0
+	],
+	"bin": "hesperus.bin",
+	"byteLength": 1602872,
+	"littleEndian": true,
+	"encoding": {
+		"position": "float32 x 3, metres, engine axes",
+		"normal": "int8 x 3, divide by 127",
+		"uv": "float32 x 2, v up (Blender / OpenGL); only on finishes with a texture",
+		"index": "uint16 or uint32 (see indexType), triangle list, relative to the finish's own vertices",
+		"color": "linear RGB of the Principled base colour",
+		"alignment": "every block starts on a 4-byte boundary"
+	},
+	"textures": [
+		"hesperus_ensign.png"
+	],
+	"lods": [
+		{
+			"name": "full",
+			"collection": "Hesperus",
+			"objects": 151,
+			"range": {
+				"min": 0.0,
+				"max": 600.0
+			},
+			"triangles": 61106,
+			"vertices": 65505,
+			"byteOffset": 0,
+			"byteLength": 1350180,
+			"bounds": {
+				"min": [
+					-4.2646,
+					-3.0,
+					-31.2638
+				],
+				"max": [
+					4.2646,
+					22.7419,
+					27.95
+				]
+			},
+			"finishes": [
+				{
+					"name": "antifouling",
+					"color": [
+						0.23,
+						0.045,
+						0.03
+					],
+					"roughness": 0.75,
+					"metallic": 0.0,
+					"vertexCount": 3622,
+					"indexCount": 18621,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 0,
+						"byteLength": 43464,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 43464,
+						"byteLength": 10866,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 54332,
+						"byteLength": 37242,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "brass",
+					"color": [
+						0.78,
+						0.57,
+						0.18
+					],
+					"roughness": 0.3,
+					"metallic": 1.0,
+					"vertexCount": 7783,
+					"indexCount": 16530,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 91576,
+						"byteLength": 93396,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 184972,
+						"byteLength": 23349,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 208324,
+						"byteLength": 33060,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "buff",
+					"color": [
+						0.7,
+						0.49,
+						0.22
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 1080,
+					"indexCount": 3744,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 241384,
+						"byteLength": 12960,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 254344,
+						"byteLength": 3240,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 257584,
+						"byteLength": 7488,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "canvas",
+					"color": [
+						0.72,
+						0.69,
+						0.6
+					],
+					"roughness": 0.9,
+					"metallic": 0.0,
+					"vertexCount": 189,
+					"indexCount": 546,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 265072,
+						"byteLength": 2268,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 267340,
+						"byteLength": 567,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 267908,
+						"byteLength": 1092,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "deck_pine",
+					"color": [
+						0.55,
+						0.43,
+						0.27
+					],
+					"roughness": 0.75,
+					"metallic": 0.0,
+					"vertexCount": 2968,
+					"indexCount": 9198,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 269000,
+						"byteLength": 35616,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 304616,
+						"byteLength": 8904,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 313520,
+						"byteLength": 18396,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "ensign",
+					"color": [
+						0.8,
+						0.8,
+						0.8
+					],
+					"roughness": 0.9,
+					"metallic": 0.0,
+					"vertexCount": 119,
+					"indexCount": 576,
+					"indexType": "uint16",
+					"texture": "hesperus_ensign.png",
+					"position": {
+						"byteOffset": 331916,
+						"byteLength": 1428,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 333344,
+						"byteLength": 357,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"uv": {
+						"byteOffset": 333704,
+						"byteLength": 952,
+						"type": "float32",
+						"size": 2
+					},
+					"index": {
+						"byteOffset": 334656,
+						"byteLength": 1152,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "galvanised",
+					"color": [
+						0.33,
+						0.34,
+						0.35
+					],
+					"roughness": 0.6,
+					"metallic": 0.0,
+					"vertexCount": 3924,
+					"indexCount": 10020,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 335808,
+						"byteLength": 47088,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 382896,
+						"byteLength": 11772,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 394668,
+						"byteLength": 20040,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "gilt",
+					"color": [
+						0.85,
+						0.63,
+						0.18
+					],
+					"roughness": 0.3,
+					"metallic": 1.0,
+					"vertexCount": 7495,
+					"indexCount": 18840,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 414708,
+						"byteLength": 89940,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 504648,
+						"byteLength": 22485,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 527136,
+						"byteLength": 37680,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "glass",
+					"color": [
+						0.02,
+						0.03,
+						0.04
+					],
+					"roughness": 0.06,
+					"metallic": 0.0,
+					"vertexCount": 960,
+					"indexCount": 1950,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 564816,
+						"byteLength": 11520,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 576336,
+						"byteLength": 2880,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 579216,
+						"byteLength": 3900,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "green_stbd",
+					"color": [
+						0.02,
+						0.33,
+						0.12
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 8,
+					"indexCount": 18,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 583116,
+						"byteLength": 96,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 583212,
+						"byteLength": 24,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 583236,
+						"byteLength": 36,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "house_aft",
+					"color": [
+						0.27,
+						0.13,
+						0.05
+					],
+					"roughness": 0.4,
+					"metallic": 0.0,
+					"vertexCount": 16,
+					"indexCount": 24,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 583272,
+						"byteLength": 192,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 583464,
+						"byteLength": 48,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 583512,
+						"byteLength": 48,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "hull_black",
+					"color": [
+						0.012,
+						0.012,
+						0.014
+					],
+					"roughness": 0.55,
+					"metallic": 0.0,
+					"vertexCount": 4424,
+					"indexCount": 17046,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 583560,
+						"byteLength": 53088,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 636648,
+						"byteLength": 13272,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 649920,
+						"byteLength": 34092,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "iron",
+					"color": [
+						0.02,
+						0.02,
+						0.022
+					],
+					"roughness": 0.6,
+					"metallic": 0.0,
+					"vertexCount": 10752,
+					"indexCount": 23964,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 684012,
+						"byteLength": 129024,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 813036,
+						"byteLength": 32256,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 845292,
+						"byteLength": 47928,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "mast_brown",
+					"color": [
+						0.4,
+						0.25,
+						0.11
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 372,
+					"indexCount": 1008,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 893220,
+						"byteLength": 4464,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 897684,
+						"byteLength": 1116,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 898800,
+						"byteLength": 2016,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "red_port",
+					"color": [
+						0.6,
+						0.02,
+						0.02
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 392,
+					"indexCount": 1170,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 900816,
+						"byteLength": 4704,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 905520,
+						"byteLength": 1176,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 906696,
+						"byteLength": 2340,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "rope",
+					"color": [
+						0.3,
+						0.23,
+						0.14
+					],
+					"roughness": 0.9,
+					"metallic": 0.0,
+					"vertexCount": 3189,
+					"indexCount": 9624,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 909036,
+						"byteLength": 38268,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 947304,
+						"byteLength": 9567,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 956872,
+						"byteLength": 19248,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "teak",
+					"color": [
+						0.27,
+						0.13,
+						0.05
+					],
+					"roughness": 0.35,
+					"metallic": 0.0,
+					"vertexCount": 5224,
+					"indexCount": 11382,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 976120,
+						"byteLength": 62688,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1038808,
+						"byteLength": 15672,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1054480,
+						"byteLength": 22764,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "vent_red",
+					"color": [
+						0.5,
+						0.05,
+						0.03
+					],
+					"roughness": 0.6,
+					"metallic": 0.0,
+					"vertexCount": 120,
+					"indexCount": 492,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1077244,
+						"byteLength": 1440,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1078684,
+						"byteLength": 360,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1079044,
+						"byteLength": 984,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "white",
+					"color": [
+						0.8,
+						0.79,
+						0.74
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 12868,
+					"indexCount": 38565,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1080028,
+						"byteLength": 154416,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1234444,
+						"byteLength": 38604,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1273048,
+						"byteLength": 77130,
+						"type": "uint16"
+					}
+				}
+			]
+		},
+		{
+			"name": "lod1",
+			"collection": "Hesperus_LOD1",
+			"objects": 29,
+			"range": {
+				"min": 600.0,
+				"max": 4000.0
+			},
+			"triangles": 9198,
+			"vertices": 10190,
+			"byteOffset": 1350180,
+			"byteLength": 208200,
+			"bounds": {
+				"min": [
+					-4.2646,
+					-3.0,
+					-31.2638
+				],
+				"max": [
+					4.2646,
+					22.7419,
+					27.95
+				]
+			},
+			"finishes": [
+				{
+					"name": "antifouling",
+					"color": [
+						0.23,
+						0.045,
+						0.03
+					],
+					"roughness": 0.75,
+					"metallic": 0.0,
+					"vertexCount": 1116,
+					"indexCount": 4761,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1350180,
+						"byteLength": 13392,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1363572,
+						"byteLength": 3348,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1366920,
+						"byteLength": 9522,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "brass",
+					"color": [
+						0.78,
+						0.57,
+						0.18
+					],
+					"roughness": 0.3,
+					"metallic": 1.0,
+					"vertexCount": 24,
+					"indexCount": 36,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1376444,
+						"byteLength": 288,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1376732,
+						"byteLength": 72,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1376804,
+						"byteLength": 72,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "buff",
+					"color": [
+						0.7,
+						0.49,
+						0.22
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 428,
+					"indexCount": 1236,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1376876,
+						"byteLength": 5136,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1382012,
+						"byteLength": 1284,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1383296,
+						"byteLength": 2472,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "canvas",
+					"color": [
+						0.72,
+						0.69,
+						0.6
+					],
+					"roughness": 0.9,
+					"metallic": 0.0,
+					"vertexCount": 168,
+					"indexCount": 372,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1385768,
+						"byteLength": 2016,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1387784,
+						"byteLength": 504,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1388288,
+						"byteLength": 744,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "deck_pine",
+					"color": [
+						0.55,
+						0.43,
+						0.27
+					],
+					"roughness": 0.75,
+					"metallic": 0.0,
+					"vertexCount": 327,
+					"indexCount": 1464,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1389032,
+						"byteLength": 3924,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1392956,
+						"byteLength": 981,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1393940,
+						"byteLength": 2928,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "ensign",
+					"color": [
+						0.8,
+						0.8,
+						0.8
+					],
+					"roughness": 0.9,
+					"metallic": 0.0,
+					"vertexCount": 18,
+					"indexCount": 60,
+					"indexType": "uint16",
+					"texture": "hesperus_ensign.png",
+					"position": {
+						"byteOffset": 1396868,
+						"byteLength": 216,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1397084,
+						"byteLength": 54,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"uv": {
+						"byteOffset": 1397140,
+						"byteLength": 144,
+						"type": "float32",
+						"size": 2
+					},
+					"index": {
+						"byteOffset": 1397284,
+						"byteLength": 120,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "galvanised",
+					"color": [
+						0.33,
+						0.34,
+						0.35
+					],
+					"roughness": 0.6,
+					"metallic": 0.0,
+					"vertexCount": 876,
+					"indexCount": 2052,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1397404,
+						"byteLength": 10512,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1407916,
+						"byteLength": 2628,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1410544,
+						"byteLength": 4104,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "gilt",
+					"color": [
+						0.85,
+						0.63,
+						0.18
+					],
+					"roughness": 0.3,
+					"metallic": 1.0,
+					"vertexCount": 104,
+					"indexCount": 156,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1414648,
+						"byteLength": 1248,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1415896,
+						"byteLength": 312,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1416208,
+						"byteLength": 312,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "glass",
+					"color": [
+						0.02,
+						0.03,
+						0.04
+					],
+					"roughness": 0.06,
+					"metallic": 0.0,
+					"vertexCount": 636,
+					"indexCount": 1116,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1416520,
+						"byteLength": 7632,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1424152,
+						"byteLength": 1908,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1426060,
+						"byteLength": 2232,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "house_aft",
+					"color": [
+						0.27,
+						0.13,
+						0.05
+					],
+					"roughness": 0.4,
+					"metallic": 0.0,
+					"vertexCount": 16,
+					"indexCount": 24,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1428292,
+						"byteLength": 192,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1428484,
+						"byteLength": 48,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1428532,
+						"byteLength": 48,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "hull_black",
+					"color": [
+						0.012,
+						0.012,
+						0.014
+					],
+					"roughness": 0.55,
+					"metallic": 0.0,
+					"vertexCount": 751,
+					"indexCount": 3516,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1428580,
+						"byteLength": 9012,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1437592,
+						"byteLength": 2253,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1439848,
+						"byteLength": 7032,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "iron",
+					"color": [
+						0.02,
+						0.02,
+						0.022
+					],
+					"roughness": 0.6,
+					"metallic": 0.0,
+					"vertexCount": 1014,
+					"indexCount": 1638,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1446880,
+						"byteLength": 12168,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1459048,
+						"byteLength": 3042,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1462092,
+						"byteLength": 3276,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "mast_brown",
+					"color": [
+						0.4,
+						0.25,
+						0.11
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 240,
+					"indexCount": 480,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1465368,
+						"byteLength": 2880,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1468248,
+						"byteLength": 720,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1468968,
+						"byteLength": 960,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "rope",
+					"color": [
+						0.3,
+						0.23,
+						0.14
+					],
+					"roughness": 0.9,
+					"metallic": 0.0,
+					"vertexCount": 144,
+					"indexCount": 216,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1469928,
+						"byteLength": 1728,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1471656,
+						"byteLength": 432,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1472088,
+						"byteLength": 432,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "teak",
+					"color": [
+						0.27,
+						0.13,
+						0.05
+					],
+					"roughness": 0.35,
+					"metallic": 0.0,
+					"vertexCount": 438,
+					"indexCount": 816,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1472520,
+						"byteLength": 5256,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1477776,
+						"byteLength": 1314,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1479092,
+						"byteLength": 1632,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "white",
+					"color": [
+						0.8,
+						0.79,
+						0.74
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 3890,
+					"indexCount": 9651,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1480724,
+						"byteLength": 46680,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1527404,
+						"byteLength": 11670,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1539076,
+						"byteLength": 19302,
+						"type": "uint16"
+					}
+				}
+			]
+		},
+		{
+			"name": "lod2",
+			"collection": "Hesperus_LOD2",
+			"objects": 13,
+			"range": {
+				"min": 4000.0,
+				"max": null
+			},
+			"triangles": 1954,
+			"vertices": 2183,
+			"byteOffset": 1558380,
+			"byteLength": 44492,
+			"bounds": {
+				"min": [
+					-4.2618,
+					-3.0,
+					-29.9068
+				],
+				"max": [
+					4.2618,
+					22.7415,
+					27.95
+				]
+			},
+			"finishes": [
+				{
+					"name": "antifouling",
+					"color": [
+						0.23,
+						0.045,
+						0.03
+					],
+					"roughness": 0.75,
+					"metallic": 0.0,
+					"vertexCount": 257,
+					"indexCount": 1056,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1558380,
+						"byteLength": 3084,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1561464,
+						"byteLength": 771,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1562236,
+						"byteLength": 2112,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "buff",
+					"color": [
+						0.7,
+						0.49,
+						0.22
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 348,
+					"indexCount": 780,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1564348,
+						"byteLength": 4176,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1568524,
+						"byteLength": 1044,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1569568,
+						"byteLength": 1560,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "canvas",
+					"color": [
+						0.72,
+						0.69,
+						0.6
+					],
+					"roughness": 0.9,
+					"metallic": 0.0,
+					"vertexCount": 60,
+					"indexCount": 138,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1571128,
+						"byteLength": 720,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1571848,
+						"byteLength": 180,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1572028,
+						"byteLength": 276,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "deck_pine",
+					"color": [
+						0.55,
+						0.43,
+						0.27
+					],
+					"roughness": 0.75,
+					"metallic": 0.0,
+					"vertexCount": 83,
+					"indexCount": 288,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1572304,
+						"byteLength": 996,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1573300,
+						"byteLength": 249,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1573552,
+						"byteLength": 576,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "gilt",
+					"color": [
+						0.85,
+						0.63,
+						0.18
+					],
+					"roughness": 0.3,
+					"metallic": 1.0,
+					"vertexCount": 66,
+					"indexCount": 114,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1574128,
+						"byteLength": 792,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1574920,
+						"byteLength": 198,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1575120,
+						"byteLength": 228,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "house_aft",
+					"color": [
+						0.27,
+						0.13,
+						0.05
+					],
+					"roughness": 0.4,
+					"metallic": 0.0,
+					"vertexCount": 16,
+					"indexCount": 24,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1575348,
+						"byteLength": 192,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1575540,
+						"byteLength": 48,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1575588,
+						"byteLength": 48,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "hull_black",
+					"color": [
+						0.012,
+						0.012,
+						0.014
+					],
+					"roughness": 0.55,
+					"metallic": 0.0,
+					"vertexCount": 275,
+					"indexCount": 1128,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1575636,
+						"byteLength": 3300,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1578936,
+						"byteLength": 825,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1579764,
+						"byteLength": 2256,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "iron",
+					"color": [
+						0.02,
+						0.02,
+						0.022
+					],
+					"roughness": 0.6,
+					"metallic": 0.0,
+					"vertexCount": 399,
+					"indexCount": 597,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1582020,
+						"byteLength": 4788,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1586808,
+						"byteLength": 1197,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1588008,
+						"byteLength": 1194,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "mast_brown",
+					"color": [
+						0.4,
+						0.25,
+						0.11
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 170,
+					"indexCount": 318,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1589204,
+						"byteLength": 2040,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1591244,
+						"byteLength": 510,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1591756,
+						"byteLength": 636,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "teak",
+					"color": [
+						0.27,
+						0.13,
+						0.05
+					],
+					"roughness": 0.35,
+					"metallic": 0.0,
+					"vertexCount": 86,
+					"indexCount": 144,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1592392,
+						"byteLength": 1032,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1593424,
+						"byteLength": 258,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1593684,
+						"byteLength": 288,
+						"type": "uint16"
+					}
+				},
+				{
+					"name": "white",
+					"color": [
+						0.8,
+						0.79,
+						0.74
+					],
+					"roughness": 0.5,
+					"metallic": 0.0,
+					"vertexCount": 423,
+					"indexCount": 1275,
+					"indexType": "uint16",
+					"position": {
+						"byteOffset": 1593972,
+						"byteLength": 5076,
+						"type": "float32",
+						"size": 3
+					},
+					"normal": {
+						"byteOffset": 1599048,
+						"byteLength": 1269,
+						"type": "int8",
+						"size": 3,
+						"normalized": true
+					},
+					"index": {
+						"byteOffset": 1600320,
+						"byteLength": 2550,
+						"type": "uint16"
+					}
+				}
+			]
+		}
+	],
+	"lights": [
+		{
+			"name": "masthead",
+			"object": "HSP_light_masthead",
+			"position": [
+				0.0,
+				15.65,
+				13.3262
+			],
+			"light": "masthead",
+			"colour": [
+				1.0,
+				0.86,
+				0.62
+			],
+			"arc_deg": 225.0,
+			"bearing_deg": 0.0,
+			"range_nm": 5.0,
+			"shown": "under way",
+			"note": "Two 16 candle-power lamps (lighting report, 1896). White over 20 points of the compass, to show 5 miles."
+		},
+		{
+			"name": "riding_aft",
+			"object": "HSP_light_riding_aft",
+			"position": [
+				0.0,
+				5.6,
+				-28.73
+			],
+			"light": "riding_aft",
+			"colour": [
+				1.0,
+				0.86,
+				0.62
+			],
+			"arc_deg": 360.0,
+			"bearing_deg": 0.0,
+			"range_nm": 1.0,
+			"shown": "at anchor",
+			"note": "The second riding light at the stern, at least 15 ft lower than the forward one."
+		},
+		{
+			"name": "riding_forward",
+			"object": "HSP_light_riding_forward",
+			"position": [
+				0.0,
+				11.4,
+				18.1255
+			],
+			"light": "riding_forward",
+			"colour": [
+				1.0,
+				0.86,
+				0.62
+			],
+			"arc_deg": 360.0,
+			"bearing_deg": 0.0,
+			"range_nm": 1.0,
+			"shown": "at anchor",
+			"note": "A vessel of 150 ft or more at anchor: a white all-round light forward, 20 to 40 ft above the hull, to show a mile."
+		},
+		{
+			"name": "searchlight",
+			"object": "HSP_light_searchlight",
+			"position": [
+				0.0,
+				6.66,
+				2.87
+			],
+			"light": "searchlight",
+			"colour": [
+				0.8,
+				0.9,
+				1.0
+			],
+			"arc_deg": 10.0,
+			"bearing_deg": 0.0,
+			"range_nm": 0.0,
+			"shown": "on demand",
+			"note": "One projector of 5000 candle power (lighting report). Its place is not recorded: its cable ran 7 ft clear of the standard compass, so it is set at the after end of the flying bridge."
+		},
+		{
+			"name": "side_port",
+			"object": "HSP_light_side_port",
+			"position": [
+				2.02,
+				5.95,
+				5.45
+			],
+			"light": "side_port",
+			"colour": [
+				1.0,
+				0.05,
+				0.03
+			],
+			"arc_deg": 112.5,
+			"bearing_deg": 56.25,
+			"range_nm": 2.0,
+			"shown": "under way",
+			"note": "Two lamps (lighting report). Red from right ahead to 2 points abaft the port beam, to show 2 miles."
+		},
+		{
+			"name": "side_starboard",
+			"object": "HSP_light_side_starboard",
+			"position": [
+				-2.02,
+				5.95,
+				5.45
+			],
+			"light": "side_starboard",
+			"colour": [
+				0.04,
+				1.0,
+				0.42
+			],
+			"arc_deg": 112.5,
+			"bearing_deg": -56.25,
+			"range_nm": 2.0,
+			"shown": "under way",
+			"note": "Two lamps (lighting report). Green from right ahead to 2 points abaft the starboard beam, to show 2 miles."
+		}
+	]
+}

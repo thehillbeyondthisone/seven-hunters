@@ -1,12 +1,13 @@
 import { Vector3 } from '../engine/math/index.js';
 import { STATION, TOWER, ROOM } from '../world/flannan/Station.js';
+import { KITCHEN, BERTH } from '../world/flannan/NextRooms.js';
 import { WARN } from '../station/Lamp.js';
 
 const view = new Vector3();
 
 // Work in camera space before projection: a target behind the player must never
 // become an apparently visible diamond through perspective division.
-export function projectGuidance( at, camera, width, height ) {
+export function projectGuidance( at, camera, width, height, insets = {} ) {
 
 	if ( ! at || width < 1 || height < 1 ) return null;
 	camera.updateMatrixWorld();
@@ -18,16 +19,21 @@ export function projectGuidance( at, camera, width, height ) {
 	let dx = view.x * e[ 0 ] / depth * width / 2;
 	let dy = - view.y * e[ 5 ] / depth * height / 2;
 	const padX = Math.min( 44, width * 0.12 ), padY = Math.min( 86, height * 0.22 );
-	const rx = width / 2 - padX, ry = height / 2 - padY;
-	const onScreen = view.z < - 0.05 && Math.abs( dx ) < rx && Math.abs( dy ) < ry;
+	const left=Math.min(width*.4,insets.left??padX),right=Math.min(width*.4,insets.right??padX);
+	const minX=left-width/2,maxX=width/2-right;
+	const top = Math.min( height * .4, insets.top ?? padY ), bottom = Math.min( height * .4, insets.bottom ?? padY );
+	const minY=top-height/2,maxY=height/2-bottom;
+	const onScreen = view.z < - 0.05 && dx>minX && dx<maxX && dy > minY && dy < maxY;
 	if ( ! onScreen ) {
 
 		// Directly behind: the bottom edge asks you to turn around. Otherwise use
 		// the target's actual left/right bearing, including on portrait screens.
 		if ( view.z >= - 0.05 && Math.abs( dx ) < 0.5 && Math.abs( dy ) < 0.5 ) dy = height;
-		const scale = Math.min( rx / Math.max( Math.abs( dx ), 0.001 ), ry / Math.max( Math.abs( dy ), 0.001 ) );
+		const scale = Math.min( (dx<0?-minX:maxX) / Math.max( Math.abs( dx ), 0.001 ), (dy<0?-minY:maxY) / Math.max( Math.abs( dy ), 0.001 ) );
 		dx *= scale;
 		dy *= scale;
+			dx = Math.max(minX,Math.min(maxX,dx));
+		dy = Math.max( top - height / 2, Math.min( height / 2 - bottom, dy ) );
 
 	}
 	return { x: width / 2 + dx, y: height / 2 + dy, onScreen, distance, angle: Math.atan2( dy, dx ) * 180 / Math.PI + 90 };
@@ -43,15 +49,9 @@ const galleryDoor = () => marker( v( Math.cos( TOWER.galleryDoor ) * 2.28, TOWER
 function stair( p, up ) {
 
 	const T = TOWER, H = T.hatch;
-	if ( p.y >= T.landing + ( up ? - 0.25 : 0.2 ) ) {
-
-		const s = up ? H.run : 0, r = H.r;
-		return marker( v( Math.cos( H.angle ) * r - Math.sin( H.angle ) * s, ( up ? T.deck : T.landing ) + 0.6, Math.sin( H.angle ) * r + Math.cos( H.angle ) * s ), up ? 'Up into the lantern' : 'Down the stair', 'hatch' );
-
-	}
-	const i = Math.max( 0, Math.min( T.count - 1, Math.floor( ( p.y - T.floor ) / T.riser ) + ( up ? 4 : - 4 ) ) );
-	const a = T.start + ( i + 0.5 ) * T.dTread;
-	return marker( v( Math.cos( a ) * 1.6, T.floor + ( i + 1 ) * T.riser + 0.55, Math.sin( a ) * 1.6 ), up ? 'Up the tower stair' : 'Down the tower stair', 'stair' );
+	if ( up ) return marker( v( Math.cos( T.start + .18 ) * 1.35, T.floor + 1, Math.sin( T.start + .18 ) * 1.35 ), 'Climb to the lantern · E', 'towerUp' );
+	return marker( v( Math.cos( H.angle ) * H.r - Math.sin( H.angle ) * ( H.run + .15 ), T.deck + 1.1,
+		Math.sin( H.angle ) * H.r + Math.cos( H.angle ) * ( H.run + .15 ) ), 'Descend to the keeper’s room · E', 'towerDown' );
 
 }
 
@@ -62,6 +62,20 @@ export function routeGuidance( p, target, zone ) {
 	const r = Math.hypot( p.x, p.z );
 	const inRoom = p.x > ROOM.x0 && p.x < ROOM.x1 + 0.4 && p.z > ROOM.z0 && p.z < ROOM.z1 && r > TOWER.rIn;
 	const above = p.y > TOWER.floor + 0.65 && r < 4.2;
+	const inside = room => p.x>room.x0&&p.x<room.x1&&p.z>room.z0&&p.z<room.z1&&Math.abs(p.y-TOWER.floor)<1;
+	const kitchen=inside(KITCHEN),berth=inside(BERTH);
+	if(berth&&(target.at.z<10.8||zone!=='room'))return marker(BERTH.door,'Berth door · E','berthDoor');
+	if(kitchen&&zone==='room'&&target.at.z>10.8)return marker(BERTH.door,'Berth door · E','berthDoor');
+	if((kitchen||berth)&&(target.at.z<5.4||zone!=='room'))return marker(KITCHEN.door,'Keepers’ room · E','kitchenDoor');
+	if(inRoom&&zone==='room'&&target.at.z>5.4)return marker(KITCHEN.door,'Kitchen door · E','kitchenDoor');
+	if(!inRoom&&!kitchen&&!berth&&!above&&r>TOWER.rIn){
+		const E=STATION.eastGate,C=STATION.compound;
+		if(zone!=='yard'&&p.x>E.x+1)return marker(v(E.x+1.5,STATION.yard+1,E.z),'East gate · E','eastReturnGate');
+		if(zone==='yard'&&p.x>C.x0&&p.x<C.x1&&p.z>C.z0&&p.z<C.z1){
+			if(target.at.x>E.x)return marker(v(E.x-.25,STATION.yard+1,E.z),'East gate · E','eastExitGate');
+			if(target.at.x<C.x0)return marker(v(STATION.southGate.x,STATION.yard+1,STATION.southGate.z-.25),'South gate · E','southExitGate');
+		}
+	}
 	if ( zone === 'weight' ) {
 		if ( p.y >= TOWER.deck - .3 ) {
 			if ( r > 2.35 ) return galleryDoor();
@@ -78,8 +92,7 @@ export function routeGuidance( p, target, zone ) {
 			if ( p.y >= TOWER.deck - 0.3 ) {
 
 				if ( r > 2.35 ) return galleryDoor();
-				const H = TOWER.hatch;
-				return marker( v( Math.cos( H.angle ) * H.r - Math.sin( H.angle ) * H.run, TOWER.deck + 0.3, Math.sin( H.angle ) * H.r + Math.cos( H.angle ) * H.run ), 'Down to the keepers’ room', 'hatch' );
+				return stair( p, false );
 
 			}
 			return stair( p, false );
@@ -105,6 +118,10 @@ export function storyGuidance( story ) {
 
 	const s = story, p = s.app.player.position, L = s.lamp, W = s.watcher, b = s.beat;
 	if ( b === 'intro' || b === 'crossing' || b === 'end' || s.signal || s.tel > 0.6 || s.paused || s.ui.open || s.app.devMenu?.open || s.app.freeCam || s.app.ui?.ui?.photoMode || s.app.settings.guidance === false ) return null;
+	if ( s.app.keeperSafety?.active && s.app.keeperSafety?.state !== 'normal' ) return s.app.keeperSafety.guidance();
+	if ( s.storm?.active ) return s.storm.guidance();
+	if ( s.returningLight?.active ) return s.returningLight.guidance();
+	if ( s.morning?.enabled ) return s.morning.guidance();
 	if ( s.next?.active ) return s.next.guidance();
 	const keeper = s.keeper?.guidance();
 	if ( keeper ) return routeGuidance( p, marker( keeper.at, keeper.label, 'keeperDuty' ), keeper.zone );

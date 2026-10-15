@@ -16,6 +16,8 @@ export function projectionScale( value ) {
 
 }
 
+export function xrSamples( value ) { return String( value ) === '1' ? 1 : 4; }
+
 export function supportMessage( env = globalThis ) {
 
 	if ( ! env.isSecureContext ) return 'Open this preview over HTTPS on your Quest, or localhost on desktop.';

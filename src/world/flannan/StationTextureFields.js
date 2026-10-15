@@ -4,7 +4,7 @@
 // Construction, joints and silhouettes remain in the existing geometry.
 export const STATION_SURFACE_SETS = [
 	{ name: 'stationWood', w: 1024, h: 512, mx: 2.8, my: .76, hs: .0009, ao: .35, out: 'indoorWoodA', nra: 'indoorWoodN' },
-	{ name: 'stationPlaster', w: 512, h: 512, mx: 1.6, my: 1.6, hs: .002, ao: .3, out: 'limeA', nra: 'limeN' },
+	{ name: 'stationPlaster', w: 512, h: 512, mx: 1.6, my: 1.6, hs: .0032, ao: .3, out: 'limeA', nra: 'limeN' },
 	{ name: 'stationPaint', w: 512, h: 512, mx: 1, my: .5, hs: .00065, ao: .2, out: null, nra: 'keptPaintN' },
 	{ name: 'stationIron', w: 512, h: 512, mx: 1, my: 1, hs: .0012, ao: .35, out: null, nra: 'castIronN' },
 ];
@@ -41,9 +41,12 @@ fn vlgGen( X: f32, Y: f32 ) -> VlgOut {
 	let film = vlgPn( X, Y, 11.0, 64.0, 1307.0 );
 	let sand = vlgPn( X, Y, 135.0, 135.0, 1309.0 );
 	let pore = smoothstep( .25, .56, -sand );
-	let height = .5 + broad * .22 + trowel * .13 + film * .028 + sand * .024 - pore * .055;
+	let height = .5 + broad * .22 + trowel * .16 + film * .028 + sand * .04 - pore * .07;
 	let rough = clamp( .88 + trowel * .05 + pore * .07 - broad * .025, .79, .98 );
-	return VlgOut( vec4f( height, rough, 1.0 - pore * .03, 0.0 ), vec4f( vlgN01( broad ), pore, vlgN01( trowel ), 1.0 ) );
+	// Pigment body, pores, trowel overlap and aggregate remain separate masks.
+	// Albedo needs real fine-scale variation when light faces the wall head-on;
+	// a shallow normal alone contributes very little in that lighting direction.
+	return VlgOut( vec4f( height, rough, 1.0 - pore * .03, 0.0 ), vec4f( vlgN01( broad ), pore, vlgN01( trowel ), vlgN01( sand ) ) );
 }
 `,
 	stationPaint: /* wgsl */`

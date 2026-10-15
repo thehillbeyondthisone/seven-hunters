@@ -220,6 +220,19 @@ export class StationSound {
 
 	}
 
+	// the Begbie lamp's shutter: one clack as the vanes open on the key, a lighter one as the spring shuts them
+	signalShutter( open ) {
+
+		if ( ! this._ok() ) return;
+		const p = this.s._panner( this.s.aboveOut, 1, 1.2 );
+		const T = this.tower.signal;
+		this._at( p, T.x, T.y, T.z );
+		const t = this.c.currentTime + 0.005;
+		this._burst( p, t, 0.01, 'bandpass', open ? 2600 : 3400, 2.2, open ? 0.42 : 0.3, 0.012 );
+		this._partial( p, t, open ? 1840 : 2210, open ? 0.05 : 0.035, 0.05 );
+
+	}
+
 	// a door or the gate: a creak, then a thud as it comes to; hard: the gate slammed by the wind
 	door( name, open, at, hard = false ) {
 
@@ -259,14 +272,31 @@ export class StationSound {
 	// The same rising impact that emits the visible spray. Heard from its actual cliff position.
 	cliffImpact( site, strength ) {
 		if ( strength < 0.025 || ! this._ok() ) return;
-		const e = this.s.env, d = Math.hypot( site.x - e.lx, e.ly, site.z - e.lz );
-		const v = this.s._shotAt( 'surf_crash', 'crash', site.x, 1, site.z,
+		const e = this.s.env, y = site.y ?? 1, d = Math.hypot( site.x - e.lx, e.ly-y, site.z - e.lz );
+		const v = this.s._shotAt( 'surf_crash', 'crash', site.x, y, site.z,
 			- 23 + 10 * strength - 6 * ( e.indoor || 0 ), 0.65 + 0.1 * ( 1 - strength ),
 			this.c.currentTime + Math.min( 1, d / 343 ), 24, 0.9 );
 		if ( v?.extra?.[ 0 ] ) v.extra[ 0 ].frequency.value = 900 + 2000 * strength;
 	}
 
 	// ---- per frame
+	breathing( effort, struggling = false ) {
+		if ( ! this._ok() ) return;
+		const now = this.c.currentTime;
+		if ( now < ( this._breathAt || 0 ) ) return;
+		this._breathAt = now + ( struggling ? 1.15 : 1.8 );
+		this._burst( this.s.near, now + .01, .3, 'bandpass', 650, .7, .035 + effort * .07, .16 );
+		this._burst( this.s.near, now + .4, .45, 'lowpass', 1100, .6, .025 + effort * .05, .2 );
+	}
+	fittingRattle( site, strength ) {
+		if ( strength < .75 || ! this._ok() ) return;
+		const e=this.s.env,d=Math.hypot(site.x-e.lx,site.z-e.lz,e.ly);
+		if(d>180 || this.c.currentTime<(this._rattleAt||0))return;
+		this._rattleAt=this.c.currentTime+8;
+		const gain=Math.min(.08,strength*3/(20+d))*(.3+.7*(e.indoor||0));
+		this._partial(this.s.aboveOut,this.c.currentTime+.1,310,gain,.3);
+		this._burst(this.s.aboveOut,this.c.currentTime+.14,.15,'bandpass',1700,2,gain,.08);
+	}
 
 	update( dt, st ) {
 

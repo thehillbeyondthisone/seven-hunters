@@ -15,7 +15,7 @@ import { XRPreview, LOCATIONS } from '../src/xr/XRPreview.js';
 import { Locomotion } from '../src/xr/Locomotion.js';
 
 const W = 480, H = 360, out = process.env.XR_TEST_OUT || 'artifacts/xr-preview';
-installBrowser( { search: '?vr&bench&noAudio&syncPipelines', width: W, height: H, root: resolve( 'public' ), onPost: async () => {} } );
+installBrowser( { search: process.env.XR_TEST_QUERY || '?vr&bench&noAudio&syncPipelines', width: W, height: H, root: resolve( 'public' ), onPost: async () => {} } );
 const { App } = await import( '../src/App.js' );
 const app = new App(), errors = [];
 const originalInit = GPU.init.bind( GPU );
@@ -51,8 +51,11 @@ for ( let i = 0; i < LOCATIONS.length; i ++ ) {
 	console.log( 'PASS actual VR spawn', LOCATIONS[i][0] );
 }
 mkdirSync( out, { recursive: true } );
-const report = { mobileLimits: !! process.env.WEBGPU_DEFAULT_LIMITS, sampledTextures: GPU.limits.maxSampledTexturesPerShaderStage, locations: [] };
-for ( const [ name, hour ] of [ ...LOCATIONS.map( ( [ , view ] ) => [ view, 13.6 ] ), [ 'dRoom', 19 ], [ 'dLantern', 19 ] ] ) {
+const report = { mobileLimits: !! process.env.WEBGPU_DEFAULT_LIMITS, sampledTextures: GPU.limits.maxSampledTexturesPerShaderStage,
+	query: location.search, headsetPerformanceMeasured: false, locations: [] };
+const selected = process.env.XR_TEST_VIEWS?.split( ',' );
+for ( const [ name, hour ] of [ ...LOCATIONS.map( ( [ , view ] ) => [ view, 13.6 ] ), [ 'dRoom', 19 ], [ 'dLantern', 19 ] ]
+	.filter( ( [ name ] ) => ! selected || selected.includes( name ) ) ) {
 
 	window.__view( name );
 	app.settings.timeOfDay = hour;
@@ -81,7 +84,8 @@ for ( const [ name, hour ] of [ ...LOCATIONS.map( ( [ , view ] ) => [ view, 13.6
 	for ( let i = 0; i < images[ 0 ].rgba.length; i ++ ) difference += Math.abs( images[ 0 ].rgba[ i ] - images[ 1 ].rgba[ i ] );
 	assert.ok( difference > 1000, name + ' did not produce distinct eyes' );
 	writeSheet( `${ out }/xr-${ name }${ hour === 19 ? '-night' : '' }-stereo.png`, images, 2 );
-	report.locations.push( { name, hour, difference, controllerRays: true } );
+	report.locations.push( { name, hour, difference, controllerRays: true, grassTrianglesPerEye: app.sward?.triangles || 0,
+		eyeRendering: renderer.metrics || null } );
 	console.log( 'PASS actual XR scene', name, hour, 'eye difference', difference );
 
 }

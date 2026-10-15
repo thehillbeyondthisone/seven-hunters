@@ -1,0 +1,292 @@
+{
+    "checked":  "2026-10-13",
+    "files":  [
+                  {
+                      "file":  "analogues/granton-may-at-islay.jpg",
+                      "bytes":  27406,
+                      "width":  700,
+                      "height":  525,
+                      "sha256":  "9af670bb21c44c81b621180a7c2902f10f302da59a688f15daff93e950d2862b"
+                  },
+                  {
+                      "file":  "analogues/granton-may-west-pier.jpg",
+                      "bytes":  28595,
+                      "width":  700,
+                      "height":  525,
+                      "sha256":  "aef54f262eadce8622ab33be9285db5042d0f97d1a22c71a542339fca9fa4e34"
+                  },
+                  {
+                      "file":  "analogues/granton-pharos-vi.jpg",
+                      "bytes":  35321,
+                      "width":  700,
+                      "height":  525,
+                      "sha256":  "d9f097c1793e28027402a348fb3aafb38aa685ccda2f73a611d8c3b8aff7f023"
+                  },
+                  {
+                      "file":  "lr-0118-classing-remarks-1896-12-08.jpg",
+                      "bytes":  873177,
+                      "width":  2000,
+                      "height":  2581,
+                      "sha256":  "7017dd4654fe735fa78e5bb564370c14ff93d659935330408650713d991700b4"
+                  },
+                  {
+                      "file":  "lr-0119-steel-steamer-report-1896-12-04-a.jpg",
+                      "bytes":  1295328,
+                      "width":  2000,
+                      "height":  3055,
+                      "sha256":  "547ccd417f0211325d84f3e49d8eaa3f5c1b1c27ad143f5ed93bc1a20a67a6ad"
+                  },
+                  {
+                      "file":  "lr-0119-steel-steamer-report-1896-12-04-b.jpg",
+                      "bytes":  683190,
+                      "width":  2000,
+                      "height":  1613,
+                      "sha256":  "e0b8cd3e8c124a59af4c214f2bdc5e5e549c2e82b16f09dd2def24badd7345f7"
+                  },
+                  {
+                      "file":  "lr-0120-donkey-boiler-form-1896-11-04.jpg",
+                      "bytes":  1205800,
+                      "width":  1465,
+                      "height":  2319,
+                      "sha256":  "dd6e9b42f8389004e952757abcbe0ee29a7be645186211c6a4ea8747cf9a92ca"
+                  },
+                  {
+                      "file":  "lr-0121-machinery-report-1896-12-03-a.jpg",
+                      "bytes":  1175918,
+                      "width":  2000,
+                      "height":  3232,
+                      "sha256":  "2437fb1a25ea332cad0eb4259be793789f232d3fe872da95ead5d8e64a51c222"
+                  },
+                  {
+                      "file":  "lr-0121-machinery-report-1896-12-03-b.jpg",
+                      "bytes":  1073551,
+                      "width":  2000,
+                      "height":  3253,
+                      "sha256":  "7d0c1f459b8582ef20c13f60bba2b437f98a8be75e30b705e320db693814ee55"
+                  },
+                  {
+                      "file":  "lr-0122-first-entry-form-1896-11-28.jpg",
+                      "bytes":  1230522,
+                      "width":  2000,
+                      "height":  3279,
+                      "sha256":  "e4eb2c6da381e9dfb6801476113756428ff097b769c9f6d53b4c6672e58626be"
+                  },
+                  {
+                      "file":  "lr-0123-electric-lighting-report-1896-12-01-a.jpg",
+                      "bytes":  1210705,
+                      "width":  2000,
+                      "height":  3361,
+                      "sha256":  "70c9b079a5ba2937f24c99d8a44dbee4b12f43e9b309476bee8c26b8fa71c515"
+                  },
+                  {
+                      "file":  "lr-0123-electric-lighting-report-1896-12-01-b.jpg",
+                      "bytes":  1118105,
+                      "width":  2000,
+                      "height":  3113,
+                      "sha256":  "ba22b2c12b8689e55848927c83db905f2c29ebd306bd0c7dd2ecad60fb42cf63"
+                  },
+                  {
+                      "file":  "lr-0124-profile-deck-plans-corrected-1896-07-16-a.jpg",
+                      "bytes":  503308,
+                      "width":  2000,
+                      "height":  1583,
+                      "sha256":  "a0a3107564df67c7fc023540bfe822920b67b8a08cf7a6a0bd4cd1993ee80a19"
+                  },
+                  {
+                      "file":  "lr-0124-profile-deck-plans-corrected-1896-07-16-b.jpg",
+                      "bytes":  182510,
+                      "width":  2000,
+                      "height":  727,
+                      "sha256":  "43a80dd598e95ec642d1cc2c0924b556c2b11341864ce933d34d668a92259acc"
+                  },
+                  {
+                      "file":  "lr-0125-midship-section-1896-05-19-a.jpg",
+                      "bytes":  398135,
+                      "width":  2000,
+                      "height":  1478,
+                      "sha256":  "a0171aba61ef7c42f3456f623ef86c795d1a1d982664dd30b6851869739036b8"
+                  },
+                  {
+                      "file":  "lr-0125-midship-section-1896-05-19-b.jpg",
+                      "bytes":  498037,
+                      "width":  2000,
+                      "height":  1841,
+                      "sha256":  "9e4bf5ed7c07d8b79f8877f728b730bc4e25ae0b60d5817315293cb2fb58a34d"
+                  },
+                  {
+                      "file":  "lr-0126-rigging-plan-1896-07-16-a.jpg",
+                      "bytes":  237034,
+                      "width":  2000,
+                      "height":  1235,
+                      "sha256":  "bbf9a464fa3e1e99f46fea636b9adc71f21a25a52c5fa30e1c339e6fa7c58bb7"
+                  },
+                  {
+                      "file":  "lr-0126-rigging-plan-1896-07-16-b.jpg",
+                      "bytes":  259411,
+                      "width":  2000,
+                      "height":  1615,
+                      "sha256":  "197ec96a7960403d2d6ebf0adfdae6fc1e62ac2760f704a9d346580d1b0adcb0"
+                  },
+                  {
+                      "file":  "lr-0127-main-boilers-1896-05-20-a.jpg",
+                      "bytes":  358190,
+                      "width":  2000,
+                      "height":  1402,
+                      "sha256":  "c3cad79e375d601eab97fe0737e5e58cf7706b44f4447d4437ccb98830029a76"
+                  },
+                  {
+                      "file":  "lr-0127-main-boilers-1896-05-20-b.jpg",
+                      "bytes":  735086,
+                      "width":  2000,
+                      "height":  2772,
+                      "sha256":  "96cd2022ad06023466e7ece578f9c7931963e350e1ae448632c1e5898ee6f0ed"
+                  },
+                  {
+                      "file":  "lr-0128-rudder-1896-07-20-a.jpg",
+                      "bytes":  531377,
+                      "width":  2000,
+                      "height":  2926,
+                      "sha256":  "673809051006a0413a51ed49f05ae1003d92daab87add76c1f562fa40f4bba63"
+                  },
+                  {
+                      "file":  "lr-0128-rudder-1896-07-20-b.jpg",
+                      "bytes":  776782,
+                      "width":  2000,
+                      "height":  2715,
+                      "sha256":  "50970b363f020b9b981ed22a75681fff35cc87e238327b255f81735322fc724a"
+                  },
+                  {
+                      "file":  "lr-0129-plans-forwarding-form-1896-11-28.jpg",
+                      "bytes":  1277297,
+                      "width":  1556,
+                      "height":  2427,
+                      "sha256":  "4a0163402ed0d61e3ce80f6491ae613d685344ea0b78e299d58ba3856a60c4f4"
+                  },
+                  {
+                      "file":  "lr-0130-mast-plan-1896-07-20-a.jpg",
+                      "bytes":  106173,
+                      "width":  2000,
+                      "height":  582,
+                      "sha256":  "73551c790171df7bd3fe4f5204d6f8b4800cedcd99db05dd1f69edd39327be9a"
+                  },
+                  {
+                      "file":  "lr-0130-mast-plan-1896-07-20-b.jpg",
+                      "bytes":  322841,
+                      "width":  2000,
+                      "height":  1462,
+                      "sha256":  "504d40b6f67a93a067a0ea0ee52ff928bf73d347426f8551c139d4a9c699a5dd"
+                  },
+                  {
+                      "file":  "lr-0131-bilge-tank-pumping-1896-09-02-a.jpg",
+                      "bytes":  159023,
+                      "width":  2000,
+                      "height":  871,
+                      "sha256":  "a3f6a4b7ea0349078eaed76e1cd268ea28c89cd1fd20a5c425f626bec15f8df6"
+                  },
+                  {
+                      "file":  "lr-0131-bilge-tank-pumping-1896-09-02-b.jpg",
+                      "bytes":  899257,
+                      "width":  2000,
+                      "height":  3013,
+                      "sha256":  "626334c4166caa58f5e6b63d41bb3b4b9d740df282604cd632447c594e5f4dd3"
+                  },
+                  {
+                      "file":  "lr-0132-plumber-work-plan-1896-09-10.jpg",
+                      "bytes":  406253,
+                      "width":  2000,
+                      "height":  1110,
+                      "sha256":  "daa0fa80b028723e75a820493ce8a6a756ae52abc38b1ab7c1336bbecf41d134"
+                  },
+                  {
+                      "file":  "lr-0133-plumber-work-profile-1896-09-05-a.jpg",
+                      "bytes":  265615,
+                      "width":  2000,
+                      "height":  860,
+                      "sha256":  "19621dd4bb97ec2ce5d1182ad38976e0073df91f1ff85c639c4c0e4c1ba02368"
+                  },
+                  {
+                      "file":  "lr-0133-plumber-work-profile-1896-09-05-b.jpg",
+                      "bytes":  143719,
+                      "width":  2000,
+                      "height":  853,
+                      "sha256":  "83240aa8ea830c43c06b408cbf094946577c886b6c646bffea0c70befdddbe05"
+                  },
+                  {
+                      "file":  "lr-0134-altered-after-end-1896-06-19-a.jpg",
+                      "bytes":  312646,
+                      "width":  2000,
+                      "height":  1575,
+                      "sha256":  "1ff5a0c4a0f8d745d3bff60fda6bef1365af4624cd1b5ba2f6e2c66bbddc0eb1"
+                  },
+                  {
+                      "file":  "lr-0134-altered-after-end-1896-06-19-b.jpg",
+                      "bytes":  257137,
+                      "width":  2000,
+                      "height":  1294,
+                      "sha256":  "43b771a1704a1fcaf4825c221da26ee70a2be655268733f6c9ab8491370d6e35"
+                  },
+                  {
+                      "file":  "lr-0135-profile-deck-plan-1896-05-19-a.jpg",
+                      "bytes":  402407,
+                      "width":  2000,
+                      "height":  1630,
+                      "sha256":  "388427272d1f67e65813074fd7ce4083b6741d6707086baab2018c9a34886a1f"
+                  },
+                  {
+                      "file":  "lr-0135-profile-deck-plan-1896-05-19-b.jpg",
+                      "bytes":  801583,
+                      "width":  2000,
+                      "height":  2647,
+                      "sha256":  "368c452562bb0f74fc1d5422847be912c8d66ed6dea2aa05b35bb3805f940231"
+                  },
+                  {
+                      "file":  "lr-0137-ship-forgings-form-1896-a.jpg",
+                      "bytes":  904096,
+                      "width":  2000,
+                      "height":  3117,
+                      "sha256":  "b71fa5be9ea34b97d81b81f4099bc870b289009f679f48c7c51fee2dddee825b"
+                  },
+                  {
+                      "file":  "lr-0137-ship-forgings-form-1896-b.jpg",
+                      "bytes":  271339,
+                      "width":  2000,
+                      "height":  1277,
+                      "sha256":  "44cc6aa78f942484c04ad18429739f9299e76738b17325231467aec2aed2318d"
+                  },
+                  {
+                      "file":  "lr-gls178-0009-survey-repairs-1897-05-28.jpg",
+                      "bytes":  1051459,
+                      "width":  2000,
+                      "height":  3098,
+                      "sha256":  "fea80d9fbfc40a8150c2ba0109f95786f5a7ee664b2fd06be9e3afbf337dbec3"
+                  },
+                  {
+                      "file":  "lr-gls178-0010-survey-engines-boilers-1897-05-22-a.jpg",
+                      "bytes":  955990,
+                      "width":  2000,
+                      "height":  3029,
+                      "sha256":  "ff5062f058fd5799267fa17840b96d2fe9b3de8335a8f85a81769066f482f532"
+                  },
+                  {
+                      "file":  "lr-gls178-0010-survey-engines-boilers-1897-05-22-b.jpg",
+                      "bytes":  774562,
+                      "width":  2000,
+                      "height":  3033,
+                      "sha256":  "6a4a0932f227fcad8b59b8f932c1fe6d782ed8d01eddff7ab45eeb5ad83151c0"
+                  },
+                  {
+                      "file":  "lr-gls184-0123-survey-repairs-1899-05-16.jpg",
+                      "bytes":  1028667,
+                      "width":  2000,
+                      "height":  3079,
+                      "sha256":  "8cd8e7e555ae1df53e03c649021d484c1e7790cf05e5fcf6807537632ca0e5c9"
+                  },
+                  {
+                      "file":  "photo-ramsey-east-quay-southward.jpg",
+                      "bytes":  446180,
+                      "width":  1600,
+                      "height":  1300,
+                      "sha256":  "f381890cfd105b9085142156cb0f92cf15fe4f31bc94ffbe01377a913ce49a4c"
+                  }
+              ]
+}

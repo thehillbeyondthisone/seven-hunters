@@ -23,11 +23,11 @@ s.flags.keeperDuty = { inspected: true, verified: true };
 s.lamp.wind = .88; s.lamp.start(); s.lamp.ignite(); s.lamp.glow = s.lamp.speed = 1;
 s.keeper.drive.sync( s.lamp.wind );
 const at = s.keeper.drive.at;
-const treads = Array.from( { length: TOWER.count }, ( _, i ) => ( { a: TOWER.start + ( i + .5 ) * TOWER.dTread, y: TOWER.floor + ( i + 1 ) * TOWER.riser } ) )
- .filter( t => Math.cos( t.a - TOWER.hatch.angle ) > .65 )
- .sort( ( a, b ) => Math.abs( a.y + 1.62 - at.y ) - Math.abs( b.y + 1.62 - at.y ) );
-const tread = treads[ 0 ];
-app.player.position.set( Math.cos( tread.a ) * 1.0, tread.y, Math.sin( tread.a ) * 1.0 );
+const H = TOWER.hatch;
+app.player.position.set( Math.cos( H.angle ) * 1.7 + Math.sin( H.angle ) * .1, TOWER.deck,
+ Math.sin( H.angle ) * 1.7 - Math.cos( H.angle ) * .1 );
+app.player.grounded = true; app.player._camY = null;
+for ( let i = 0; i < 30; i ++ ) app.player.update( 1 / 60 );
 app.camera.position.copy( app.player.position ); app.camera.position.y += 1.62;
 app.camera.lookAt( at );
 app.setFreeCam( true );
@@ -47,6 +47,7 @@ for ( const name of [ 'weight-before', 'weight-descended' ] ) {
  const rgba = bgraShot( Buffer.from( body ) ); images.push( rgba );
  writePNG( resolve( out, `${ name }.png` ), width, height, rgba.rgba );
  console.log( `${ name}: weight ${ s.keeper.drive.at.y.toFixed( 3 ) } m; wind ${ s.lamp.wind.toFixed( 3 ) }` );
+ console.log( 'View', app.camera.position.toArray(), 'projected weight', s.keeper.drive.at.clone().project( app.camera ).toArray(), 'lantern bounds', app.localLights.flashlight.bounds );
 }
 writeSheet( resolve( out, 'weight-sheet.png' ), images, 2 );
 process.exit( 0 );

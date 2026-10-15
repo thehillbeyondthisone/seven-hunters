@@ -19,16 +19,17 @@ export class NextWatch {
 
 	install() {
 		const s = this.s, I = s.interact;
+		const later = () => this.active || s.returningLight?.active || s.storm?.active;
 		const door = ( id, at, name, label ) => {
-			I.add( { id, at, reach: 2.2, size: 0.5, text: () => this.active ? `${ s.doors[ name ][ 0 ].target > 0.5 ? 'Shut' : 'Open' } the ${ label }` : 'The kitchen',
-				use: () => this.active ? s._toggle( name ) : s.ui.read( NOTES.bed ) } );
+			I.add( { id, at, reach: 2.2, size: 0.5, text: () => later() ? `${ s.doors[ name ][ 0 ].target > 0.5 ? 'Shut' : 'Open' } the ${ label }` : 'The kitchen',
+				use: () => later() ? s._toggle( name ) : s.ui.read( NOTES.bed ) } );
 		};
 		// Replace the old kitchen note target rather than stacking two prompts.
 		const kitchen = I.get( 'kitchenDoor' );
 		kitchen.at = KITCHEN.door;
-		kitchen.text = () => this.active ? `${ s.doors.kitchen[ 0 ].target > 0.5 ? 'Shut' : 'Open' } the kitchen door` : 'The kitchen';
+		kitchen.text = () => later() ? `${ s.doors.kitchen[ 0 ].target > 0.5 ? 'Shut' : 'Open' } the kitchen door` : 'The kitchen';
 		const oldUse = kitchen.use;
-		kitchen.use = () => this.active ? s._toggle( 'kitchen' ) : oldUse();
+		kitchen.use = () => later() ? s._toggle( 'kitchen' ) : oldUse();
 		door( 'berthDoor', BERTH.door, 'berth', 'berth door' );
 		I.add( { id: 'kitchenStove', at: KITCHEN.stove, reach: 2, size: 0.35, hold: 1.2, when: () => this.active,
 			text: () => s.beat === 'd3bank' ? 'Bank the stove before you go' : s.beat === 'd3return' ? 'Look at the stove' : this.state.fireLit ? 'The kitchen stove' : 'Get the stove going', use: () => this.stove() } );
@@ -131,6 +132,14 @@ export class NextWatch {
 		} else this.s.watcher.load( savedWatcher );
 	}
 
+	wakeLantern() {
+		const s = this.s;
+		s.hand.setRest( BERTH.lantern, 0.4 );
+		this.state.lanternInBerth = true;
+		s.hand.carried = s.hand.lit = true;
+		s.hand.glow = 1;
+	}
+
 	async stove() {
 		const s = this.s;
 		if ( this.busy ) return;
@@ -180,10 +189,12 @@ export class NextWatch {
 				if ( s.lamp.wind < 0.95 ) { s.toast( 'Wind the machine fully before resting.' ); return; }
 				this.state.sleepFrom = s.h; this.state.sleepUntil = s.h + 2;
 				s.hand.lit = false;
-				if ( s.hand.carried ) { s.hand.setRest( BERTH.lantern, 0.4 ); s.hand.carried = false; this.state.lanternInBerth = true; }
+				s.hand.setRest( BERTH.lantern, 0.4 ); s.hand.carried = false; this.state.lanternInBerth = true;
 				s.row( s.h, 'Machine fully wound. Storm lantern left unlit. Two hours’ rest.' );
 				await s._skipTo( this.state.sleepUntil, this.state.lanternInBerth ? 'You leave the storm lantern on the washstand. Two hours. The machine will want you again.' : 'Two hours. The machine will want you again.' );
 				s.row( s.h, 'Resumed the watch after two hours’ rest.' );
+				this.wakeLantern();
+				s.toast( 'You light your storm lantern and take it from the washstand.' );
 				this.place( -2.7, TOWER.floor, 12.1, 0, 0 ); s.setBeat( 'd2wake' );
 			} else if ( b === 'd3sleep' ) {
 				if ( s.lamp.wind < 0.9 ) { s.toast( 'Wind fully before keeping the remaining watch from here.' ); return; }
@@ -228,7 +239,7 @@ export class NextWatch {
 	showEnd() {
 		if ( this.endShown ) return;
 		this.endShown = true;
-		this.s.ui.end( { heading: 'The next watch', rows: this.s.rows.filter( r => r[ 0 ] >= 57 ).map( ( [ h, text ] ) => [ this.date( h ), text ] ), lines: [ 'The kitchen is warm. Beyond the glass, the sea is dark.', 'Cate is watching from Gallan Head.', 'End of this chapter. The relief has still to come.' ], credits: 'Seven Hunters. Walter Innes and Cate Macleod are fictional. The new rooms, hauling shed and incidents are authored reconstructions.' } );
+		this.s.ui.end( { heading: 'The next watch', rows: this.s.rows.filter( r => r[ 0 ] >= 57 ).map( ( [ h, text ] ) => [ this.date( h ), text ] ), lines: [ 'The kitchen is warm. Beyond the glass, the sea is dark.', 'Cate is watching from Gallan Head.', 'The next clear watch is ahead. The relief has still to come.' ], credits: 'Seven Hunters. Walter Innes and Cate Macleod are fictional. The new rooms, hauling shed and incidents are authored reconstructions.', next: { label: 'Keep the next clear watch', use: () => this.s.returningLight.begin() } } );
 	}
 
 	guidance() {

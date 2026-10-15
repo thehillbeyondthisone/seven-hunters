@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Morning service · browser acceptance</title>
+<link rel="stylesheet" href="/src/ui/ui.css"><link rel="stylesheet" href="/src/story/story.css">
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#10191d}canvas{display:block}
+#run-route{position:fixed;top:110px;left:16px;z-index:106;padding:12px;color:#eee4cf;background:#10191d;border:1px solid #b8a780;font:15px Georgia}
+#review-note{position:fixed;bottom:12px;left:12px;z-index:105;max-width:320px;padding:10px;background:#10191dee;color:#eee4cf;font:12px/1.5 system-ui;pointer-events:none}
+</style></head><body><div id="app"></div><div id="fps" hidden></div>
+<button id="run-route" hidden>Run the complete walking routine</button>
+<p id="review-note">Browser acceptance · loading the real station and renderer. No watch or preview saves are written.</p>
+<script type="module">
+import { App } from '../src/App.js';
+import { UI } from '../src/ui/UI.js';
+import { AppUI } from '../src/ui/AppUI.js';
+import { Story } from '../src/story/Story.js';
+import { walkMorningRoutine } from './helpers/morning-route.mjs';
+const app = new App(), ui = new UI(), note = document.getElementById('review-note'), run = document.getElementById('run-route');
+app.qs.set('morningPreview',app.qs.get('morningPreview') || ''); app.qs.set('noAudio','');
+// Shared normal-speed collision and selection route. Apparatus and oil state
+// use real service actions. The paper and signature UI stay interactive.
+const raf = window.requestAnimationFrame.bind(window), caf = window.cancelAnimationFrame.bind(window);
+window.requestAnimationFrame = cb => document.visibilityState === 'hidden' ? setTimeout(()=>cb(performance.now()),16) : raf(cb);
+window.cancelAnimationFrame = id => { clearTimeout(id); caf(id); };
+await app.init((p,label,until)=>{ui.setLoading(p,label,until); note.textContent=`Loading browser acceptance · ${label}`;});
+app.ui = new AppUI(app,ui);
+const s = app.story = new Story(app); s.save = ()=>{}; s.loadSave = ()=>null;
+app.input.requestLock = ()=>{};
+app.start(); await ui.hideLoader();
+note.textContent='Read the first-time instruction. Then run the shared walking test through the real renderer, doors and selectable targets. Sign the actual journal when it appears. This is automated route QA, not a manual playthrough. No saves are written.';
+await s.start(); run.hidden=false;
+run.onclick=async()=>{
+	run.hidden=true;
+	const player=app.player, keys=app.input.keys;
+	const step=seconds=>{for(let t=0;t<seconds-1e-8;t+=1/60){player.update(1/60);s.update(1/60);app.input.endFrame();}};
+	const face=at=>{const d=at.clone().sub(app.camera.position).normalize();player.yaw=Math.atan2(-d.x,-d.z);player.pitch=Math.asin(d.y);player.update(0);app.camera.updateMatrixWorld();};
+	const checkpoint=async id=>{note.textContent=id==='journal-ready'?'The complete walking route passed. Review the actual slate and service entries, then sign the page.':`Browser route · ${id}`;await new Promise(resolve=>setTimeout(resolve,450));};
+	try {
+		await walkMorningRoutine({s,m:s.morning,player,keys,step,face,checkpoint});
+		note.textContent=`PASS ${s.morning.state.familiar?'familiar':'first'} dawn · complete real walking route, selected targets, conserved transfers and signed journal. Quiet exploration remains active. No saves written.`;
+	} catch(error) { keys.clear();note.textContent=`FAIL · ${error.message}`;console.error(error); }
+};
+</script></body></html>

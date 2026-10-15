@@ -8,6 +8,7 @@ import { SeaWeather, stationShelter } from './weather/SeaWeather.js';
 import { ExtremeSea } from './weather/ExtremeSea.js';
 import { SeaDread } from './weather/SeaDread.js';
 import { CliffSurge } from './ocean/CliffSurge.js';
+import { CoastalSurge } from './ocean/CoastalSurge.js';
 
 import { Engine } from './core/Engine.js';
 import { Input } from './core/Input.js';
@@ -30,7 +31,7 @@ import { Environment } from './sky/Environment.js';
 import { TerrainData } from './world/TerrainData.js';
 import { loadFlannanData } from './world/flannan/FlannanData.js';
 import { FlannanTerrainData } from './world/flannan/FlannanTerrain.js';
-import { FlannanSward } from './world/flannan/Sward.js';
+import { FlannanSward, SWARD, QUEST_SWARD } from './world/flannan/Sward.js';
 import { buildStation, assembleStation, STATION, TOWER, ROOM } from './world/flannan/Station.js';
 import { KITCHEN, BERTH } from './world/flannan/NextRooms.js';
 import { loadInteriorArchive } from './world/flannan/InteriorArchive.js';
@@ -79,6 +80,8 @@ import { PostFX } from './post/PostFX.js';
 import { AirHaze, hazeDensityForVisibility } from './post/AirHaze.js';
 import { FlyCamera } from './player/FlyCamera.js';
 import { Player } from './player/Player.js';
+import { NightVision } from './player/NightVision.js';
+import { loadCameraBob } from './player/CameraComfort.js';
 import { Game } from './game/Game.js';
 import { STAND } from './game/FishStand.js';
 import { CHANDLERY } from './game/Chandlery.js';
@@ -89,7 +92,7 @@ import { Vegetation } from './world/Vegetation.js';
 import { SoundScape } from './audio/SoundScape.js';
 import { StationSound } from './audio/StationSound.js';
 import { stationAcoustics } from './world/flannan/StationAcoustics.js';
-import { stationLightBounds } from './world/flannan/StationLighting.js';
+import { stationLightBounds, handLampBounds } from './world/flannan/StationLighting.js';
 import { updateCameraVelocity, useStaticVelocity } from './post/CameraVelocity.js';
 
 const _up = new Vector3( 0, 1, 0 );
@@ -99,6 +102,7 @@ export class App {
 
 	constructor() {
 
+		this.nightVision = new NightVision();
 		this.settings = {
 			timeOfDay: 16.2,
 			sunAzimuth: 0, // degrees: turns the sun's daily path about the vertical
@@ -106,8 +110,11 @@ export class App {
 			exposure: 0.55,
 			renderScale: 1, // internal resolution (the temporal upscaler reconstructs the output), Performance tab
 			guidance: true,
+			cameraBob: loadCameraBob(),
 		};
 		this.qs = new URLSearchParams( location.search );
+		if ( this.qs.has( 'morningPreview' ) ) this.qs.set( 'setting', 'flannan' );
+		if ( this.qs.has( 'stormPreview' ) || this.qs.has( 'returningLightPreview' ) || this.qs.has( 'coastPreview' ) ) this.qs.set( 'setting', 'flannan' );
 		if ( this.qs.has( 'weatherObservationsPreview' ) ) this.qs.set( 'setting', 'flannan' );
 		if ( this.qs.has( 'interiorPreview' ) ) { this.qs.set( 'setting', 'flannan' ); this.qs.set( 'chapterPreview', 'kitchen' ); }
 		this.isArrivalAtmosphere = this.qs.has( 'arrivalAtmospherePreview' );
@@ -138,6 +145,7 @@ export class App {
 		const qs = this.qs;
 		const vrPreview = this.isVRPreview;
 		const compactWater = vrPreview || this.isMobile;
+		const questRendering = vrPreview && ! qs.has( 'xrLegacy' );
 		if ( vrPreview ) this.settings.timeSpeed = 0;
 		// report a stage, then let the page paint it before the (synchronous) stage work starts
 		const progress = async ( p, text, until ) => {
@@ -190,7 +198,7 @@ export class App {
 		// contact-hardening filter sized by the sun's disc on the near cascade. Each cascade's depth range
 		// is its light margin (200 m) + its extent, which keeps the depth bias small in metres.
 		// Shadows come from the opaque and the late (transparent-pass) layers.
-		this.csm = this.shadows = new SunShadows( { size: compactWater ? 1024 : 2048, splits: [ 10, 60, 400 ], lightMargin: 200, normalBias: [ 0.015, 0.06, 0.3 ], bias: 0.00002 } );
+		this.csm = this.shadows = new SunShadows( { size: compactWater ? 1024 : 2048, splits: questRendering ? [ 12, 90 ] : [ 10, 60, 400 ], lightMargin: 200, normalBias: [ 0.015, 0.06, 0.3 ], bias: 0.00002, pcssCascades: questRendering ? 0 : 1 } );
 		this.shadows.layerMask = ( 1 << LAYERS.OPAQUE ) | ( 1 << LAYERS.TRANSPARENT );
 
 		this.environment = new Environment( renderer, scene, this.sky );
@@ -205,13 +213,13 @@ export class App {
 		// the village flattens building pads into the heightmap: build it before any terrain
 		// data is derived (shore field, GPU textures, meshes). The station grades its yard and tracks.
 		await progress( 0.12, this.flannan ? 'Building the light station…' : 'Building the village…' );
-		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, build: this.flannan ? ( ctx, village ) => buildStation( { ...ctx, keeperStudy: true }, village ) : null } );
+		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, build: this.flannan ? ( ctx, village ) => buildStation( { ...ctx, keeperStudy: true, morningStudy: this.qs.has( 'morningPreview' ) }, village ) : null } );
 		// the lens, the doors and gate, the lantern's glass (they move: meshes of their own)
 		if ( this.flannan ) assembleStation( this.village );
 		if ( this.flannan ) this.stationInterior = await loadInteriorArchive( this.village );
 		if ( this.flannan ) this.weatherInstruments = await loadWeatherInstruments( this.village );
 		if ( this.flannan && this.isArrivalAtmosphere ) this.village.materials.landingConcrete.uniforms.arrivalDetail.value = 1;
-		if ( this.flannan && ! qs.has( 'noVeg' ) ) this.sward = new FlannanSward( { scene, terrain: this.terrainData, village: this.village } );
+		if ( this.flannan && ! qs.has( 'noVeg' ) ) this.sward = new FlannanSward( { scene, terrain: this.terrainData, village: this.village, profile: questRendering && qs.get( 'grass' ) !== 'desktop' ? QUEST_SWARD : SWARD } );
 		if ( ! qs.has( 'noVeg' ) && ! this.flannan ) {
 
 			await progress( 0.14, 'Planting the island…' );
@@ -284,6 +292,8 @@ export class App {
 		this.surface = new WaterSurface( { fft: this.fft, cdlod: this.oceanLOD, foamTexture: this.foamTexture } );
 		this.surface.terrain = this.terrainGPU;
 		this.surface.coastalSafe.value = this.flannan ? 1 : 0;
+		this.coastal = this.flannan && ! vrPreview && ! qs.has( 'nostory' ) && ( ! qs.has('bench') || qs.has('coastalReview') ) ? new CoastalSurge( { terrain: this.terrainData, terrainGPU: this.terrainGPU, scene } ) : null;
+		if ( this.coastal ) this.surface.coastal = this.coastal;
 		this.surface.distanceDetail.value = this.isArrivalAtmosphere ? 1 : 0;
 		this.extremeSea = this.flannan && ! compactWater ? new ExtremeSea( this ) : null;
 		if ( this.extremeSea ) this.surface.extremeSea = this.extremeSea;
@@ -295,7 +305,7 @@ export class App {
 		this.surface.shore = this.shore;
 		// Cliffs need reflecting/run-up surf rather than the sandy bay's breaking lips.
 		// Attach before WaterQuery and WaterMaterial first compose the surface shader.
-		this.cliffSurge = this.flannan && ! vrPreview && ! qs.has( 'noCliffSurf' ) ? new CliffSurge( { scene, terrain: this.terrainData, terrainGPU: this.terrainGPU, shore: this.shore } ) : null;
+		this.cliffSurge = this.flannan && ! vrPreview && ! qs.has( 'noCliffSurf' ) ? new CliffSurge( { scene, terrain: this.terrainData, terrainGPU: this.terrainGPU, shore: this.shore, coastal: this.coastal } ) : null;
 		if ( this.cliffSurge ) this.surface.cliffSurf = this.cliffSurge;
 		this.caustics = off( 'noCaustics' ) ? null : new Caustics( renderer, this.fft );
 		if ( this.caustics ) this.caustics.detail = this.seaDetail;
@@ -437,6 +447,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// the sea is not drawn inside the boat (its hull volume masks the surface)
 		if ( ! compactWater ) this.sceneRenderer.addHullMask( this.boat.createHullVolumeGeometry(), this.boat.group );
 		this.waterMaterial = new WaterMaterial( {
+			xrPreview: questRendering,
 			surface: this.surface, sky: this.sky, sceneCopy: this.sceneRenderer.opaqueCopy, sceneDepthHalf: this.sceneRenderer.opaqueDepthHalf.texture,
 			refraction: compactWater ? null : this.refraction,
 			hullMask: compactWater ? null : this.sceneRenderer.hullMaskRT.texture, hullMaskActive: compactWater ? null : this.sceneRenderer.hullMaskActive,
@@ -506,7 +517,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// The on-foot preview omits boat wake textures and uses the opaque scene
 		// copy for water refraction, staying within mobile's 16-texture budget.
 		if ( ! compactWater ) this.surface.wake = this.wake;
-		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl, reef: this.reef } );
+		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl, reef: this.reef, comfort: this.settings } );
 		this.player.ambientDrift = ( swimming ) => {
 			const p = this.player.position;
 			if ( swimming && this.extremeSea?.active ) {
@@ -568,9 +579,10 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// the station's machinery, doors and the sea in the geos
 		this.stationSound = this.audio && this.flannan ? new StationSound( this.audio, { tower: TOWER } ) : null;
 		if ( this.cliffSurge ) this.cliffSurge.audio = this.stationSound;
-		this.seaWeather = this.isWeatherPreview ? new SeaWeather( this ) : null;
+		if ( this.coastal ) this.coastal.onImpact = ( site, strength ) => { this.stationSound?.cliffImpact( site, strength ); this.stationSound?.fittingRattle( site, strength ); this.seaDread?.cliffImpact( site, strength ); };
+		this.seaWeather = this.isWeatherPreview || qs.has('stormPreview') ? new SeaWeather( this, {preset:qs.has('stormPreview')?'fresh':undefined} ) : null;
 		if ( this.isWeatherPreview ) this.settings.timeOfDay = 12.4;
-		this.seaDread = this.isWeatherPreview && qs.has( 'seaDread' ) ? new SeaDread( this ) : null;
+		this.seaDread = this.isWeatherPreview && qs.has( 'seaDread' ) || qs.has('stormPreview') ? new SeaDread( this ) : null;
 		this.player.audio = this.audio;
 		// the fishing game (rod, bites, catch, cooler, fish stand)
 		this.game = this.flannan ? null : new Game( this );
@@ -701,6 +713,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		const night = MathUtils.smoothstep( - dir.y, 0.02, 0.18 );
 		G.night.value = night;
 		this.sky.starIntensity.value = night;
+		this.sky.setStarTime( sky.ut, this.setting.lat, this.setting.lon, turn );
 		const moon = _moon.copy( sky.moon ).applyAxisAngle( _up, turn );
 		this.sky.moonDir.value.copy( moon );
 		// a dated sky has a real moon: its phase shows, and it is not always up (moonless nights are
@@ -939,18 +952,20 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		}
 		this.extremeSea?.update( dt );
+		this.keeperSafety?.beforeFrame( dt );
 		this.boatCtl.update( dt );
 		this.boatSpray.update( dt );
 		if ( ! this.isVRPreview && ! this.isMobile ) this.wake.update( dt );
 		if ( this.xr?.active ) { /* The headset owns the camera and the preview walker. */ }
 		else if ( this.freeCam ) this.fly.update( dt );
-		else if ( ! this.story?.aboard && ! this.story?.islandReveal?.active ) this.player.update( dt );
+		else if ( ! this.story?.aboard && ! this.story?.islandReveal?.active && ! this.story?.towerTravel?.active ) this.player.update( dt );
 		if ( this.game ) this.game.update( dt );
 		if ( this.weatherPreview ) this.weatherPreview.update( dt );
 		// the first night (src/story/Story.js) keeps the clock, the weather and the lamp; without it (the
 		// review shots) the lamp just burns
 		if ( this.story ) this.story.update( dt );
 		else if ( this.lamp ) this.lamp.update( dt, 0 );
+		this.keeperSafety?.afterFrame();
 		if ( ! this.story && this.qs.has( 'chimneySmoke' ) ) this.village.station?.moving.smoke.update( dt, this.camera, 1 );
 		this.mobile?.update();
 		if ( ! this.story && this.arrival?.group.visible && this.arrival.reviewView ) {
@@ -962,6 +977,14 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.devMenu?.update( dt );
 		if ( this.flannan ) Beams.uniforms.pixel.value = MathUtils.degToRad( this.camera.fov ) / Math.max( 1, this.sceneRenderer.height );
 		this.updateSun();
+		const atLanternHeight = this.camera.position.y > TOWER.deck && this.camera.position.y < TOWER.deck + 4.6;
+		const onBalcony = atLanternHeight && Math.hypot( this.camera.position.x, this.camera.position.z ) > 2.35;
+		const outside = !! this.flannan && ( onBalcony || ! stationLightBounds( this.camera.position ) );
+		const eyes = this.nightVision;
+		eyes.update( dt, { night: G.night.value, outside, lit: !! this.handLamp?.lit, glow: this.handLamp?.glow || 0,
+			underwater: this.camera.position.y < ( this.cameraWaterHeight ?? 0 ),
+			paused: !! this.story?.ui.open || !! this.mobile?.paused || document.hidden } );
+		this.sky.darkAdaptation.value = eyes.strength;
 		// the world drops away below the camera with the Earth's curvature (FarShore.js)
 		if ( this.flannan ) FrameUniforms.fields.curvature.value.set( CURVATURE, this.camera.position.x, this.camera.position.z, 0 );
 
@@ -979,7 +1002,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		if ( this.query.cpuValid ) {
 
 			const h0 = this.query.cpu[ 0 ];
-			const h = Number.isFinite( h0 ) ? h0 : ( this.cameraWaterHeight ?? 0 );
+			const h = Number.isFinite( h0 ) ? this.query.currentHeight( 0, this.camera.position, h0 ) : ( this.cameraWaterHeight ?? 0 );
 			G.cameraUnderwater.value = this.camera.position.y < h - LENS_REACH ? 1 : 0;
 			G.cameraWaterHeight.value = h;
 			this.cameraWaterHeight = h;
@@ -1021,12 +1044,12 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			// the storm lantern: in your hand unless you are flying, at the signal lamp or at the telescope
 			const st = this.story;
 			const show = ( ! this.freeCam || this.handInView ) && ! ( st && ( st.signal || st.tel > 0.3 ) ) && ! this.devArmory?.canUse() && ! this.playground?.canUse();
-			this.handLamp.update( dt, this.camera, { show } );
+			this.handLamp.update( dt, this.camera, { show, motion: this.keeperSafety?.state === 'braced' || this.settings.cameraBob === false ? .35 : this.keeperSafety?.state === 'swept' ? .65 : 1 } );
 			const fl = this.localLights.flashlight;
 			fl.on = this.handLamp.glow > 0.002;
 			fl.scale = this.handLamp.glow * this.handLamp.flicker;
 			if ( this.flannan ) {
-				fl.bounds = stationLightBounds( this.handLamp.lightPosition );
+				fl.bounds = handLampBounds( this.handLamp.lightPosition );
 				fl.boost = fl.bounds ? 1 : 0;
 			}
 
@@ -1036,7 +1059,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		// ---- render
 		this.seaDread?.beginRender();
-		G.exposure.value = s.exposure;
+		G.exposure.value = s.exposure * eyes.exposure;
 		updateCameraVelocity( this.camera );
 		this.post.lens.update( dt, this.camera.position.y < ( this.cameraWaterHeight ?? 0 ) );
 		if ( this.post.flare ) {

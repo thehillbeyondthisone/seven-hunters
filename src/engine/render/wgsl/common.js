@@ -33,6 +33,11 @@ const EPS: f32 = 1e-5;
 
 fn sat( x: f32 ) -> f32 { return clamp( x, 0.0, 1.0 ); }
 fn sat3( x: vec3f ) -> vec3f { return clamp( x, vec3f( 0.0 ), vec3f( 1.0 ) ); }
+// Compact ACES fit used by the VR forward pass (before optional sRGB encoding).
+fn xrToneMap( radiance: vec3f ) -> vec3f {
+	let c = max( radiance * frame.exposure, vec3f( 0.0 ) );
+	return sat3( ( c * ( 2.51 * c + 0.03 ) ) / ( c * ( 2.43 * c + 0.59 ) + 0.14 ) );
+}
 fn pow2( x: f32 ) -> f32 { return x * x; }
 fn pow4( x: f32 ) -> f32 { let y = x * x; return y * y; }
 fn pow5( x: f32 ) -> f32 { let y = x * x; return y * y * x; }

@@ -1,5 +1,6 @@
 import { gridPart } from '../village/GeoBuilder.js';
 import { lin, WOOD, HARD } from '../Props.js';
+import { roomCraft } from './RoomCraft.js';
 
 // Construction studies guided by the actual station photographs. The furniture
 // models, finish colours and placement are reconstruction, not a 1901 inventory.
@@ -11,44 +12,31 @@ const linen = { tint: lin( 0xc7bea3 ), data: HARD( .48, 0, 0, .96 ) };
 export function keeperTable( B, x, F, z, w, d, h, ry = 0, seed = .4, drawer = false ) {
 
   B.pushAt( x, F, z, ry );
-  for ( let i = 0; i < 4; i ++ ) B.box( 'stationTimber', 0, h - .025, (i + .5) * d / 4 - d / 2, w, .05, d / 4 - .002, { grain: 0, ...oak( seed + i * .013 ) } );
+  roomCraft( B, 'tableTop', 0, h - .05, 0, { sx:w, sz:d, seed } );
   for ( const side of [ -1, 1 ] ) {
     B.box( 'stationTimber', 0, h - .12, side * ( d / 2 - .07 ), w - .12, .15, .045, { grain: 0, ...oak( seed + .08 ) } );
     B.box( 'stationTimber', side * ( w / 2 - .07 ), h - .12, 0, .045, .15, d - .13, { grain: 2, ...oak( seed + .1 ) } );
   }
   for ( const sx of [ -1, 1 ] ) for ( const sz of [ -1, 1 ] ) {
     const lx = sx * (w / 2 - .085), lz = sz * (d / 2 - .085);
-    B.lathe( 'stationTimber', lx, .015, lz, [[.037,0],[.039,.045],[.028,.07],[.026,h*.43],[.042,h*.5],[.04,h*.56],[.036,h-.12]], { segs: 12, ...oak( seed + .12 ) } );
-    B.box( 'stationTimber', lx, h - .06, lz, .078, .10, .078, { grain: 1, ...oak( seed ) } );
-    B.box( 'stationTimber', lx, h - .16, lz + sz * .025, .008, .028, .013, dark( seed ) );
+    roomCraft( B, 'tableLeg', lx, .015, lz, { sy:(h-.065)/.71, seed:seed+.12 } );
+    B.cyl( 'stationTimber', lx, h - .14, lz + sz * .025, .004, .004, .014, { rx:Math.PI/2, segs:8, ...dark(seed) } );
   }
+  // A routed lower apron bead and timber corner blocks catch the table lamp.
+  for ( const side of [-1,1] ) B.rod('stationTimber',[-w/2+.08,h-.192,side*(d/2-.045)],[w/2-.08,h-.192,side*(d/2-.045)],.006,.006,{segs:8,...oak(seed+.08)});
   if ( drawer ) {
     B.box( 'stationTimber', 0, h - .12, d / 2 - .037, w * .55, .105, .018, { grain: 0, ...dark( seed ) } );
     B.box( 'stationTimber', 0, h - .12, d / 2 - .023, w * .53, .088, .022, { grain: 0, ...oak( seed + .05 ) } );
-    for ( const sx of [-1,1] ) B.cyl( 'hard', sx * w * .16, h - .12, d / 2 - .006, .014, .014, .021, { rx: Math.PI/2, segs: 10, ...iron } );
+    for ( const sx of [-1,1] ) {
+      B.cyl( 'hard', sx * w * .16, h - .12, d / 2 - .006, .014, .014, .021, { rx: Math.PI/2, segs: 20, ...iron } );
+      B.torus('hard',sx*w*.16,h-.12,d/2+.013,.012,.002,{rx:Math.PI/2,radial:6,tubular:20,...iron});
+    }
   }
   B.pop();
 }
 
 export function keeperChair( B, x, F, z, ry = 0, seed = .4 ) {
-  B.pushAt( x, F, z, ry );
-  B.box( 'stationTimber', 0, .446, 0, .43, .044, .42, { grain: 0, ...oak( seed ) } );
-  B.part( 'stationTimber', gridPart( 8, 8, ( i, j ) => {
-    const u = i / 8, v = j / 8;
-    return { p:[(u-.5)*.426, .47 - Math.sin(u*Math.PI)*Math.sin(v*Math.PI)*.015, (v-.5)*.416], n:[0,1,0], uv:[u*.426,v*.416] };
-  } ), 0, 0, 0, oak(seed) );
-  for ( const sx of [-1,1] ) for ( const sz of [-1,1] ) {
-    B.beam( 'stationTimber', [sx*.195,.025,sz*.19], [sx*.17,.425,sz*.16], .037, .037, oak( seed + .025 ) );
-  }
-  for ( const sx of [-1,1] ) {
-    B.beam( 'stationTimber', [sx*.17,.43,.17], [sx*.17,.965,.225], .035, .035, oak( seed + .05 ) );
-    B.beam( 'stationTimber', [sx*.185,.21,-.18], [sx*.185,.21,.18], .021, .026, dark(seed) );
-  }
-  B.box( 'stationTimber', 0, .245, -.18, .37, .026, .022, { grain: 0, ...dark(seed) } );
-  B.box( 'stationTimber', 0, .55, .181, .36, .045, .03, { grain: 0, ...oak(seed) } );
-  B.box( 'stationTimber', 0, .935, .222, .405, .08, .035, { grain: 0, ...oak(seed) } );
-  for ( const sx of [-.1,0,.1] ) B.beam( 'stationTimber', [sx,.57,.187], [sx,.90,.218], .043, .012, oak(seed+.03) );
-  B.pop();
+  roomCraft( B, 'chair', x, F, z, { ry, seed } );
 }
 
 // A small cloth surface whose normals follow its folds, rather than a flat box.
@@ -85,18 +73,15 @@ export function rangeDetails( B, x, F, z, w = .9, d = .72 ) {
   // Accessible face points east: the player's stove target remains unchanged.
   const face = x+w/2+.014;
   B.box('hard',x,F+.018,z,w+.35,.035,d+.35,{tint:lin(0x787970),data:HARD(.4,0,0,.94)});
-  for(const [height,width] of [[.54,.48],[.23,.50]]) {
-    B.box('hard',face,F+height,z,.027,height>.3?.30:.14,width,iron);
-    for(const dz of [-width/2,width/2]) B.box('hard',face+.015,F+height,z+dz,.025,height>.3?.33:.16,.018,iron);
-    B.rod('hard',[face+.045,F+height,z-.04],[face+.045,F+height,z+.1],.009,.009,{segs:8,...iron});
-  }
-  for(let i=0;i<6;i++) B.box('hard',face+.02,F+.235,z-.16+i*.058,.007,.045,.019,{tint:lin(0x121713),data:HARD(.2,0,0,.9)});
+  roomCraft(B,'stoveFront',face,F,z,{sz:d/.58});
   for(const dz of [-.18,.18]) {
-    B.torus('hard',x,F+.905,z+dz,.105,.009,{radial:5,tubular:28,...iron});
-    B.box('hard',x,F+.903,z+dz,.12,.009,.009,iron);
+    roomCraft(B,'hob',x,F+.889,z+dz);
   }
   for(const sx of [-1,1]) for(const sz of [-1,1]) B.box('hard',x+sx*(w/2-.08),F+.08,z+sz*(d/2-.08),.07,.13,.07,iron);
-  B.rod('hard',[face+.06,F+.77,z-.28],[face+.06,F+.77,z+.28],.016,.016,{segs:10,...iron});
+  if(w<.7) for(const height of [1.04,1.65,2.28]) {
+    B.torus('hard',x-.05,F+height,z,.071,.006,{radial:6,tubular:32,...iron});
+    B.box('hard',x-.05,F+height,z+.071,.025,.035,.008,iron);
+  }
 }
 
 export function berthBedding( B, F ) {

@@ -96,9 +96,9 @@ export class SeaDread {
 		P.saturation.value = 0.2; P.warmth.value = - 0.09; P.contrast.value = 1.05;
 		// An authored overcast grade removes the sunset's warm cast while retaining the sea's detail.
 		P.gradeMode.value = 1; P.gradeLift.value.set( 0.003, 0.005, 0.007, 0 );
-		P.gradeGamma.value.set( 1, 1, 1, 0 ); P.gradeGain.value.set( 0.52, 0.8, 1.06, 1 );
+		P.gradeGamma.value.set( 1, 1, 1, 0 ); P.gradeGain.value.set( 0.67, 0.9, 1.08, 1 );
 		P.vignette.value = 0.36 + m.impact * 0.1;
-		if ( a.xr?.active || ! m.shake ) return;
+		if ( a.xr?.active || a.settings.cameraBob === false || ! m.shake ) return;
 		this.basePose.copy( a.camera.quaternion ); this.rendering = true;
 		const t = m.time, k = m.shake * 0.0048;
 		this.euler.set( Math.sin( t * 23 ) * k, Math.sin( t * 17 ) * k * 0.3, Math.sin( t * 19 ) * k * 0.55, 'YXZ' );

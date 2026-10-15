@@ -51,6 +51,17 @@ input.setTouchKey( 'KeyE', true ); input.setTouchMove( 1, 1 ); input.touchScope 
 assert.equal( input.down( 'KeyE' ), false ); assert.deepEqual( input.move, { x:0, y:0 } ); assert.equal( input.rightDown, false );
 input.setTouchMove( 1, 0 ); document.hidden = true; fire( document, 'visibilitychange' ); assert.equal( input.move.x, 0 ); document.hidden = false;
 const mouseInput = new Input( canvas ); mouseInput.requestLock(); assert.equal( locks, 1 );
+let releases = 0; document.exitPointerLock = () => { releases ++; document.pointerLockElement = null; };
+mouseInput.enabled = false; mouseInput.requestLock(); assert.equal( locks, 1, 'modal screens cannot request mouse capture' );
+// A pending capture from an earlier gesture can complete after the story modal opens.
+document.pointerLockElement = canvas; fire( document, 'pointerlockchange' );
+assert.equal( releases, 1, 'late pointer capture is released while a modal owns the cursor' );
+fire( document, 'pointerlockchange' );
+input.enabled = false;
+const modalTab = new Event( 'keydown', { cancelable: true } ); Object.assign( modalTab, { code: 'Tab' } ); window.dispatchEvent( modalTab );
+assert.equal( modalTab.defaultPrevented, false, 'disabled game input leaves Tab available to modal buttons' );
+assert.equal( mouseInput.keys.has( 'Tab' ), false, 'modal navigation cannot leak a held key into the game' );
+mouseInput.enabled = true; input.enabled = true;
 fire( canvas, 'mousedown', { button:2 } ); assert.equal( mouseInput.rightDown, true ); fire( window, 'mouseup', { button:2 } ); assert.equal( mouseInput.rightDown, false );
 console.log( 'ok virtual press/hold/tap, disabled-input gating, independent keyboard input, blur/background cleanup and desktop mouse' );
 
@@ -114,3 +125,11 @@ menuApp.devMenu.open = false; controls.beforeFrame();
 assert.equal( controls.available, true ); assert.equal( input.enabled, true );
 assert.equal( input.down( 'KeyE' ), false, 'closing the menu must not resume a held action' );
 console.log( 'ok experiences menu blocks mobile input across frames, stops motion and resumes without held actions' );
+
+menuApp.story.lampStudy = { active: true };
+assert.equal( controls.available, false, 'lamp lesson hides walking controls and their touch zones' );
+input.enabled = false; controls.blockedInput = true; controls.beforeFrame();
+assert.equal( input.enabled, false, 'closing a mobile pause cannot release input during lamp study' );
+menuApp.story.lampStudy.active = false;
+assert.equal( controls.available, true, 'walking controls return after stepping away from the lamp' );
+console.log( 'ok lamp lesson owns touch input and restores walking controls on exit' );

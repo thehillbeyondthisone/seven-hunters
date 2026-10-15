@@ -126,6 +126,7 @@ fn waterSurfaceSafeDisplacement( d: vec3f, depth: f32, amplitude: f32, safe: f32
 		const SIM = !! this.shoreSim;
 		const CLIFF = !! this.cliffSurf;
 		const EXTREME = !! this.extremeSea;
+		const COAST = !! this.coastal;
 		const cd = this.cdlod.module.name;
 		const CdV = cd[ 0 ].toUpperCase() + cd.slice( 1 ) + 'Vertex';
 		const f = ( x ) => Number( x ).toFixed( 6 );
@@ -211,6 +212,10 @@ ${ WK ? '	extra += wakeDisplacement( worldXZ );' : '' }
 
 	var total = waterSurfaceSafeDisplacement( disp + extra, depth, waterSurface.amplitude, waterSurface.coastalSafe );
 	var y = frame.seaLevel + total.y;
+${ COAST ? `
+	let landingXZ=worldXZ+total.xz;
+	let landingWash=coastalSample(landingXZ); y+=landingWash.x; total.y+=landingWash.x; shoreFoam+=landingWash.w;
+	shoreN=normalize(shoreN+coastalNormal(landingXZ)-vec3f(0.0,1.0,0.0));` : '' }
 ${ EXTREME ? `
 	let extreme = extremeSeaSample( worldXZ );
 	y += extreme.x;
@@ -421,7 +426,7 @@ ${ SF ? /* wgsl */`
 		return new ShaderModule( {
 			name: 'waterSurface',
 			deps: [ commonModule, fft.module, this.cdlod.module, this.attenuationModule, T && this.terrain.module, SH && this.shore.module,
-				WK && this.wake.module, DT && this.detail.module, SF && SF.module, CLIFF && this.cliffSurf.module, EXTREME && this.extremeSea.module ],
+				WK && this.wake.module, DT && this.detail.module, SF && SF.module, CLIFF && this.cliffSurf.module, EXTREME && this.extremeSea.module, COAST && this.coastal.module ],
 			uniforms: this.params,
 			uniformName: 'waterSurface',
 			bindings: { waterFoamTex: { texture: this.foamTexture } },

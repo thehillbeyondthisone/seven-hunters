@@ -1,6 +1,7 @@
 import { Vector3 } from '../../engine/index.js';
 import { Builder } from '../village/GeoBuilder.js';
 import { lin, HARD } from '../Props.js';
+import { roomCraft } from './RoomCraft.js';
 
 // Authored personal belongings. The Brownie follows the original 1900 box's
 // 3 x 3 x 5 inch proportions, rather than a later model with integral finders.
@@ -37,8 +38,7 @@ export function unpackingProps( floor, room ) {
 		}
 	} );
 	const clothes = B => {
-		B.box( 'hard', 0, .018, 0, .25, .036, .19, linen );
-		B.box( 'hard', -.015, .044, -.012, .23, .018, .17, linen );
+		roomCraft(B,'foldedCloth',0,0,0,{sx:.91,sy:1.5,sz:.73},{linen});
 		for ( const x of [ -.055, .045 ] ) {
 			B.box( 'hard', x, .065, .02, .064, .03, .145, { ry: .08, ...wool } );
 			B.box( 'hard', x + .015, .063, .09, .092, .035, .052, wool );

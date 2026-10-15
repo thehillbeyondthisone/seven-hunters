@@ -53,6 +53,8 @@ export function buildMeshShader( material, layout, pass ) {
 	defs.LIT = material.lit ? 1 : 0;
 	defs.INSTANCED = has.has( 'instanceMatrix0' ) ? 1 : 0;
 	defs.INSTANCE_COLOR = has.has( 'instanceColor' ) ? 1 : 0;
+	defs.XR_FORWARD = 0;
+	defs.XR_SRGB = 0;
 	Object.assign( defs, pass.defines || {} );
 	defs.CLIP_DISTANCES = defs.REFRACTION_CLIP && GPU.features.has( 'clip-distances' ) ? 1 : 0;
 
@@ -254,6 +256,9 @@ fn fragInput( vs: VSOut, front: bool ) -> FragInput {
 	in.color = vs.color;
 	in.front = front;
 	in.pixel = vs.clip.xy;
+#if XR_FORWARD
+	in.pixel -= frame.viewportOrigin;
+#endif
 	return in;
 }
 
@@ -337,6 +342,12 @@ struct FragOut {
 	materialOutput( in, s, &r );
 	var out: FragOut;
 	out.color = r.color;
+#if XR_FORWARD
+	out.color = vec4f( xrToneMap( out.color.rgb ), out.color.a );
+#if !XR_SRGB
+	out.color = vec4f( linearToSrgb( out.color.rgb ), out.color.a );
+#endif
+#endif
 #if PASS_MAIN
 #if PASS_LATE
 	// premultiplied: opaque outputs overwrite, blended ones weight their motion by coverage

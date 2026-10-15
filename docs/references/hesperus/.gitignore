@@ -1,0 +1,7 @@
+# Local study copies only. Lloyd's Register Foundation permits download for personal,
+# non-commercial use and does not permit redistribution; the photographs are third-party
+# copyright. Keep the catalogue in git, not the scans.
+*.jpg
+*.jpeg
+*.png
+analogues/

@@ -53,7 +53,7 @@ export const viewPositionFromViewZ = ( uv, viewZ ) => `viewPositionFromViewZ( ${
 // shader: previous world position = current, staticVelocity), r.mask = ( seenFromBelow, 1, 0, 1 ).
 export class WaterMaterial extends Material {
 
-	constructor( { surface, sky, sceneCopy, sceneDepthHalf = null, refraction = null, reflection = null, hullMask = null, hullMaskActive = null } ) {
+	constructor( { surface, sky, sceneCopy, sceneDepthHalf = null, refraction = null, reflection = null, hullMask = null, hullMaskActive = null, xrPreview = false } ) {
 
 		super( {
 			name: 'water',
@@ -89,6 +89,7 @@ export class WaterMaterial extends Material {
 		this.reflection = reflection;
 		this.clouds = null; // set by the app before the first frame
 		this.cheap = false;
+		this.xrPreview = xrPreview;
 		this.cameraWaterHeightNode = null; // optional WGSL f32 expression replacing frame.cameraWaterHeight (may carry `.module`, e.g. query.cameraState().x)
 
 		const U = this.uniforms;
@@ -160,22 +161,24 @@ export class WaterMaterial extends Material {
 		const HULL = !! ( this.hullMaskTexture && this.hullMaskActive );
 		const REFL = !! ( this.reflection && this.reflection.module );
 
-		this.modules = [ commonModule, waterFresnelModule, waterHelpersModule, whaleWaterModule, S.module, sky && sky.module, CL && this.clouds.module,
+		this.modules = [ commonModule, waterFresnelModule, ! this.xrPreview && waterHelpersModule, ! this.xrPreview && whaleWaterModule, S.module, sky && sky.module, CL && this.clouds.module,
 			SIM && S.shoreSim.module, REFL && this.reflection.module, this.cameraWaterHeightNode && this.cameraWaterHeightNode.module ].filter( Boolean );
-		this.bindings.waterSceneColor = { texture: this.sceneColorTexture };
-		this.bindings.waterSceneDepth = { texture: this.sceneDepthTexture, sampleType: 'unfilterable-float' };
-		if ( this.sceneDepthHalfTexture ) this.bindings.waterSceneDepthHalf = { texture: this.sceneDepthHalfTexture };
-		this.setDefine( 'WATER_DEPTH_HALF', this.sceneDepthHalfTexture ? 1 : 0 );
-		const REFR = !! this.refraction;
-		if ( REFR ) {
+		if ( ! this.xrPreview ) {
+			this.bindings.waterSceneColor = { texture: this.sceneColorTexture };
+			this.bindings.waterSceneDepth = { texture: this.sceneDepthTexture, sampleType: 'unfilterable-float' };
+			if ( this.sceneDepthHalfTexture ) this.bindings.waterSceneDepthHalf = { texture: this.sceneDepthHalfTexture };
+			this.setDefine( 'WATER_DEPTH_HALF', this.sceneDepthHalfTexture ? 1 : 0 );
+			const REFR = !! this.refraction;
+			if ( REFR ) {
 
-			this.bindings.waterRefrColor = { texture: this.refraction.texture };
-			this.bindings.waterRefrDepth = { texture: this.refraction.depthTexture, sampleType: 'unfilterable-float' };
+				this.bindings.waterRefrColor = { texture: this.refraction.texture };
+				this.bindings.waterRefrDepth = { texture: this.refraction.depthTexture, sampleType: 'unfilterable-float' };
 
+			}
+
+			this.setDefine( 'WATER_REFRACTION', REFR ? 1 : 0 );
+			if ( HULL ) this.bindings.waterHullMask = { texture: this.hullMaskTexture, sampleType: 'unfilterable-float' };
 		}
-
-		this.setDefine( 'WATER_REFRACTION', REFR ? 1 : 0 );
-		if ( HULL ) this.bindings.waterHullMask = { texture: this.hullMaskTexture, sampleType: 'unfilterable-float' };
 		this._hull = HULL;
 
 		this.vertex = /* wgsl */`
@@ -192,8 +195,48 @@ export class WaterMaterial extends Material {
 	o.vShoreFoam = r.shoreFoam;
 	o.vSurfMask = r.surfMask;
 `;
-		this.output = this.cheap ? 'r.color = vec4f( 0.02, 0.05, 0.1, 1.0 ); r.mask = vec4f( 0.0, 1.0, 0.0, 1.0 );' : this._shadeWGSL( { T, SH, SIM, SF, CL, HULL, REFL } );
+		this.output = this.xrPreview ? this._shadeXRWGSL() : this.cheap ? 'r.color = vec4f( 0.02, 0.05, 0.1, 1.0 ); r.mask = vec4f( 0.0, 1.0, 0.0, 1.0 );' : this._shadeWGSL( { T, SH, SIM, SF, CL, HULL, REFL } );
 		this.needsUpdate = true;
+
+	}
+
+	// Opaque, stereo-safe water for the walking preview. Retains simulated swell,
+	// filtered normals, shore foam, Fresnel and a broad sun reflection. No screen
+	// copies, refraction tracing or screen-space reflection march are required.
+	_shadeXRWGSL() {
+
+		return /* wgsl */`
+	let footprint = max( length( fwidth( in.vs.vLagXZ ) ), 1e-4 );
+	let surf = waterSurfaceFragment( in.vs.vLagXZ, footprint, in.vs.vSeaDepth, in.vs.vFoam,
+		in.vs.vShoreN, in.vs.vShoreFoam, 0.0, vec4f( 0.0 ), in.vs.vSurfMask, in.P );
+	let V = normalize( frame.cameraPos - in.P );
+	let N = normalize( surf.normal + V * max( .03 - dot( surf.normal, V ), 0.0 ) );
+	let NdV = max( dot( N, V ), .02 );
+	let F = .0204 + .9796 * pow5( 1.0 - NdV );
+	let R0 = reflect( -V, N );
+	let R = normalize( vec3f( R0.x, max( R0.y, .025 ), R0.z ) );
+	let reflection = skyReflectionRadiance( R ) * mat.reflectionStrength;
+	let depth = max( in.vs.vSeaDepth, 0.0 );
+	let body = mix( vec3f( .025, .105, .09 ), vec3f( .012, .042, .055 ), smoothstep( 0.0, 14.0, depth ) );
+	let ambient = frame.skyIrradiance * PI;
+	let sun = frame.sunColor * max( frame.sunDir.y, 0.0 );
+	let foam = sat( surf.foam );
+	// Broaden the glint with pixel footprint instead of unstable subpixel sparkles.
+	let H = normalize( V + frame.sunDir + vec3f( 0.0, 1e-5, 0.0 ) );
+	let alpha = max( .06, mat.waterRoughness + min( footprint, 2.0 ) * .07 );
+	let a2 = alpha * alpha;
+	let d = pow2( max( dot( N, H ), 0.0 ) ) * ( a2 - 1.0 ) + 1.0;
+	let spec = a2 / max( PI * d * d, .0001 );
+	let glint = frame.sunColor * min( spec * .0204 * max( dot( N, frame.sunDir ), 0.0 ), 8.0 );
+	let water = mix( body * ( ambient + sun * .25 ), reflection, F ) + glint;
+	let whitewater = ( ambient + frame.sunColor * ( max( dot( N, frame.sunDir ), 0.0 ) * .75 + .25 ) ) * .85;
+	var color = mix( water, whitewater * mat.foamIntensity, foam );
+	// Distance haze matches the horizon without a full-screen volumetric pass.
+	let haze = 1.0 - exp( -length( frame.cameraPos - in.P ) / 18000.0 );
+	color = mix( color, frame.horizonColor, haze );
+	r.color = vec4f( max( color, vec3f( 0.0 ) ), 1.0 );
+	r.mask = vec4f( 0.0, 1.0, 0.0, 1.0 );
+`;
 
 	}
 

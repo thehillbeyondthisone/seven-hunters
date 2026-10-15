@@ -15,10 +15,10 @@ export const KEEPER_PAPER = {
 		'Before lighting, examine the prepared apparatus. The oil supply feeds the burner; even, trimmed wicks and clean glass help the light burn clearly. In this study the previous watch has left the apparatus ready. Sound equipment does not need imaginary repairs.',
 		'Wind the clockwork at the crank on the pedestal. Winding raises the driving weight. It does not light the burner. In this reconstruction a separate stop holds the machine until you release it.',
 		'At sunset, light the burner. Release the machine’s stop at the small brass lever beside the crank. The flame remains at the centre while the optic turns around it. Watch the flame settle and inspect the apparatus again.',
-		'On the first night, go down to the upper stair landing and examine the driving weight in the central tube. Watch it descend as the clockwork turns the optic, then return to the crank and raise it again while the light continues working. The tube is exposed in this teaching reconstruction so you can see the connection.',
+		'On the first night, look down through the inner end of the lantern hatch and examine the driving weight in the central tube. Watch it descend as the clockwork turns the optic, then return to the crank and raise it again while the light continues working. The tube and a small observation opening below the hatch are exposed in this teaching reconstruction so you can see the connection.',
 		'Through the watch, attend to the lamp and the rotation. A burning lamp with a stopped optic is not the same signal as a correctly working light. At dawn, extinguish the lamp and make the apparatus ready for the following evening.',
 	],
-	provenance: 'Authored teaching notes, not recovered 1901 instructions. Flannan records establish lamp preparation, filled oil supplies, cleaned optics and machinery, and slate-to-log observations. Museum records from other stations explain weight-driven clockwork. The exposed tube, weight dimensions and travel, start lever, winding duration and condition descriptions here are provisional reconstructions. Weather measurements, wick adjustment and morning servicing are not yet simulated by this study.',
+	provenance: 'Authored teaching notes, not recovered 1901 instructions. Flannan records establish lamp preparation, filled oil supplies, cleaned optics and machinery, and slate-to-log observations. Museum records from other stations explain weight-driven clockwork. The exposed tube, weight dimensions and travel, start lever, winding duration and condition descriptions here are provisional reconstructions. The separate Morning servicing study adds generic oil handling, cleaning and wick preparation; exact Flannan burner details remain unverified. Normal watches retain their existing dawn flow.',
 	sources: [
 		{ label: 'Northern Lighthouse Board · Flannan records', url: 'https://www.nlb.org.uk/history/flannan-isles/' },
 		{ label: 'Northern Lighthouse Board · lighthouse keeping', url: 'https://www.nlb.org.uk/history/lighthouse-keeping/' },
@@ -40,7 +40,7 @@ export class KeeperDuties {
 	}
 
 	get enabled() { return !! this.s.app.qs?.has( 'keeperPreview' ) || !! this.s.flags.keeperRoutine; }
-	get active() { return this.enabled && ! this.s.next?.active && ! [ 'intro', 'crossing', 'climb', 'room', 'letter', 'dawn', 'journal', 'end' ].includes( this.s.beat ); }
+	get active() { return this.enabled && ! this.s.morning?.enabled && ! this.s.next?.active && ! this.s.returningLight?.active && ! this.s.storm?.active && ! [ 'intro', 'crossing', 'climb', 'room', 'letter', 'dawn', 'journal', 'end' ].includes( this.s.beat ); }
 	get state() { return this.s.flags.keeperDuty ||= { inspected: false, verified: false }; }
 
 	install() {
@@ -54,14 +54,14 @@ export class KeeperDuties {
 		this.drive = new WeightDrive( this.s.app.village, way );
 		this.s.moving.group?.add( this.drive.group );
 		this.drive.sync( this.s.lamp.wind );
-		this.s.interact.add( { id: 'drivingWeight', at: () => this.drive.at, size: .24, reach: 2.15,
+		this.s.interact.add( { id: 'drivingWeight', at: () => this.drive.at, size: .24, reach: 20,
 			when: () => this.active && this.weightVisible(), text: 'Examine the driving weight', use: () => this.inspectWeight() } );
 		this.buildLever();
 		this.sync();
 	}
 
 	sync() {
-		const enabled = this.enabled, controls = enabled && ! this.s.next?.active && ! [ 'dawn', 'journal' ].includes( this.s.beat );
+		const enabled = this.enabled, controls = enabled && ! this.s.next?.active && ! this.s.returningLight?.active && ! this.s.storm?.active && ! [ 'dawn', 'journal' ].includes( this.s.beat );
 		this.s.interact.get( 'lens' ).hold = controls ? 0 : this.originalLensHold;
 		this.s.interact.get( 'crank' ).hideProgress = controls;
 		if ( this.drive ) { this.drive.group.visible = enabled; this.drive.sync( this.s.lamp.wind ); }
@@ -92,7 +92,7 @@ export class KeeperDuties {
 		if ( this.state.rewound && this.s.lamp.running && this.s.lamp.wind >= WARN ) return null;
 		if ( this.state.verified ) {
 			if ( this.s.lamp.wind < WARN ) return 'The weight is nearly down. Return to the winding crank and raise it.';
-			if ( ! this.state.descentSeen ) return this.state.weightLook ? 'Watch the driving weight descend as the optic turns.' : 'Go down to the upper stair landing. Examine the driving weight in the central tube.';
+			if ( ! this.state.descentSeen ) return this.state.weightLook ? 'Watch the driving weight descend as the optic turns.' : 'Look down through the lantern hatch. Examine the driving weight in the central tube.';
 			if ( ! this.state.rewound ) return 'Return to the lantern crank. Raise the weight again while the optic keeps turning.';
 			return null;
 		}
@@ -108,7 +108,9 @@ export class KeeperDuties {
 		const L = this.s.lamp;
 		if ( this.state.verified ) {
 			if ( L.wind < WARN || this.state.descentSeen ) return { at: TOWER.crank, label: 'Raise the weight again · hold E', zone: 'lantern' };
-			return { at: this.drive.at, label: 'Driving weight · E', zone: 'weight' };
+			const H = TOWER.hatch;
+			return { at: new Vector3( Math.cos( H.angle ) * 1.7 + Math.sin( H.angle ) * .1, TOWER.deck + .3,
+				Math.sin( H.angle ) * 1.7 - Math.cos( H.angle ) * .1 ), label: 'Driving weight · look down through the inner end of the hatch', zone: 'lantern' };
 		}
 		if ( this.state.inspected && L.wind < .95 && ! L.running ) return { at: TOWER.crank, label: 'Winding crank', zone: 'lantern' };
 		if ( L.lit && ! L.running ) return { at: this.at, label: 'Clockwork stop', zone: 'lantern' };
@@ -146,7 +148,7 @@ export class KeeperDuties {
 			if ( ! this.state.verified ) s.row( s.h, 'Lamp and revolving apparatus examined; light working.' );
 			this.state.verified = true;
 			if ( ! this.state.rewound ) s.setBeat( 'watch' );
-			this.say( 'Keeping the light', this.state.rewound ? 'The flame is steady and the optic revolves. Keep attending to the light and its clockwork throughout the watch.' : 'The flame is steady at the centre; the optic revolves around it. Now go down to the upper stair landing and examine the weight in the central tube. Watch what is driving the machine.' );
+			this.say( 'Keeping the light', this.state.rewound ? 'The flame is steady and the optic revolves. Keep attending to the light and its clockwork throughout the watch.' : 'The flame is steady at the centre; the optic revolves around it. Look down through the lantern hatch and examine the weight in the central tube. Watch what is driving the machine.' );
 		}
 		s.save(); return true;
 	}
@@ -190,7 +192,10 @@ export class KeeperDuties {
 
 	weightVisible() {
 		const p = this.s.app.camera.position, a = this.drive.way.angle;
-		return p.x * Math.cos( a ) + p.z * Math.sin( a ) > .05;
+		const H = TOWER.hatch, x = Math.cos( H.angle ) * 1.7 + Math.sin( H.angle ) * .1,
+			z = Math.sin( H.angle ) * 1.7 - Math.cos( H.angle ) * .1;
+		return p.y > TOWER.deck && p.y < TOWER.deck + 3 && Math.hypot( p.x - x, p.z - z ) < .4
+			&& p.x * Math.cos( a ) + p.z * Math.sin( a ) > .05;
 	}
 
 	inspectWeight() {

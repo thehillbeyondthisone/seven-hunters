@@ -5,8 +5,8 @@ import { SPRAY } from '../fx/Spray.js';
 import { buildCliffSites, cliffPulse } from './CliffImpact.js';
 
 export class CliffSurge {
-	constructor( { scene, terrain, terrainGPU, spray, shore, audio = null } ) {
-		this.sites = buildCliffSites( terrain );
+	constructor( { scene, terrain, terrainGPU, spray, shore, audio = null, coastal = null } ) {
+		this.sites = buildCliffSites( terrain ).filter( s => ! coastal || ! coastal.sites.some( c => Math.hypot( c.x-s.x, c.z-s.z ) < 75 ) );
 		this.spray = spray;
 		this.shore = shore;
 		this.audio = audio;

@@ -20,3 +20,15 @@ export function stationLightBounds( p ) {
 	return null;
 
 }
+
+// The handheld flame can spill down the open stair hatch. Other lantern-room
+// lights retain their floor mask so the whole shaft does not light through it.
+export function handLampBounds( p ) {
+	const bounds = stationLightBounds( p ), H = TOWER.hatch;
+	const s = -p.x * Math.sin( H.angle ) + p.z * Math.cos( H.angle );
+	const r = p.x * Math.cos( H.angle ) + p.z * Math.sin( H.angle );
+	if ( bounds && p.y > TOWER.deck - .4 && p.y < TOWER.deck + 2 && s > -.5 && s < H.run + .5 && Math.abs( r - H.r ) < .9 ) {
+		bounds.min[ 1 ] = TOWER.floor - .15;
+	}
+	return bounds;
+}

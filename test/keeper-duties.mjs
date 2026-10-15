@@ -85,26 +85,39 @@ await use( 'lens' );
 assert.ok( s.flags.keeperDuty.verified && s.lamp.turning );
 assert.equal( s.beat, 'watch' );
 assert.ok( s.goal().includes( 'driving weight' ), 'the first-night weight lesson follows working-light inspection' );
-assert.equal( storyGuidance( s ).label, 'Down to the driving weight', 'guidance uses the real hatch instead of pointing through the lantern floor' );
+assert.equal( storyGuidance( s ).label, 'Driving weight · look down through the inner end of the hatch', 'guidance uses the accessible lantern hatch' );
 
 const lanternPosition = player.position.clone(), lanternCamera = camera.position.clone();
 function lookAtWeight() {
 	drive.sync( s.lamp.wind );
-	// Stand on an actual upper tread, on the exposed side of the weightway.
-	const candidates = Array.from( { length: TOWER.count }, ( _, i ) => ( { a: TOWER.start + ( i + .5 ) * TOWER.dTread, y: TOWER.floor + ( i + 1 ) * TOWER.riser } ) )
-		.filter( t => Math.cos( t.a - TOWER.hatch.angle ) > .65 )
-		.sort( ( a, b ) => Math.abs( a.y + 1.62 - drive.at.y ) - Math.abs( b.y + 1.62 - drive.at.y ) );
-	const tread = candidates[ 0 ];
-	player.position.set( Math.cos( tread.a ), tread.y, Math.sin( tread.a ) );
+	// Stand behind the outer rail at the inner end of the hatch.
+	const H = TOWER.hatch;
+	player.position.set( Math.cos( H.angle ) * 1.7 + Math.sin( H.angle ) * .1, TOWER.deck, Math.sin( H.angle ) * 1.7 - Math.cos( H.angle ) * .1 );
 	player.yaw = Math.atan2( player.position.x, player.position.z );
-	player.pitch = Math.atan2( drive.at.y - tread.y - 1.62, 1 );
+	player.pitch = Math.atan2( drive.at.y - TOWER.deck - 1.62, Math.hypot( player.position.x - drive.at.x, player.position.z - drive.at.z ) );
 	player.mode = 'walk'; player.grounded = true; player.velocity.set( 0, 0, 0 ); player._camY = null;
 	for ( let i = 0; i < 30; i ++ ) player.update( 1 / 60 );
 	camera.updateMatrixWorld();
 	s.interact.update( 0 );
-	assert.equal( s.interact.current?.id, 'drivingWeight', 'weight is reachable from the real tower stair' );
+	assert.equal( s.interact.current?.id, 'drivingWeight', 'weight is reachable from the supported lantern floor' );
 }
 lookAtWeight(); await use( 'drivingWeight' );
+// A selectable target must also have a clear geometric sightline. Catch floors,
+// treads or beams reappearing across the supported hatch observation view.
+{
+	const origin = camera.position, direction = drive.at.clone().sub( origin ).normalize(), distance = origin.distanceTo( drive.at );
+	const edge1 = new E.Vector3(), edge2 = new E.Vector3(), cross = new E.Vector3(), delta = new E.Vector3(), q = new E.Vector3();
+	for ( const batch of Object.values( B.batches ) ) for ( let i = 0; i < batch.idx.length; i += 3 ) {
+		const vertex = k => new E.Vector3( ...batch.pos.slice( batch.idx[ i + k ] * 3, batch.idx[ i + k ] * 3 + 3 ) );
+		const a = vertex( 0 ), b = vertex( 1 ), c = vertex( 2 );
+		edge1.subVectors( b, a ); edge2.subVectors( c, a ); cross.crossVectors( direction, edge2 );
+		const det = edge1.dot( cross ); if ( Math.abs( det ) < 1e-8 ) continue;
+		delta.subVectors( origin, a ); const u = delta.dot( cross ) / det; if ( u < 0 || u > 1 ) continue;
+		q.crossVectors( delta, edge1 ); const v = direction.dot( q ) / det; if ( v < 0 || u + v > 1 ) continue;
+		const t = edge2.dot( q ) / det;
+		assert( t <= 0 || t >= distance - .2, 'station geometry does not obscure the observed weight' );
+	}
+}
 assert.ok( s.flags.keeperDuty.weightLook );
 const observedY = drive.at.y, observedWind = s.lamp.wind;
 s.lamp.stop();
@@ -153,4 +166,4 @@ assert.equal( localStorage.getItem( 'sevenhunters.night1.v1' ), 'protected norma
 const normal = new Lamp(); normal.addWind( .5 );
 assert.equal( normal.running, true );
 normal.stop(); normal.wind = 0; normal.start(); assert.equal( normal.running, false );
-console.log( 'PASS apparatus targets, physical weight/cable, brake holds descent, real stair reach, movement-based observation, winding while running, lesson restore, preview save isolation and legacy winding.' );
+console.log( 'PASS apparatus targets, physical weight/cable, brake holds descent, supported hatch reach, movement-based observation, winding while running, lesson restore, preview save isolation and legacy winding.' );

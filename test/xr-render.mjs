@@ -7,6 +7,7 @@ import { readTexture } from '../src/engine/gpu/Readback.js';
 import { SceneRenderer } from '../src/engine/render/SceneRenderer.js';
 import { MeshRenderer } from '../src/engine/render/MeshRenderer.js';
 import { Material } from '../src/engine/render/Material.js';
+import { FrameUniforms } from '../src/engine/render/Frame.js';
 import { SunShadows } from '../src/engine/render/Shadows.js';
 import { XRRenderer } from '../src/xr/XRRenderer.js';
 import { writePNG } from './headless.mjs';
@@ -31,6 +32,8 @@ sr.clearColor = [ 0.02, 0.04, 0.07, 1 ];
 sr.setSize( W, H );
 const app = { camera, scene, sceneRenderer: sr, engine: { meshRenderer: mr }, shadows: new SunShadows( { size: 256, splits: [ 10, 30, 60 ] } ) };
 const renderer = new XRRenderer( app, 'rgba8unorm' );
+// The immersive forward pass must not call the desktop render/copy path.
+sr.render = () => { throw new Error( 'XR allocated desktop HDR / motion / refraction passes' ); };
 await GPU.pipelinesReady();
 const projection = new Matrix4().makePerspective( - 0.06 * W / H, 0.06 * W / H, 0.06, - 0.06, 0.06, 1000, undefined, false ).toArray();
 const views = [ - 0.032, 0.032 ].map( ( x, i ) => ( {
@@ -100,6 +103,32 @@ for ( const [ i, expected ] of [ left, right ].entries() ) {
 	assert.deepEqual( rendered, expected, 'WebGL projection or staging viewport changed the eye image' );
 }
 console.log( 'PASS compatibility eye images match native output, with WebGL projection depth and submission before transfer.' );
+
+// Check explicit sRGB output and the single-sample performance option. This
+// catches double encoding and incorrect atlas offsets outside the default path.
+const srgb = new Texture( { width: W * 2, height: H, format: 'rgba8unorm-srgb', usage: [ 'render', 'copySrc' ] } );
+const srgbViews = atlasViews.map( v => ( { ...v, subImage: { ...v.subImage, colorTexture: srgb.getGPU() } } ) );
+const sharp = new XRRenderer( app, 'rgba8unorm-srgb', { sampleCount: 1 } );
+GPU.beginFrame(); sharp.render( srgbViews, new Matrix4() ); await GPU.queue.onSubmittedWorkDone();
+const encoded = new Uint8Array( ( await readTexture( srgb ) ).data );
+assert.ok( redPixels( encoded, W * 2, 0, W ) > 1000 );
+assert.ok( redPixels( encoded, W * 2, W, W * 2 ) > 1000 );
+// Interior of the near cube is unaffected by edge sample count.
+const center = ( 120 * W * 2 + 150 ) * 4;
+for ( let c = 0; c < 3; c ++ ) assert.ok( Math.abs( both[ center + c ] - encoded[ center + c ] ) <= 1 );
+assert.equal( renderer.sampleCount, 4 ); assert.equal( sharp.sampleCount, 1 );
+assert.equal( renderer.metrics.renderPath, 'forward' );
+assert.equal( FrameUniforms.fields.viewportOrigin.value.x, 0 );
+if ( renderer.timer.enabled ) {
+	// Readback runs after submission; it must complete without blocking render().
+	const until = performance.now() + 3000;
+	while ( renderer.timer.busy && performance.now() < until ) await new Promise( resolve => setTimeout( resolve, 1 ) );
+	assert.equal( renderer.timer.busy, false, 'GPU timing readback did not complete' );
+	assert.ok( ! renderer.timer.latest || renderer.timer.latest.ms > 0, 'unusable GPU timing was reported as measured' );
+	renderer.timer.reset();
+	assert.equal( renderer.timer.latest, null, 'a new session retained old GPU timings' );
+}
+sharp.dispose();
 const validation = await GPU.device.popErrorScope();
 assert.equal( validation, null, validation?.message );
 assert.deepEqual( errors, [] );

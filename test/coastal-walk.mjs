@@ -1,0 +1,13 @@
+import {fixture} from './helpers/morning-fixture.mjs';
+import {CoastalState} from '../src/ocean/CoastalState.js';
+import {KeeperSafety} from '../src/player/KeeperSafety.js';
+import {walkReturningLight,walkStormReview} from './helpers/coastal-route.mjs';
+const f=await fixture(false,{search:'returningLightPreview',morningStudy:false}),{app,s,player,keys}=f;
+app.qs.delete('morningPreview');app.coastal=new CoastalState(app.terrainData);app.keeperSafety=new KeeperSafety(app,s);s.saveKey='sevenhunters.test-coastal-walk.v1';
+s.ui.travel=async(text,move)=>move();s.ui.choose=async q=>q.options[0].value;s.ui.journal=async()=>({light:true});s.ui.end=()=>{};
+await s.returningLight.begin(true);
+const step=seconds=>{for(let t=0;t<seconds-1e-8;t+=1/60){app.keeperSafety.beforeFrame(1/60);player.update(1/60);s.update(1/60);app.keeperSafety.afterFrame();}};
+const controls=await walkReturningLight({...f,step,checkpoint:async label=>console.log('ok',label)});
+console.log('PASS returning-light chapter entirely at walking speed: doors, tower travel, selected actions, both signals, telescope evidence and journal.');
+await walkStormReview({...f,step,checkpoint:async label=>console.log('ok',label)},controls);
+console.log('PASS storm preparation, observed service lantern, coupled route destruction, safe walking return, working lamp and Cate exchange.');

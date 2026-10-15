@@ -21,17 +21,22 @@ for ( const [ x, y, z ] of [ [ 100, 0, - 10 ], [ - 100, 0, - 10 ], [ 2, 3, 5 ], 
 	}
 
 }
+for(const [width,height]of [[390,844],[844,390]])for(const [x,y]of [[100,0],[-100,0],[0,100],[0,-100],[-100,100]]){
+	camera.aspect=width/height;camera.updateProjectionMatrix();
+	const p=projectGuidance(at(x,y,-1),camera,width,height,{left:104,right:70,top:130,bottom:120});
+	assert.ok(p.x>=104&&p.x<=width-70&&p.y>=130&&p.y<=height-120,'arrows respect asymmetric notch, objective and touch-control insets');
+}
 camera.position.set( 12, 4, 6 ); camera.lookAt( 2, 4, 6 );
 const turned = projectGuidance( at( 2, 4, 6 ), camera, 1280, 720 );
 assert.ok( turned.onScreen && Math.abs( turned.x - 640 ) < 0.001, 'camera transforms are applied before projection' );
 const desk = { at: at( - 6.5, TOWER.floor + 0.8, - 0.8 ), label: 'Journal', id: 'journal' };
-assert.equal( routeGuidance( at( 0, TOWER.floor + 6, 1.5 ), desk, 'room' ).id, 'stair', 'journal upstairs routes down the spiral, not through the floor' );
+assert.equal( routeGuidance( at( 0, TOWER.floor + 6, 1.5 ), desk, 'room' ).id, 'towerDown', 'journal upstairs routes to the descent action' );
 assert.equal( routeGuidance( at( 3, TOWER.deck, 0 ), desk, 'room' ).id, 'galleryDoor', 'a downstairs objective starts at the balcony door' );
 assert.equal( routeGuidance( at( - 6, TOWER.floor, 2 ), desk, 'room' ).id, 'journal', 'the journal is targeted directly inside its own room' );
 assert.equal( routeGuidance( at( 5, TOWER.floor, 4 ), desk, 'room' ).id, 'houseDoor', 'an outside player first finds the room entrance' );
-assert.equal( routeGuidance( at( 15, TOWER.floor + 4, 6 ), desk, 'room' ).id, 'houseDoor', 'high outdoor terrain must not be mistaken for the tower stair' );
+assert.equal( routeGuidance( at( 15, TOWER.floor + 4, 6 ), desk, 'room' ).id, 'eastReturnGate', 'high outdoor terrain routes through the east gate rather than the tower stair' );
 const lens = { at: at( 0, TOWER.deck + 2.1, 0 ), label: 'Lamp', id: 'lens' };
 assert.equal( routeGuidance( at( - 6, TOWER.floor, 2 ), lens, 'lantern' ).id, 'towerDoor', 'an upstairs objective starts at the tower doorway' );
-assert.equal( routeGuidance( at( 0, TOWER.floor + 6, 1.5 ), lens, 'lantern' ).id, 'stair' );
+assert.equal( routeGuidance( at( 0, TOWER.floor + 6, 1.5 ), lens, 'lantern' ).id, 'towerUp' );
 assert.equal( routeGuidance( at( 1.7, TOWER.deck, - 0.5 ), lens, 'lantern' ).id, 'lens' );
 console.log( 'Guidance: camera projection, behind-camera bearings, portrait safe areas and station threshold routing passed.' );

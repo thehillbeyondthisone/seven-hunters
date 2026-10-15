@@ -1,5 +1,7 @@
-import { Group, Mesh, Vector2, Vector3, CylinderGeometry, SphereGeometry, TorusGeometry, LatheGeometry, MathUtils } from '../engine/index.js';
-import { standard } from '../materials/Materials.js';
+import { Group, Mesh, Vector2, Vector3, MathUtils } from '../engine/index.js';
+import { Builder, Part } from '../world/village/GeoBuilder.js';
+import { HAND_LAMP_MODEL } from './HandLampModel.js';
+import { createHandLampMaterials } from './HandLampMaterials.js';
 
 // The keeper's storm lantern: a tubular paraffin lantern of the 1890s, a tin
 // fount, a glass globe in a wire guard, a cap and a bail. It stands on the keepers' room table until taken
@@ -10,8 +12,8 @@ import { standard } from '../materials/Materials.js';
 //   lit: the wick is lit; glow warms up over a couple of seconds, flickers, and dies away when put out
 //   lightPosition: where the flame is (the light's source)
 //
-// The lantern's own meshes don't take the local lights (its own flame would blow them out at a few
-// centimetres); the globe glows by itself.
+// Metal reflects the room lights, with a bounded response for its own flame.
+// Surface wear stays in object space while the lantern is carried.
 const HEIGHT = 0.32; // fount foot to the bail's top
 const FLAME = 0.13; // the flame above the foot
 // carried: the bail's top below and in front of the eye, to the right (body frame: yaw only)
@@ -23,60 +25,18 @@ function buildLantern() {
 
 	const g = new Group();
 	g.name = 'hand_lamp';
-	// the tin and brass, lit by their own flame (in place of the local lights): flamePos (world), flameLit
-	const metal = ( color, roughness, metalness ) => {
-
-		const m = standard( { color, roughness, metalness, defines: { NO_LOCAL_LIGHTS: 1 }, uniforms: { flamePos: [ 'vec3f', new Vector3() ], flameLit: [ 'f32', 0 ] } } );
-		m.surface = /* wgsl */`
-	let toF = mat.flamePos - in.P;
-	let d2 = dot( toF, toF );
-	let wrap = 0.35 + 0.65 * max( dot( s.normal, toF * inverseSqrt( max( d2, 1e-6 ) ) ), 0.0 );
-	s.emissive = s.emissive + s.albedo * vec3f( 1.0, 0.62, 0.3 ) * mat.flameLit * wrap * 0.01 / ( d2 + 0.003 );
-`;
-		return m;
-
-	};
-
-	const tin = metal( 0x3d3830, 0.55, 0.55 );
-	const brass = metal( 0x9a7634, 0.38, 0.9 );
-	const glass = standard( { color: 0x6b5a40, roughness: 0.15, metalness: 0, emissive: 0x000000, defines: { NO_LOCAL_LIGHTS: 1 } } );
-	const flame = standard( { color: 0x000000, roughness: 1, metalness: 0, emissive: 0x000000, defines: { NO_LOCAL_LIGHTS: 1 } } );
-	const add = ( geo, mat, x, y, z, rx = 0, rz = 0 ) => {
-
-		const m = new Mesh( geo, mat );
-		m.position.set( x, y, z );
-		m.rotation.set( rx, 0, rz );
-		m.castShadow = false;
-		m.receiveShadow = true;
-		g.add( m );
-		return m;
-
-	};
-
-	// the fount: a squat tin drum with a rolled rim, the wick's raiser on the side
-	add( new LatheGeometry( [ [ 0.0, 0 ], [ 0.072, 0 ], [ 0.078, 0.008 ], [ 0.078, 0.045 ], [ 0.06, 0.062 ], [ 0.03, 0.068 ], [ 0, 0.068 ] ].map( ( p ) => new Vector2( p[ 0 ], p[ 1 ] ) ), 20 ), tin, 0, 0, 0 );
-	add( new CylinderGeometry( 0.008, 0.008, 0.02, 8 ), brass, 0.045, 0.072, 0, 0, Math.PI / 2 );
-	// the burner's collar and the globe: a fat glass barrel
-	add( new CylinderGeometry( 0.032, 0.036, 0.016, 14 ), brass, 0, 0.074, 0 );
-	const globe = add( new LatheGeometry( [ [ 0.036, 0 ], [ 0.052, 0.025 ], [ 0.057, 0.06 ], [ 0.052, 0.098 ], [ 0.034, 0.122 ] ].map( ( p ) => new Vector2( p[ 0 ], p[ 1 ] ) ), 20 ), glass, 0, 0.08, 0 );
-	// the flame
-	const flm = add( new SphereGeometry( 0.011, 8, 6 ), flame, 0, FLAME, 0 );
-	flm.scale.set( 1, 1.9, 1 );
-	// the wire guard, and the side tubes that feed the burner's air
-	for ( let i = 0; i < 4; i ++ ) {
-
-		const a = ( i + 0.5 ) / 4 * Math.PI * 2;
-		add( new CylinderGeometry( 0.0022, 0.0022, 0.13, 4 ), tin, Math.cos( a ) * 0.062, 0.14, Math.sin( a ) * 0.062 );
-
+	// Blender-authored folded metal, open vents, burner and glass. Each finish is
+	// merged into one mesh, including the small screws, seams and controls.
+	const materials=createHandLampMaterials(),meshes={};
+	const {tin,steel,brass,black,glass,flame}=materials;
+	for(const [finish,data] of Object.entries(HAND_LAMP_MODEL)) {
+		const B=new Builder();B.part(finish,new Part(data.p,data.n,data.uv,data.idx),0,0,0);
+		const mesh=new Mesh(B.batches[finish].build(),materials[finish]);
+		mesh.name='storm-lantern-'+finish;mesh.castShadow=false;mesh.receiveShadow=true;
+		g.add(mesh);meshes[finish]=mesh;
 	}
-
-	for ( const s of [ - 1, 1 ] ) add( new CylinderGeometry( 0.006, 0.006, 0.17, 6 ), tin, s * 0.082, 0.135, 0 );
-	add( new TorusGeometry( 0.06, 0.0025, 4, 20 ), tin, 0, 0.14, 0, Math.PI / 2 );
-	// the cap: the air chamber over the globe
-	add( new LatheGeometry( [ [ 0.0, 0 ], [ 0.088, 0 ], [ 0.07, 0.03 ], [ 0.03, 0.05 ], [ 0.018, 0.058 ], [ 0, 0.058 ] ].map( ( p ) => new Vector2( p[ 0 ], p[ 1 ] ) ), 20 ), tin, 0, 0.215, 0 );
-	// the bail, from the side tubes over the cap
-	add( new TorusGeometry( 0.082, 0.003, 4, 18, Math.PI ), tin, 0, HEIGHT - 0.082, 0 );
-	return { group: g, glass, flame, globe, metals: [ tin, brass ] };
+	meshes.flame.visible=false;
+	return {group:g,glass,flame,globe:meshes.glass,flameMesh:meshes.flame,metals:[tin,steel,brass,black]};
 
 }
 
@@ -88,6 +48,7 @@ export class HandLamp {
 		this.group = L.group;
 		this._glass = L.glass;
 		this._flame = L.flame;
+		this._flameMesh = L.flameMesh;
 		this._metals = L.metals;
 		this.carried = false;
 		this.lit = false;
@@ -111,7 +72,7 @@ export class HandLamp {
 	}
 
 	// show: carried and in view (not in the free camera, not at the signal lamp)
-	update( dt, camera, { show = true } = {} ) {
+	update( dt, camera, { show = true, motion = 1 } = {} ) {
 
 		this._t += dt;
 		// the wick: warms up when lit, and dies quickly when turned down
@@ -121,7 +82,9 @@ export class HandLamp {
 		const flicker = 0.93 + 0.05 * Math.sin( t * 9.1 ) * Math.sin( t * 5.7 + 1.3 ) + 0.02 * Math.sin( t * 23.0 );
 		this.flicker = flicker;
 		const k = this.glow * flicker;
-		this._glass.emissive.setRGB( 1.0 * 3.2 * k, 0.62 * 3.2 * k, 0.3 * 3.2 * k );
+		this._glass.emissive.setRGB( .006 * k, .0035 * k, .0015 * k );
+		this._flameMesh.visible = k > .001;
+		this._flame.opacity = Math.min(1,k*2);
 		this._flame.emissive.setRGB( 1.0 * 40 * k, 0.75 * 40 * k, 0.42 * 40 * k );
 		for ( const m of this._metals ) m.uniforms.flameLit.value = k;
 
@@ -174,7 +137,7 @@ export class HandLamp {
 
 		// hang it from the bail's top: the foot lies HEIGHT down the swung axis, and the lantern's up axis
 		// leans the other way (yaw, then a lean about the body's right and forward axes)
-		const sx = this._swing.x, sf = this._swing.y;
+		const sx = this._swing.x * motion, sf = this._swing.y * motion;
 		const down = _v.set( 0, - 1, 0 ).addScaledVector( _r, Math.sin( sx ) ).addScaledVector( _f, Math.sin( sf ) ).normalize();
 		g.visible = show;
 		g.position.copy( hand ).addScaledVector( down, HEIGHT );

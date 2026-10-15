@@ -1049,7 +1049,7 @@ export class SoundScape {
 
 		// underwater: steep low-pass on everything above the surface, the reef bed faded in
 		// indoors (the tower, the keepers' room): the wind and the sea through stone walls
-		const f = Math.min( Math.exp( lerp( Math.log( 20000 ), Math.log( lerp( 520, 260, deep ) ), u ) ), Math.exp( lerp( Math.log( 20000 ), Math.log( 700 ), e.indoor ) ) );
+		const f = Math.min( Math.exp( lerp( Math.log( 20000 ), Math.log( lerp( 520, 260, deep ) ), u ) ), Math.exp( lerp( Math.log( 20000 ), Math.log( this.flannan ? 480 : 700 ), e.indoor ) ) );
 		this._ramp( this.muffle[ 0 ].frequency, f, this.flannan && ! u ? .18 : .04 );
 		this._ramp( this.muffle[ 1 ].frequency, Math.min( 20000, f * 1.4 ), this.flannan && ! u ? .18 : .04 );
 		this._ramp( this.aboveOut.gain, lerp( 1, 0.4 / ( 1 + e.depth / 5 ), u ), 0.05 );
@@ -1084,7 +1084,7 @@ export class SoundScape {
 		const w = Math.hypot( e.wind, eb.active ? eb.speed * 0.9 : 0 );
 		const gw = eb.active && eb.speed > 3 ? Math.max( g.v, 0.5 ) : g.v; // apparent wind on a running boat is steady
 		// (the Flannans: exposed, more so up the tower; a whisper indoors)
-		const exposure = this.flannan ? ( 1.3 + clamp( ( e.ly - 85 ) / 15, 0, 1 ) ) * lerp( 1, 0.3, e.indoor ) : 1;
+		const exposure = this.flannan ? ( 1.3 + clamp( ( e.ly - 85 ) / 15, 0, 1 ) ) * lerp( 1, 0.18, e.indoor ) : 1;
 		this._bed( 'wind', dB( MIX.wind ) * clamp( w / 7, 0, 2.5 ) * gw * exposure / dB( BANK.wind.lufs ), now, 0.3 );
 		this._ramp( this.windLP.frequency, 400 + ( 80 + 60 * gw ) * w, 0.4 );
 

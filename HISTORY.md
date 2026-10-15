@@ -1,7 +1,156 @@
 # History
 
+## 14 October 2026 · Clear guidance, dangerous coast and returning light
+
+Explicit first-night hints and the gate beat remain. Offscreen arrows are solid
+ivory at 28 px on desktop and 22 px on mobile; desktop labels persist. Story and
+menu typography is larger, with separate touch sizing and action-row clearance.
+
+Shared analytic landing surges now supply water rendering, water queries, local
+foam, sound and player force. Actual stair rails constrain movement; designated
+rails support bracing. Story immersion has limited steering, a twelve-second
+struggle and short reachable-rung recovery. The lantern goes out. Unsafe saves
+cannot replace safe checkpoints; death retries restore the apparatus, watch,
+evidence, pose and surge phase. Tidewater and XR retain their movement models.
+
+Normal progression extends from 6 January to the 8–9 January returning-light
+chapter, with optional shore investigation, two Cate exchanges and observed-only
+journal remarks. The original islet bearing is retained; its old light height
+was under the current ridge and now follows terrain height. The cause remains
+unresolved. `coast-and-isolation.html` provides separate-save entry points.
+
+The later storm has an isolated preparation/lookout/return review, including a
+separate service lantern, reversible lower-landing destruction affecting rendered
+geometry, terrain and collision, keeping the lamp operating and Cate's honest
+uncertainty. It does not claim to implement relief. The complete later story
+direction remains in `docs/STORY-CONTINUATION.md`. See `docs/COAST-AND-ISOLATION.md`
+for the authored model, controls and validation limits.
+
 Context for new sessions: what this repository is, what changed recently, and where things stand. Newest
 entries first.
+
+## 14 October 2026 · Storm lantern surface materials
+
+`HandLampMaterials.js` gives tinned steel, rubbed edge metal and brass distinct
+reflective responses, with metre-scaled object-space tarnish, sparse hairline
+scratches, micron relief, contact polish and slight oil residue near the filler.
+Soot concentrates on the burner and hood. The clear globe has irregular upper
+soot, faint cleaning marks, small scratches and minute blown-glass waviness.
+The flame remains visible through its clean central area.
+
+The metal now reflects other room lights. A lantern-only light exclusion skips
+its own point source; bounded finite-source GGX shading handles that near-field
+light without the former broad diffuse glow. Other materials retain their
+existing local-light behavior. Meshes, triangles and carrying behavior are
+unchanged. Fourteen composed main/color shaders, including an unrelated material
+control, compile successfully. The existing hero-lantern handling audit passes.
+`tools/props/hero-lantern-materials.blend` retains an editable node-based study;
+the source script and in-game captures are under `tools/props/` and
+`artifacts/lantern-materials/` respectively.
+
+## 14 October 2026 · Hero storm lantern
+
+The table lantern and carried lantern now use the same detailed Blender model:
+rolled fount seams, shaped air tubes, curved globe guards, open hood vents,
+knurled filler cap, toothed wick wheel, globe-lift lever, burner gallery, wick,
+hinge rivets and a continuous carrying bail. Clear glass replaces the old opaque
+barrel, with slight soot beneath the hood and a separate flame hidden when out.
+Metal roughness varies subtly in object space, so the finish follows the prop
+while carried. Its pattern is a reconstruction with no invented maker's marks.
+
+`tools/props/hero-lantern.blend` and `hero-lantern-mcp.py` retain the editable
+authoring source; `src/station/HandLampModel.js` is the indexed export. The model
+has 21,460 triangles in six finish meshes, replacing 1,184 triangles in fourteen
+meshes. `tools/shots/hero-lantern-audit.mjs` confirms unchanged resting/carried
+positions, swing, flame source, warm-up/extinction, flicker and saved inventory,
+along with valid export normals, indices and the .32 m grip envelope. Build,
+unpacking and keeper-duty checks passed. Lit/unlit review images are retained in
+`artifacts/hero-lantern/`.
+
+## 14 October 2026 · Keepers room furniture and objects
+
+A second Blender pass replaces the room's primitive furnishings with 22 editable
+prototypes: shaped chairs with bowed slats and turned legs, eased table planks,
+framed dresser doors and supported shelves, folded curtains with rings and hems,
+cast stove doors and hob plates, a hollow curved kettle spout, lamp burners and
+wick wheels, glazed hollow crockery, seamed tins and oil cans, a nailed plank
+crate, folded cloth, gathered journal signatures, an ink bottle and pen, framed
+slate, hanging oilskins and a turned clock case with Roman numerals. Interior
+doors have raised fields and continuous mitred cove moulding. These objects are
+period-plausible reconstruction, not new historical evidence.
+
+`tools/props/room-craft-mcp.py` reproduces the Blender work and indexed export;
+`tools/props/room-craft.blend` is the isolated authoring scene. Opaque parts share
+the existing station batches. Clear lamp chimneys and separate night flames use
+two merged transparent draws, replacing the opaque village-window approximation.
+The previous sources are retained in `artifacts/room-craft/original/`.
+
+`node tools/shots/room-craft-audit.mjs` verifies finite indexed geometry, split
+normal lengths, triangle areas, exact collision envelopes, all room interaction
+targets, all door parameters, source-light alignment and unchanged opaque material
+batch keys. Added static detail, including clear surfaces, is 167,960 triangles
+in both station profiles; the interior door moulding reduces each leaf by 720
+triangles. Room walking, first/familiar dawn walks, weather observations, keeper
+duties and unpacking checks passed. Headset performance is not measured.
+
+## 14 October 2026 · Working station joinery and steps
+
+The working kitchen and berth doors now use Blender-authored recessed panels,
+bevelled stiles and rails, hinge knuckles, turned brass knobs and escutcheons.
+The house, gallery and morning-study oil-store doors reuse the authored hardware.
+The east gate has forged straps, coach bolts, pin heads and a separate latch/catch;
+its braces now consistently face the yard. Blender's original unsaved scene was
+retained. `tools/props/station-joinery.blend` is the isolated authoring scene, and
+`tools/props/station-joinery-mcp.py` reproduces the meshes and indexed engine export.
+
+Entrance steps use bevelled solids and the existing concrete material. Their
+footprints and tread heights are retained. The tower handrail has four samples
+per tread and a smoother section; small rounded cast nosings catch the carried
+lamp. Interior doorways have linings, stops, casing on both faces and fitted
+skirting returns. Timber heads fill the construction allowance above the working
+exterior leaves. Existing limewash and compound stone finishes remain in use.
+These fittings are modelling reconstruction, not new historical specifications.
+
+The local reviewer is `/test/prop-quality.html?setting=flannan&noAudio`.
+Blender and current Chrome captures are in `artifacts/prop-quality/`; the viewer
+writes no watch saves. `prop-quality-audit.mjs` compares the preserved pre-pass
+source against the current station: exact door pivots, swings, sizes, targets,
+collision envelopes and sampled tower walking surfaces match. Added detail is
+34,024 triangles in the normal profile and 37,472 in the morning study, with no
+new textures. Geometry, walking, 30/60/120 FPS stair movement, keeper duties,
+signal-lamp, first/familiar morning walks and story-continuation checks passed.
+The production build passed. Physical headset performance remains unmeasured.
+Nothing was pushed or deployed.
+
+## 9 October 2026 · Examine the signal lamp
+
+- By daylight the walkway lamp offers **Examine the signal lamp**: look over its parts, read
+  about it, and work it as in 1901. You can open the side door, lift the glass chimney, strike a match,
+  draw up the chimney, turn the wick up as the lamp warms, and hold the shutter key (Space) to flash.
+  You can also fill, trim and clean it once it is out and cool. The lamp burns on the story clock (a ten-hour
+  fount); it smokes if turned up too soon, and smoke and char dim it. Flashes read back as Morse
+  with the 1889 Army unit proportions. The first daylight flash compares Gallan Head's actual
+  distance with the recorded 4–8 mile range. Night signalling is unchanged.
+- The Blender model now has a hollow body and working parts: door, six shutter vanes, key, telescoping
+  chimney, wick, wick knob, glass chimney, flame and lens glow, plus a kerosene can. These are exported as
+  `SIGNAL_LAMP.parts` and assembled as `moving.signalLamp`. See `docs/SIGNAL-LAMP.md` for controls,
+  evidence and reconstruction boundaries; tests in `test/signal-lamp.mjs` (added to `npm test`)
+  and renders by `tools/shots/signal-lamp.mjs`.
+
+## 9 October 2026 · Signal lamp makeover
+
+- The walkway signal lamp is no longer a black box on a railing bracket. It is now a
+  Begbie-pattern oil signalling lamp, the Army's standard flashing lamp c.1885-1915, on its
+  wooden tripod: a black sheet-iron box, brass-bezelled convex lens with open shutter vanes behind
+  it, telescoping copper chimney with a vented cap, brass shutter plunger, sights, side door,
+  wick knob and a folded bail handle.
+- Modelled in Blender (`tools/props/signal-lamp.blend`). Its `export_signal_lamp` text block writes
+  `src/world/flannan/SignalLampModel.js` (Part arrays per finish), which `lanternFittings` in
+  `Station.js` adds to the builder. About 4.1k triangles.
+- The tripod stands at 3.45 m from the tower's axis (was 3.55) so its legs clear the railing.
+  The lens centre is at deck + 1.09 m (was 1.27) so the chimney stays below a standing eye line;
+  `TOWER.signal` follows. `TOWER.signalStand` is unchanged. Sources and what is reconstructed are
+  listed in `reference/signal-lamp/README.md`.
 
 ## 8 October 2026 · Weather observations through exploration
 
