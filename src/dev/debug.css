@@ -22,6 +22,12 @@
 .sh-debug [data-reveal-controls] .sh-debug-grid .sh-debug-row { gap:3px; }
 .sh-debug [data-reveal-controls] .sh-debug-grid input { width:48px; }
 .sh-debug-launch { position:fixed; z-index:85; right:8px; top:8px; border:1px solid #555; border-radius:0; padding:5px 9px; color:#ddd; background:#222e; font:11px/1.2 Arial,system-ui,sans-serif; cursor:pointer; }
+.sh-hotspots[hidden]{display:none!important}
+.sh-hotspots{position:fixed;inset:0;z-index:82;pointer-events:none;font:11px/1.4 monospace}
+.sh-hotspots svg{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
+.sh-hotspots text{font-family:monospace;font-size:11px;paint-order:stroke;stroke:#101719;stroke-width:3px;stroke-linejoin:round}
+.sh-hotspots aside{position:absolute;left:14px;bottom:100px;width:315px;max-width:calc(100vw - 28px);padding:12px;color:#e4e9df;background:#101719e8;border:1px solid #54807e;border-radius:4px}
+.sh-hotspots strong{color:#9fe3ff}.sh-hotspots p{margin:6px 0;color:#b4c3bb;font:10px/1.4 system-ui,sans-serif}
 .keeper-playground-hud { position:fixed; left:22px; bottom:22px; z-index:84; max-width:310px; padding:14px 18px; border:1px solid #5bd9c477; border-radius:5px; background:#111e23e8; color:#e7e1d1; font:12px/1.65 monospace; pointer-events:none; box-shadow:0 8px 24px #0006; }
 .keeper-playground-hud[hidden],.keeper-grab-crosshair[hidden] { display:none!important; }
 .keeper-playground-hud small { display:block; color:#79d5c5; font-size:9px; letter-spacing:1px; }

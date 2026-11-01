@@ -3,10 +3,11 @@ import { resolve } from 'node:path';
 import { installBrowser } from '../tools/shots/browser.mjs';
 Object.defineProperty( globalThis, 'navigator', { value: {}, writable: true, configurable: true } );
 installBrowser( { root: resolve( 'public' ) } );
-const { Vector3, PerspectiveCamera, Mesh, Group, BoxGeometry } = await import( '../src/engine/index.js' );
+const { Vector3, PerspectiveCamera, Mesh, Group, BoxGeometry, BufferGeometry, Float32BufferAttribute } = await import( '../src/engine/index.js' );
 const { G } = await import( '../src/core/Globals.js' );
 const { pressureAt, pressureAngle, temperatureAt, windReading, seaReading, landmarkReport, visibilityReading } = await import( '../src/weather/WeatherReadings.js' );
 const { SeaObservation, WeatherObservations, opaqueSegmentBlocked } = await import( '../src/story/WeatherObservations.js' );
+const { prepareObservationOcclusion } = await import( '../src/story/ObservationOcclusion.js' );
 const { ROOM, TOWER } = await import( '../src/world/flannan/Station.js' );
 const { StoryUI } = await import( '../src/story/StoryUI.js' );
 assert.equal( pressureAt( 18 ), 29.94 ); assert.equal( pressureAt( 21 ), 29.86 );
@@ -36,12 +37,48 @@ assert.ok( ! opaqueSegmentBlocked( [ box ], new Vector3( -2, 0, 0 ), new Vector3
 box.position.y = 0; const hiddenGroup = new Group(); hiddenGroup.add(box); hiddenGroup.visible = false;
 assert.ok(!opaqueSegmentBlocked([box],new Vector3(-2,0,0),new Vector3(2,0,0)),'hidden scene variants do not obstruct observations');
 
+// Material batches span distant objects. Once their bounds have been prepared,
+// a clear view must not revisit every triangle merely because the mesh spans it.
+const triangles = 8192, positions = new Float32Array( triangles * 9 );
+for ( let i = 0; i < triangles; i ++ ) {
+	const y = i < triangles / 2 ? 10 : -10;
+	positions.set( [ 0, y - 1, -1, 0, y + 1, -1, 0, y, 1 ], i * 9 );
+}
+const batchGeometry = new BufferGeometry(); batchGeometry.setAttribute( 'position', new Float32BufferAttribute( positions, 3 ) );
+const batch = new Mesh( batchGeometry, { name: 'station metalwork' } ), start = new Vector3( -2, 0, 0 ), end = new Vector3( 2, 0, 0 );
+const position = batchGeometry.getAttribute( 'position' ), getX = position.getX;
+let vertexReads = 0; position.getX = function ( i ) { vertexReads ++; return getX.call( this, i ); };
+batch.visible = false;
+prepareObservationOcclusion( [ {}, { geometry: {} }, batch ] );
+assert.ok( vertexReads > 0, 'loading prepares hidden opaque variants and skips fixtures without geometry' );
+batch.visible = true; vertexReads = 0;
+assert.equal( opaqueSegmentBlocked( [ batch ], start, end ), false );
+assert.equal( vertexReads, 0, 'the first observation reuses prepared spatial bounds without scanning triangles' );
+position.setXYZ( 0, 0, -1, -1 ); position.setXYZ( 1, 0, 1, -1 ); position.setXYZ( 2, 0, 0, 1 ); position.needsUpdate = true;
+assert.equal( opaqueSegmentBlocked( [ batch ], start, end ), true, 'edited geometry rebuilds its visibility bounds' );
+batch.position.x = 3;
+assert.equal( opaqueSegmentBlocked( [ batch ], start, end ), false, 'geometry beyond the target cannot block a finite sightline' );
+
 const query = { cpuValid: true, cpu: new Float32Array( 256 ), resultInputs: new Float32Array( 256 ), resultTime: 0, version: 0, allocate: () => 1,
 	setPoint( i, x, z ) { this.resultInputs[ i*4 ] = x; this.resultInputs[ i*4+1 ] = z; this.cpu[ i*4 ] = ( i % 3 - 1 ) * .5; this.cpu[ i*4+3 ] = -20; } };
 const sea = new SeaObservation( query ); sea.begin( new Vector3( 300, 0, 0 ) );
 for ( let i = 1; i <= 40; i++ ) { query.resultTime = i*.1; query.version++; sea.step( .1, query.resultTime ); }
 assert.equal( sea.reading.label, 'Moderate' );
 sea.step( 0, query.resultTime + .5 ); assert.equal( sea.reading, null, 'stale GPU results cannot complete a capture' );
+assert.ok( sea.elapsed >= 4 - 1e-6, 'a delayed readback pauses rather than erases a completed steady hold' );
+query.resultTime = 4.5; query.version ++; assert.ok( sea.step( 0, 4.5 ), 'fresh samples resume the existing hold' );
+
+// Slow GPUs can deliver matching samples several frames late. Intermittent
+// long frames still complete, while a stopped readback never records evidence.
+sea.begin( new Vector3( 300, 0, 0 ) ); query.latency = .2;
+for ( let i = 1; i <= 40; i ++ ) {
+	query.resultTime = i * .1; query.version ++;
+	sea.step( .1, query.resultTime + .6 );
+	if ( i === 20 ) { const held = sea.elapsed; assert.equal( sea.step( .1, query.resultTime + 2 ), null ); assert.equal( sea.elapsed, held ); }
+}
+assert.equal( sea.reading.label, 'Moderate', 'measured GPU latency permits the four-second observation to complete' );
+assert.equal( sea.step( 0, query.resultTime + 2 ), null, 'stopped readbacks cannot commit the reading' );
+delete query.latency;
 query.resultTime = 5; query.resultInputs[ 4 ] = 900; sea.step( .1, 5 ); assert.equal( sea.elapsed, 0, 'old patch results cannot accumulate' );
 sea.begin( new Vector3( 300, 0, 0 ) ); query.cpu[ 4 ] = Infinity; sea.step( .1, 5 ); assert.equal( sea.elapsed, 0 );
 query.cpu[ 4 ] = .2; query.cpu[ 7 ] = 0; sea.step( .1, 5 ); assert.equal( sea.elapsed, 0, 'shallow or land points remain pending' );
@@ -62,7 +99,7 @@ const s = { h: 18, flags: {}, obs: {}, paused: false, signal: false, rows: [], s
 s.ui = new StoryUI( { input } );
 const w = s.weatherObservations = new WeatherObservations( s );
 assert.equal( w.clockScale, .4, 'the currently due unfinished round slows the clock before the first capture' ); w.begin();
-const due = s._obsDue; s._obsDue = () => 0; assert.equal(w.clockScale,.4,'an active draft retains slower time while urgent lamp duties block capture'); s._obsDue = due;
+const due = s._obsDue; s._obsDue = () => 0; assert.equal(w.clockScale,1,'an orphaned first-night draft does not slow a watch without weather duties'); s._obsDue = due;
 s.ui.inspection = async ( { onRecord } ) => { w.updateFocus(); assert.ok( camera.fov < 30 ); onRecord(); };
 const pose = camera.quaternion.clone(), feet = player.position.clone();
 await w.inspect( 'pressure' );

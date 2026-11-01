@@ -86,6 +86,7 @@ export class Watcher {
 		this._read = 0; // units of the message read so far (advances only while watched)
 		this.onSent = null; // ( text, minutes ): your answer went (the story spends the clock)
 		this.familiar = false;
+		this._manual = null; // opt-in first reply lesson; ordinary exchanges keep their existing timing
 
 	}
 
@@ -125,14 +126,16 @@ export class Watcher {
 		this.text = '';
 		this.wireText = '';
 		this.options = null;
+		this._manual = null;
 
 	}
 
 	// your answer i (while waiting): you send it, then she replies with its next message
-	reply( i ) {
+	reply( i, { manual = false } = {} ) {
 
 		if ( this.state !== 'waiting' || ! this.options ) return null;
 		const o = this.options[ i ];
+		if ( ! o ) return null;
 		this.log.push( { from: 'you', text: o.text, code: o.code, minutes: o.minutes } );
 		if ( o.say ) this.flags.saidName = true;
 		if ( o.flag ) this.flags[ o.flag ] = true;
@@ -142,8 +145,64 @@ export class Watcher {
 		this._next = o.next;
 		this._sent = o;
 		this.options = null;
+		this._manual = manual ? { letter: 0, symbol: 0, pressed: false } : null;
 		return o;
 
+	}
+
+	// The lesson operates the existing chosen transmission. It never changes its
+	// wording, advances a branch, or charges its minutes until every letter is sent.
+	get manualReply() { return this.state === 'replying' && !! this._manual; }
+
+	get manualChunk() {
+		if ( ! this.manualReply ) return null;
+		const chunks = [ ...String( this._sent.wire || this._sent.text ).toUpperCase() ]
+			.filter( letter => MORSE[ letter ] ).map( letter => ( { letter, code: MORSE[ letter ] } ) );
+		const { letter, symbol } = this._manual;
+		return { ...chunks[ letter ], index: letter, symbol, total: chunks.length, complete: letter >= chunks.length };
+	}
+
+	manualPress( pressed ) {
+		if ( this.manualReply ) this._manual.pressed = !! pressed;
+	}
+
+	manualMark( mark ) {
+		const chunk = this.manualChunk;
+		if ( ! chunk || chunk.complete ) return false;
+		if ( chunk.code[ chunk.symbol ] !== mark ) {
+			this._manual.symbol = 0;
+			this._manualTime();
+			return false;
+		}
+		this._manual.symbol ++;
+		if ( this._manual.symbol >= chunk.code.length ) {
+			this._manual.letter ++;
+			this._manual.symbol = 0;
+		}
+		this._manualTime();
+		return true;
+	}
+
+	retryManualLetter() {
+		if ( ! this.manualReply ) return;
+		this._manual.symbol = 0;
+		this._manual.pressed = false;
+		this._manualTime();
+	}
+
+	_manualTime() {
+		if ( ! this.manualReply ) return;
+		const codes = [ ...String( this._sent.wire || this._sent.text ).toUpperCase() ].filter( letter => MORSE[ letter ] );
+		const count = codes.slice( 0, this._manual.letter ).reduce( ( n, letter ) => n + MORSE[ letter ].length, 0 ) + this._manual.symbol;
+		this._t = count ? this._m.symbols[ count - 1 ]?.end || 0 : 0;
+	}
+
+	finishManualReply() {
+		if ( ! this.manualChunk?.complete ) return false;
+		this._manual = null;
+		if ( this.onSent ) this.onSent( this._sent.text, this._sent.minutes );
+		this._send( this._next );
+		return true;
 	}
 
 	// the haze closed in: she is lost mid-message
@@ -154,6 +213,7 @@ export class Watcher {
 		this.state = 'done';
 		this.lost = true;
 		this.options = null;
+		this._manual = null;
 
 	}
 
@@ -163,7 +223,8 @@ export class Watcher {
 
 	}
 
-	// dt real seconds; watched: her lamp is in your telescope's field and can be seen; hurry: read faster
+	// dt real seconds; watched: her lamp is in view and visible. A single hurry
+	// request finishes only this transmission; choices and the next message wait.
 	update( dt, { watched = false, hurry = false } = {} ) {
 
 		const u = dt / UNIT;
@@ -185,10 +246,10 @@ export class Watcher {
 			case 'sending': {
 
 				// her lamp keeps her own time; what you read of it advances only while you watch
-				const pace = hurry ? 4 : this.familiar ? 1.8 : 1;
+				const pace = this.familiar ? 1.8 : 1;
 				this._t += u * pace;
 				this.lamp = this._on( this._t % this._m.length ) ? 1 : 0;
-				if ( watched ) this._read = Math.min( this._m.length, this._read + u * pace );
+				if ( watched ) this._read = hurry ? this._m.length : Math.min( this._m.length, this._read + u * pace );
 				this.wireText = this._m.letters.filter( ( [ , te ] ) => te <= this._read ).map( ( [ c ] ) => c ).join( '' );
 				this.text = this.node.wire && this._read >= this._m.length ? this.node.her : this.wireText;
 				if ( this._read >= this._m.length ) {
@@ -215,7 +276,8 @@ export class Watcher {
 
 				// your lamp sends; she is dark while she reads it
 				this.lamp = 0;
-				this._t += u * 3; // you send quickly, in the clock's skip
+				if ( this.manualReply ) break;
+				this._t = hurry ? this._m.length : this._t + u * 3; // you send quickly, in the clock's skip
 				if ( this._t >= this._m.length ) {
 
 					if ( this.onSent ) this.onSent( this._sent.text, this._sent.minutes );
@@ -244,7 +306,7 @@ export class Watcher {
 
 	get yourLamp() {
 
-		return this.state === 'replying' && this._on( this._t ) ? 1 : 0;
+		return this.manualReply ? Number( !! this._manual.pressed ) : this.state === 'replying' && this._on( this._t ) ? 1 : 0;
 
 	}
 
@@ -258,13 +320,15 @@ export class Watcher {
 	save() {
 
 		return { state: this.state, node: this.node && Object.keys( this.script.nodes ).find( ( k ) => this.script.nodes[ k ] === this.node ), log: this.log, flags: this.flags, lost: !! this.lost, familiar: this.familiar,
-			progress: { t: this._t, read: this._read, next: this._next, sent: this._sent } };
+			progress: { t: this._t, read: this._read, next: this._next, sent: this._sent,
+				manual: this._manual ? { ...this._manual, pressed: false } : null } };
 
 	}
 
 	load( s ) {
 
 		if ( ! s ) return;
+		this._manual = null;
 		this.log = s.log || [];
 		this.flags = s.flags || {};
 		this.lost = !! s.lost;
@@ -282,6 +346,13 @@ export class Watcher {
 				if ( s.state === 'replying' && s.progress.sent ) {
 					this._sent = s.progress.sent; this._next = s.progress.next;
 					this._m = morse( this._sent.wire || this._sent.text );
+					if ( s.progress.manual ) {
+						const chunks = [ ...String( this._sent.wire || this._sent.text ).toUpperCase() ].filter( letter => MORSE[ letter ] );
+						const letter = Math.max( 0, Math.min( chunks.length, Math.floor( s.progress.manual.letter || 0 ) ) );
+						const symbol = letter < chunks.length ? Math.max( 0, Math.min( MORSE[ chunks[ letter ] ].length - 1, Math.floor( s.progress.manual.symbol || 0 ) ) ) : 0;
+						this._manual = { letter, symbol, pressed: false };
+						this._manualTime();
+					}
 				}
 			}
 		}

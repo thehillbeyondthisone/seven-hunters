@@ -1,5 +1,61 @@
 # History
 
+## 23 October 2026 · Storm lantern and observation usability
+
+The carried lantern casts a shorter, warmer pool with cap/fount shading shared
+by surfaces, room air and dust. Indoor scattering is reduced independently of
+surface light, flicker is gentler, doorway brightness blends, and nearby walls
+retract the model and flame together. Existing window shafts remain intact.
+
+The lantern also casts filtered shadows from actual furniture, walls and moving
+doors in all six directions. Dust and indoor scattering use the same visibility.
+Clear glass transmits light, and open doorways admit spill. A reserved sun-atlas
+layer avoids another sampled texture; nearby chunk indices and stationary-map
+reuse limit the extra rendering work.
+
+An independent pickup marker pulses every six seconds near the station until
+the lantern is taken; urgent duties retain their own marker. Pickup reach is
+more forgiving. The roof vane accepts a 24° view around the tower top, with
+matching prompt/capture checks and an unobstructed yard view still required.
+
+## 23 October 2026 · Weather, work, and the island
+
+Winter grass and ground now share broad olive/straw patches, with local terrain
+and masonry shelter, feathered wear and lower ground-relief contrast. Blade
+counts, shared LOD roots and Quest budgets remain unchanged. Four bounded, slow
+coastal mist banks integrate inside the existing haze composite with no added
+texture or render pass; global weather visibility remains independent.
+
+Removed duplicate masonry that blocked five original bedroom sashes, retaining
+perimeter collisions, doors and furniture. Both bedrooms join the room-air layout.
+Documented balcony daylight assistance fittings are reconstructed with empty
+projecting poles, secured halyards and stowed discs; optional inspection leaves
+the watch, apparatus and conversations unchanged. Maintained station finishes
+are retained. Full original house drawings remain inaccessible and uninspected.
+
+A save-free live study and matched native before/after gallery are documented in
+[LANDSCAPE-PASS.md](docs/LANDSCAPE-PASS.md). Source snapshots preserve earlier
+uncommitted work without resetting the checkout. Full npm test and build passed;
+all ten desktop and ten mobile-profile captures report no GPU errors. The
+continuous walking review has finite velocity buffers throughout.
+
+
+## 16 October 2026 · Readable west landing and storm damage
+
+The west landing's concrete was missing from its moving assembly. The stage,
+steps and support cheeks now render with their ironwork and derrick wire. Pale
+concrete separates from wet rock, the storm retains more shadow detail, and the
+nearby service lantern no longer blooms over the platform.
+
+The safe observation point moves down the intact upper flight so the damaged
+joint can be seen. A broader offshore set focuses into run-up at the cliff,
+replacing the narrow vertical water wall. It follows a clear intact interval,
+then drains before the return objective. Rendered damage, terrain and collision share
+one stair joint; chipped concrete, bent rails and fallen fragments remain.
+The normal story, separate storm review, saved damage and retries share the change.
+The motion capture and reproduction commands are documented in
+`docs/COAST-AND-ISOLATION.md`.
+
 ## 14 October 2026 · Clear guidance, dangerous coast and returning light
 
 Explicit first-night hints and the gate beat remain. Offscreen arrows are solid

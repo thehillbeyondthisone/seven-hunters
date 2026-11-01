@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { fixture } from './helpers/morning-fixture.mjs';
+import { captureKeeperHands } from '../tools/shots/keeper-hands-warm.mjs';
+const {app,s}=await fixture(false,{search:'keeperPreview',morningStudy:false});
+const originalUpdate=s.update,originalPlayer=app.player.update;
+app.post={outputTexture:{width:32,height:32},autoExposure:{snap:{value:0}}};app.cameraCut=()=>{};
+const stop=new Error('Prepared the real story; stop before allocating or rendering a GPU frame');let scope=0;
+app.frame=()=>{throw stop;};
+const GPU={device:{addEventListener(){},removeEventListener(){},pushErrorScope(){scope++;},async popErrorScope(){scope--;return null;}},queue:{async onSubmittedWorkDone(){}},async pipelinesReady(){}};
+await assert.rejects(captureKeeperHands({app,s,GPU,out:'artifacts/keeper-hands-review/preflight'}),error=>error===stop);
+assert.equal(scope,0);assert.equal(s.update,originalUpdate);assert.equal(app.player.update,originalPlayer);assert.equal(app.post.autoExposure.snap.value,0);
+console.log('Hands warm helper preflight: real Story APIs, controller cleanup, callback restoration and incoming exposure state passed before GPU rendering.');
+process.exit(0);

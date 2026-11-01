@@ -19,10 +19,19 @@ fn coastalSiteSample( xz: vec2f, i: u32 ) -> vec4f {
 	let mask = (1.0-smoothstep(shape.x*.4,shape.x*.6,across)) * (1.0-smoothstep(0.0,shape.y,-along)) * (1.0-smoothstep(40.0,80.0,along));
 	let pulse = smoothstep(0.0,.13,phase) * (1.0-smoothstep(.13,.49,phase));
 	let sets = array<f32,5>(${ COAST_SETS.map( n => n.toFixed( 2 ) ).join( ',' ) });
-	let amplitude = (.5+coast.strength*4.0)*sets[u32(wave)%5u]*shape.z + select(0.0,coast.rogue,i==1u);
-	let speed = min(9.0,amplitude*.9)*pulse*mask*select(-1.0,.75,phase>.26);
+	let amplitude = (.5+coast.strength*4.0)*sets[u32(wave)%5u]*shape.z;
+	let rogue = select(0.0,coast.rogue,i==1u);
+	let inland = max(0.0,-along);
+	let rogueHalfWidth = mix(52.0,24.0,smoothstep(-12.0,26.0,-along));
+	let rogueMask = (1.0-smoothstep(0.0,rogueHalfWidth,across)) * (1.0-smoothstep(0.0,shape.y,inland)) * (1.0-smoothstep(80.0,160.0,along));
+	let rogueAmplitude = rogue*(.20+.60*smoothstep(0.0,32.0,inland));
+	let rogueWeight=clamp(rogue/48.0,0.0,1.0);
+	let windWave=1.0-.75*rogueWeight*(1.0-smoothstep(0.0,26.0,inland));
+	let speed = min(9.0,min(9.0,amplitude*.9)*pulse*mask+min(9.0,rogueAmplitude*.9)*pulse*rogueMask)*select(-1.0,.75,phase>.26);
 	let ripple=.06*sin(xz.x*.8+coast.time*1.6)*sin(xz.y*.9+coast.time*1.2);
-	return vec4f(max(0.0,(amplitude+ripple)*pulse*mask),s.zw*speed,pulse*mask);
+	let height=max(0.0,(amplitude+ripple)*pulse*mask*windWave+rogueAmplitude*pulse*rogueMask);
+	let foam=pulse*max(mask,rogueMask*rogueWeight);
+	return vec4f(height,s.zw*speed,foam);
 }
 fn coastalSample( xz: vec2f ) -> vec4f {
 	let a=coastalSiteSample(xz,0u); let b=coastalSiteSample(xz,1u); return select(a,b,b.x>a.x);

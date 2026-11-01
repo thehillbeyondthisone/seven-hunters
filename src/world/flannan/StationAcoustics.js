@@ -18,6 +18,8 @@ export function stationAcoustics( p, houseOpen = 0, galleryOpen = 0 ) {
 		indoor = threshold * ( 1 - .62 * clamp( houseOpen ) * Math.exp( -distance / 2.2 ) );
 	}
 	if ( [ KITCHEN, BERTH ].some( room => p.x > room.x0 && p.x < room.x1 && p.z > room.z0 && p.z < room.z1 && p.y > T.floor && p.y < ROOM.ceiling ) ) indoor = 1;
+	const westRoom=p.x>-21.4&&p.x<-9.3&&p.z>ROOM.z0&&p.z<ROOM.z1&&p.y>T.floor&&p.y<ROOM.ceiling;
+	if(westRoom||p.x>7.25&&p.x<11.35&&p.z>-4.35&&p.z<-.85&&p.y>T.floor&&p.y<T.floor+2.9)indoor=1;
 	// Blend through the hatch at eye height. The enclosed lantern admits gusts
 	// through its glazing; opening its gallery door admits more of the outside.
 	const lantern = p.y < T.deck + 4.5 ? smooth( ( p.y - T.deck + .8 ) / 1.5 ) * ( 1 - smooth( ( r - 2.05 ) / .5 ) ) : 0;
@@ -27,7 +29,7 @@ export function stationAcoustics( p, houseOpen = 0, galleryOpen = 0 ) {
 	const lanternShelter = .52 * ( 1 - .75 * clamp( galleryOpen ) * Math.exp( -galleryDistance / 1.5 ) );
 	const shelter = inRoom || ! shaft && ! lantern ? indoor : Math.max( shaft, lantern * lanternShelter );
 	const heightAboveRoom = Math.max( 0, p.y - T.floor - 1.62 );
-	const clockAudibility = inRoom ? 1 : shaft * .42 * Math.exp( -heightAboveRoom / 3.2 );
+	const clockAudibility = inRoom ? 1 : westRoom ? .2*Math.exp(-(Math.abs(p.x)-9)/5) : shaft * .42 * Math.exp( -heightAboveRoom / 3.2 );
 	const depthBelowLantern = Math.max( 0, T.deck + 1.62 - p.y );
 	const machineAudibility = lantern + walkway * .58 + shaft * .72 * Math.exp( -depthBelowLantern / 6 );
 	return { indoor, inRoom, inLantern, onWalkway, shaft, lantern, walkway, shelter, clockAudibility, machineAudibility };

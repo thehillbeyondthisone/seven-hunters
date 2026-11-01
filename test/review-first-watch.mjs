@@ -1,0 +1,81 @@
+import { GATE_REVEAL_SECONDS } from '../src/story/FirstWatchRevision.js';
+import assert from 'node:assert/strict';
+import { fixture, E, TOWER, STATION } from './helpers/morning-fixture.mjs';
+import { SUNSET, WATCHER } from '../src/story/Script.js';
+import { Watcher } from '../src/story/Watcher.js';
+import { Beams } from '../src/station/Beams.js';
+import { upkeepHours } from '../src/story/WatchPacing.js';
+import { storyGuidance } from '../src/story/Guidance.js';
+
+const f = await fixture( false, { search: 'keeperPreview', morningStudy: false } );
+const { s, app, player, place, face, camera, keys } = f;
+s.flags.unpacking = { stage: 4, examined: true };
+s.flags.keeperRoutine = true;
+s.keeper.state.inspected = true;
+place( STATION.eastGate.x + 3, STATION.yard, STATION.eastGate.z );
+s.beat = 'climb'; s.h = 13.7; s.paused = false;
+for ( let i = 0; i < 500; i ++ ) s.update( 1 );
+assert.ok( s.h <= SUNSET - .03 + 1e-8, 'idle arrival holds daylight until the working-light milestone' );
+assert.ok( ! s.lamp.lit && ! s.flags.late, 'time cannot create a missed first lighting while the player is finding the job' );
+
+Object.assign( s.keeper.state, { inspected: true, verified: true, rewound: true, driveCutsceneSeen: true } );
+s.lamp.ignite(); s.lamp.wind = 1; s.lamp.start();
+s.flags.firstLightMilestone = 15.2; s.flags.talked = true; s.h = 17.3; s.beat = 'evening';
+s.watcher = new Watcher(); s.watcher.state = 'done';
+s.firstWatch.afterContact();
+assert.equal( s.beat, 'gate-secure' );
+assert.equal( s.interact.get( 'gate' ).hold, 1.8 );
+const h = s.h, wind = s.lamp.wind;
+place( STATION.eastGate.x - 1.2, STATION.yard, STATION.eastGate.z ); face( s.interact.get( 'gate' ).at );
+assert.equal( s.interact.pick()?.id, 'gate', 'the real entrance gate is the physical target' );
+keys.add( 'KeyE' ); for ( let i = 0; i < 60; i ++ ) s.interact.update( 1 / 60 ); keys.delete( 'KeyE' ); s.interact.update( 0 );
+assert.equal( s.beat, 'gate-secure', 'an interrupted rope wrap leaves the required task recoverable' );
+keys.add( 'KeyE' ); for ( let i = 0; i < 112; i ++ ) s.interact.update( 1 / 60 ); keys.delete( 'KeyE' );
+assert.equal( s.beat, 'evening' );
+assert.ok( s.flags.gateRopes[ 0 ].secured && s.doors.gate[ 0 ].target === 0 );
+assert.equal( s.h, h ); assert.equal( s.lamp.wind, wind );
+
+s.h = s.haar + .7; s.beat = 'haar';
+const rail = s.firstWatch.rail;
+const radius = Math.hypot( rail.x, rail.z );
+place( rail.x * ( radius - .3 ) / radius, TOWER.deck, rail.z * ( radius - .3 ) / radius ); face( rail );
+assert.equal( s.interact.pick()?.id, 'gateLookout', 'the east railing offers the deliberate sea examination' );
+assert.equal( storyGuidance( s )?.id, 'gateLookout' );
+const home = { position: camera.position.clone(), quaternion: camera.quaternion.clone(), fov: camera.fov };
+s.interact.get( 'gateLookout' ).use();
+assert.ok( s.cinematic && player.busy && ! app.input.enabled );
+s.update( 1 ); const elapsed = s.firstWatch.elapsed;
+s.paused = true; s.update( 1 ); s.paused = false;
+assert.equal( s.firstWatch.elapsed, elapsed );
+for ( let i = 0; i < Math.ceil( GATE_REVEAL_SECONDS ); i ++ ) s.update( 1 );
+assert.equal( s.beat, 'gate' );
+assert.ok( ! s.cinematic && ! player.busy && app.input.enabled );
+assert.ok( camera.position.equals( home.position ) && camera.quaternion.equals( home.quaternion ) && camera.fov === home.fov );
+assert.match( s.goal(), /Secure the gate/ );
+assert.equal( s.doors.gate[ 0 ].target, 1 );
+assert.equal( s.islet, null ); assert.equal( Beams.uniforms.far.value[ 1 ].w, 0 );
+
+place( STATION.eastGate.x - 1.2, STATION.yard, STATION.eastGate.z ); face( s.interact.get( 'gate' ).at );
+s.interact.get( 'gate' ).use();
+assert.equal( s.beat, 'night' );
+assert.ok( s.firstWatch.state.resecured && s.flags.gateRopes[ 0 ].secured );
+assert.ok( ! s._journalRows().some( ( [ , text ] ) => /Eilean Tighe/.test( text ) ) );
+
+// Check the actual saved director, including an interruption while looking down.
+s.beat = 'haar'; delete s.firstWatch.state.revealed; delete s.firstWatch.state.resecured;
+place( rail.x * .95, TOWER.deck, rail.z * .95 ); face( rail );
+s.firstWatch.startReveal(); s.update( 1 ); s.save(); const saved = structuredClone( s.loadSave() );
+s._restore( saved );
+assert.equal( s.beat, 'gate' );
+assert.ok( ! s.cinematic && ! player.busy && app.input.enabled, 'a mid-reveal reload restores usable controls and the follow-up' );
+s.interact.get( 'gate' ).use();
+const resumed = structuredClone( s.loadSave() ); s._restore( resumed ); assert.equal( s.beat, 'night' );
+
+place( -160, app.terrainData.heightAt( -160, 35 ), 35 );
+assert.equal( upkeepHours( s, 5 ), 0, 'exploring the island never spends winding reserve' );
+place( 0, TOWER.deck, 1.5 );
+assert.equal( upkeepHours( s, .5 ), .5, 'time at the tower watch still makes winding a responsibility' );
+s.signal = true; assert.equal( upkeepHours( s, 1 ), 0 ); s.signal = false;
+assert.equal( WATCHER.nodes.ceit.her, 'CEIT MACLEOD HERE. CALL ME CATE. I WATCH YOUR LIGHT FOR THE BOARD.' );
+assert.equal( s.audioCues.play( 'gate-discovery' ), false, 'pending stings do not invent or fetch an asset' );
+console.log( 'PASS safe arrival milestone, physical interrupted/repeated rope actions, rail-triggered first-person gate reveal, no islet, exact camera/control restore, save recovery and protected away winding.' );

@@ -1961,7 +1961,21 @@ export class UI {
 		// a hold-to-use prompt fills its key while the key is held
 		this.promptFill = h( 'span', 'tw-prompt-fill' );
 		this.promptKey.append( this.promptFill );
-		this.promptEl.append( this.promptKey, this.promptText );
+		// the story's prompt: a logbook slip with the key inked as a stamp, the action, a line on what the
+		// work does, the instruction ("Hold E") and how long is left, and an ink rule along its foot that
+		// reads how far a held action has got (Tidewater keeps the filling key and the action)
+		this.promptHead = h( 'span', 'tw-prompt-head' );
+		this.promptHow = h( 'span', 'tw-prompt-how' );
+		this.promptRead = h( 'span', 'tw-prompt-read' );
+		this.promptHead.append( this.promptHow, this.promptRead );
+		this.promptDetail = h( 'span', 'tw-prompt-detail' );
+		this.promptNote = h( 'span', 'tw-prompt-note' );
+		this.promptTime = h( 'span', 'tw-prompt-time' );
+		this.promptDetail.append( this.promptNote, this.promptTime );
+		const words = h( 'span', 'tw-prompt-words' );
+		words.append( this.promptHead, this.promptText, this.promptDetail );
+		this.promptBar = h( 'span', 'tw-prompt-bar' );
+		this.promptEl.append( this.promptKey, words, this.promptBar );
 
 		// bottom-left: boat instruments
 		this.boatEl = this._buildBoat();
@@ -2155,7 +2169,7 @@ export class UI {
 					</section>
 					<section>
 						<h3>Interact</h3>
-						${ this.tidewater ? '' : row( k( 'E' ), 'Use<small>Read papers aboard; hold to light the lamp or wind the machine ashore</small>' ) + row( k( 'Enter' ), 'Boat arrival<small>Bring the landing closer, then step ashore</small>' ) + row( k( 'B' ), 'Read the papers in your coat' ) + row( k( 'RMB' ), 'Telescope<small>Hold, once you have it</small>' ) + row( k( 'L' ), 'Storm lantern<small>Once you have taken it</small>' ) + row( k( 'Space' ), 'Read her signals faster' ) + row( k( 'F' ), 'Free camera' ) + row( k( 'M' ), 'Mute' ) }
+						${ this.tidewater ? '' : row( k( 'E' ), 'Use<small>Read papers aboard; hold to light the lamp or wind the machine ashore</small>' ) + row( k( 'Enter' ), 'Boat arrival<small>Bring the landing closer, then step ashore</small>' ) + row( k( 'B' ), 'Read the papers in your coat' ) + row( k( 'RMB' ), 'Telescope<small>Hold, once you have it</small>' ) + row( k( 'L' ), 'Storm lantern<small>Once you have taken it</small>' ) + row( k( 'C' ), 'Brownie camera<small>Raise / put away after taking it; hold E to expose or wind</small>' ) + row( k( 'Space' ), 'Finish the current signal message' ) + row( k( 'F' ), 'Free camera' ) + row( k( 'M' ), 'Mute' ) }
 						${ ! this.tidewater ? '' : `
 						${ row( k( 'E' ), 'Interact<small>Board, helm, step ashore, trade</small>' ) }
 						${ row( k( 'V' ), 'Boat camera<small>1st / 3rd person</small>' ) }
@@ -2177,7 +2191,7 @@ export class UI {
 					</section>
 				</div>
 				<div class="tw-help-guide">
-					<span>${ this.tidewater ? '<b>How to play:</b> catch fish, sell them to Joe at the fish stand by the pier, and buy upgrades from Marta at the chandlery by the boathouse. Both are on the map (lower right).' : '<b>The night:</b> light the lamp at sunset, keep the machine wound, answer Gallan Head when the air is clear, and write up the journal in the morning. <kbd>E</kbd> uses things (hold it to light and to wind), the right mouse button raises the telescope, <kbd>L</kbd> lights your storm lantern, <kbd>Space</kbd> reads her signals faster.' }</span>
+					<span>${ this.tidewater ? '<b>How to play:</b> catch fish, sell them to Joe at the fish stand by the pier, and buy upgrades from Marta at the chandlery by the boathouse. Both are on the map (lower right).' : '<b>The night:</b> light the lamp at sunset, keep the machine wound, answer Gallan Head when the air is clear, and write up the journal in the morning. <kbd>E</kbd> uses things (hold it to light and to wind), the right mouse button raises the telescope, <kbd>L</kbd> lights your storm lantern, <kbd>Space</kbd> finishes the current signal message. You choose every reply.' }</span>
 					<button type="button" class="gm-btn is-ghost tw-help-replay">Replay the guide</button>
 				</div>
 			</div>`;
@@ -2728,22 +2742,74 @@ export class UI {
 	}
 
 	// setPrompt( 'E', 'Board boat' ) shows it; setPrompt( null ) hides it. progress (0..1, or null): a
-	// hold-to-use prompt, filled that far
-	setPrompt( key, text, progress = null ) {
+	// hold-to-use prompt, filled that far. { hold }: a hold with no end to measure (bracing against a
+	// rail) shows its dial without a reading; { active }: the key is held now; { eta }: seconds of
+	// holding left; { detail }: a line on what the work does. A hidden prompt keeps its last look while
+	// it fades.
+	setPrompt( key, text, progress = null, { hold: held = false, active = false, eta = null, detail = '' } = {} ) {
 
 		const on = key != null && key !== '';
-		const hold = progress !== null && progress !== undefined;
-		if ( hold !== !! this._pHold ) {
-
-			this._pHold = hold;
-			this.promptEl.classList.toggle( 'is-hold', hold );
-
-		}
-
-		if ( hold ) this.promptFill.style.transform = `scaleY(${ Math.min( 1, Math.max( 0, progress ) ).toFixed( 3 ) })`;
+		const gauge = progress !== null && progress !== undefined;
+		const ratchet = ! gauge && held;
+		const k = on ? String( key ) : this._pKey;
 		if ( on ) {
 
-			const k = String( key ), t = text == null ? '' : String( text );
+			const p = gauge ? Math.min( 1, Math.max( 0, progress ) ) : 0;
+			const mode = gauge ? 'gauge' : ratchet ? 'ratchet' : 'press';
+			if ( mode !== this._pMode ) {
+
+				this._pMode = mode;
+				this.promptEl.classList.toggle( 'is-hold', gauge );
+				this.promptEl.classList.toggle( 'is-ratchet', ratchet );
+
+			}
+
+			if ( gauge && p !== this._pProg ) {
+
+				// a hold that reaches its end rings once
+				if ( active && p >= 0.97 && ! ( this._pProg >= 0.97 ) ) this._promptDone();
+				this._pProg = p;
+				this.promptFill.style.transform = `scaleY(${ p.toFixed( 3 ) })`;
+				this.promptBar.style.transform = `scaleX(${ p.toFixed( 3 ) })`;
+
+			} else if ( ! gauge && this._pProg !== 0 ) {
+
+				this._pProg = 0;
+				this.promptBar.style.transform = '';
+
+			}
+
+			const busy = ( gauge || ratchet ) && active;
+			if ( busy !== !! this._pBusy ) {
+
+				this._pBusy = busy;
+				this.promptEl.classList.toggle( 'is-active', busy );
+
+			}
+
+			// the instruction leads; a held action with nothing left to do says so instead
+			const complete = gauge && p >= 0.999 && eta == null;
+			this.promptEl.classList.toggle( 'is-complete', complete );
+			const how = this._pDone ? 'Done' : complete ? 'Complete' : busy ? ( ratchet ? 'Holding' : 'Keep holding' ) : `${ gauge || ratchet ? 'Hold' : 'Press' } ${ k }`;
+			if ( how !== this._pHow ) this.promptHow.textContent = this._pHow = how;
+			const read = gauge && ( p > 0 || busy ) ? `${ Math.round( p * 100 ) }%` : '';
+			if ( read !== this._pRead ) this.promptRead.textContent = this._pRead = read;
+			// what the work does, and how long it takes or has left (whole seconds, rounded up)
+			// (counting down rounds up, so it never reads 0 while work remains; an estimate rounds)
+			const ok = eta != null && isFinite( eta ) && eta > 0 && ! complete;
+			const secs = ok ? Math.max( 1, busy ? Math.ceil( eta - 0.05 ) : Math.round( eta ) ) : 0;
+			const time = secs ? busy ? `${ secs } s left` : `about ${ secs } s` : '';
+			const note = detail ? String( detail ) : gauge && ! complete ? ( busy ? 'The line below shows how far you have got' : `Hold ${ k } until the line below reaches the end` ) : '';
+			if ( note !== this._pNote || time !== this._pTime ) {
+
+				if ( note !== this._pNote || !! time !== !! this._pTime ) this._pMeasure = true;
+				this.promptNote.textContent = this._pNote = note;
+				this.promptTime.textContent = this._pTime = time;
+				this.promptDetail.hidden = ! note && ! time;
+
+			}
+
+			const t = text == null ? '' : String( text );
 			if ( k !== this._pKey || t !== this._pText ) {
 
 				this._pKey = k;
@@ -2754,6 +2820,15 @@ export class UI {
 				this.promptEl.classList.remove( 'is-bump' );
 				void this.promptEl.offsetWidth;
 				this.promptEl.classList.add( 'is-bump' );
+				this._pMeasure = true;
+
+			}
+
+			// captions that share the bottom centre (story.css) stand above a showing prompt
+			if ( this._pMeasure ) {
+
+				this._pMeasure = false;
+				document.documentElement.style.setProperty( '--tw-prompt-h', `${ this.promptEl.offsetHeight }px` );
 
 			}
 
@@ -2763,9 +2838,27 @@ export class UI {
 
 			this._pOn = on;
 			this.promptEl.classList.toggle( 'is-on', on );
+			document.documentElement.classList.toggle( 'has-prompt', on );
 			if ( on ) this._activity();
 
 		}
+
+	}
+
+	_promptDone() {
+
+		clearTimeout( this._pDoneTimer );
+		this._pDone = true;
+		this.promptHow.textContent = this._pHow = 'Done';
+		this.promptEl.classList.remove( 'is-done' );
+		void this.promptEl.offsetWidth;
+		this.promptEl.classList.add( 'is-done' );
+		this._pDoneTimer = setTimeout( () => {
+
+			this._pDone = false;
+			this.promptEl.classList.remove( 'is-done' );
+
+		}, 900 );
 
 	}
 

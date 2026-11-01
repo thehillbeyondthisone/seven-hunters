@@ -88,7 +88,9 @@ export class Material {
 
 		const fields = { ...BUILTIN_UNIFORMS };
 		for ( const k in o.uniforms || {} ) fields[ k ] = o.uniforms[ k ];
-		this.uniformBlock = new UniformBlock( 'MaterialParams' + this.id, fields, { label: this.name } );
+		// Values live in separate buffers; the WGSL type depends only on the fields.
+		// A per-material type name would prevent identical shaders from sharing a pipeline.
+		this.uniformBlock = new UniformBlock( 'MaterialParams', fields, { label: this.name } );
 		this.uniforms = this.uniformBlock.fields;
 		const u = this.uniforms;
 		u.color.value = toColor( o.color, new Color( 1, 1, 1 ) );
@@ -199,9 +201,11 @@ export class Material {
 		Object.assign( m, this );
 		m.id = _id ++;
 		m.version = 0;
+		m.__pkFrame = - 1; // Do not inherit the source material's per-frame pipeline lookup.
+		m.__pk = null;
 		m.defines = { ...this.defines };
 		m.bindings = { ...this.bindings };
-		m.uniformBlock = new UniformBlock( 'MaterialParams' + m.id, Object.fromEntries( this.uniformBlock.order.map( ( k ) => [ k, [ this.uniformBlock.layout[ k ].typeStr, cloneValue( this.uniforms[ k ].value ) ] ] ) ), { label: m.name } );
+		m.uniformBlock = new UniformBlock( 'MaterialParams', Object.fromEntries( this.uniformBlock.order.map( ( k ) => [ k, [ this.uniformBlock.layout[ k ].typeStr, cloneValue( this.uniforms[ k ].value ) ] ] ) ), { label: m.name } );
 		m.uniforms = m.uniformBlock.fields;
 		m._listeners = [];
 		return m;

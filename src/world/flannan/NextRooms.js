@@ -4,6 +4,7 @@ import { deskOilLamp } from './InteriorDressing.js';
 import { keeperTable, keeperChair, rangeDetails, berthBedding, clothSurface } from './InteriorCraft.js';
 import { Builder } from '../village/GeoBuilder.js';
 import { stationCraft, interiorDoorFrame } from './StationCraft.js';
+import { makeDomesticProps } from './DomesticCraft.js';
 
 // Playable reconstruction, not a recovered station plan or inventory.
 export const KITCHEN = { x0: -5.4, x1: 1.2, z0: 6, z1: 10.5, door: new Vector3() };
@@ -50,9 +51,8 @@ export function nextRooms( ctx, parts, floor, ceiling, palette, makeDoor ) {
 	B.box( 'hard', -4.65, F + 0.42, 7.6, 0.95, 0.84, 0.74, iron );
 	B.box( 'hard', -4.65, F + 0.87, 7.6, 1.02, 0.06, 0.8, iron );
 	B.cyl( 'hard', -4.8, F + 0.9, 7.45, 0.065, 0.065, ceiling - F - 0.9, { segs: 12, ...iron } );
-	B.lathe( 'hard', -4.45, F + 0.91, 7.75, [ [ 0, 0 ], [ 0.12, 0 ], [ 0.15, 0.08 ], [ 0.12, 0.19 ], [ 0.055, 0.22 ], [ 0, 0.22 ] ], { segs: 20, ...iron } );
-	B.torus( 'hard', -4.45, F + 1.15, 7.75, 0.1, 0.008, { radial: 6, tubular: 16, ...iron } );
-	B.rod( 'hard', [ -4.32, F + 1.01, 7.75 ], [ -4.21, F + 1.12, 7.75 ], 0.025, 0.016, { segs: 10, ...iron } );
+	// Kettle, jug, cup and split loaf are independent Blender-authored props.
+	parts.domesticCraft = makeDomesticProps( F );
 	B.cyl( 'hard', -4.75, F, 8.45, 0.18, 0.14, 0.33, { segs: 16, ...iron } );
 	colliders.addBox( new Vector3( -4.65, F + 0.45, 7.6 ), new Vector3( 0.5, 0.45, 0.42 ), 0, { tag: 'furniture' } );
 	KITCHEN.stove = new Vector3( -4.12, F + 0.45, 7.6 );
@@ -67,8 +67,7 @@ export function nextRooms( ctx, parts, floor, ceiling, palette, makeDoor ) {
 	// Table, bread, mugs and Walter's crate. Keep the centre aisle unobstructed.
 	table( -3.8, 9.65, 1.8, 0.65, 0.76 );
 	B.box( 'hard', -3.9, F + 0.81, 9.65, 0.47, 0.05, 0.31, cream );
-	B.lathe( 'hard', -3.9, F + 0.84, 9.65, [ [ 0, 0 ], [ 0.1, 0 ], [ 0.13, 0.09 ], [ 0, 0.13 ] ], { segs: 18, sx: 1.5, tint: lin( 0xa77b3e ), data: HARD( 0.55, 0, 0, 0.95 ) } );
-	for ( const x of [ -3.38, -4.35 ] ) B.cyl( 'hard', x, F + 0.81, 9.6, 0.045, 0.04, 0.09, { segs: 14, ...cream } );
+
 	for ( let i = 0; i < 3; i ++ ) B.box( 'stationTimber', 0.82, F + 0.72 + i * 0.52, 8.2, 0.58, 0.055, 2.7, { grain: 2, ...wood } );
 	// Backboards, shelf brackets and a cabinet base give the stores a built form.
 	for(let i=0;i<11;i++) B.box('stationTimber',1.155,F+1.13,6.85+(i+.5)*2.7/11,.025,1.63,2.7/11-.003,{grain:1,...wood});
@@ -80,7 +79,7 @@ export function nextRooms( ctx, parts, floor, ceiling, palette, makeDoor ) {
 	}
 	for ( const z of [ 7.3, 8.1, 9.1 ] ) B.lathe( 'hard', .85, F+.77, z, [[.08,0],[.095,.06],[.09,.22],[.065,.25],[0,.25]], {segs:20,...cream} );
 	for(let i=0;i<5;i++) B.lathe('hard',.82,F+1.28+i*.015,7.3,[[0,0],[.12,0],[.17,.019],[.16,.025],[0,.025]],{segs:24,...cream});
-	B.lathe('hard',.82,F+1.28,8.25,[[.09,0],[.11,.1],[.09,.26],[.045,.30],[.04,.36],[0,.36]],{segs:24,...cream});
+
 	for(const z of [8.9,9.17]) B.lathe('hard',.82,F+1.8,z,[[.075,0],[.077,.24],[.07,.26],[0,.26]],{segs:16,tint:lin(0x747b70),data:HARD(.6,.01,.6,.55)});
 	B.rod('stationTimber',[.5,F+1.05,8.7],[.5,F+1.05,9.25],.018,.018,{segs:12,...wood});
 	clothSurface(B,(u,v)=>[.48+.014*Math.cos(u*35),F+1.04-v*.53,8.8+u*.33],cream);

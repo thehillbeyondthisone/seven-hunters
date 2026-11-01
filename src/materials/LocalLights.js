@@ -4,13 +4,16 @@ import { commonModule } from '../engine/render/wgsl/common.js';
 import { surfaceModule } from '../engine/render/wgsl/lighting.js';
 import { G } from '../engine/render/Frame.js';
 import { SceneLighting } from './SceneLighting.js';
+import { handLampLightModule } from '../station/HandLampLight.js';
+import { handLampShadowModule } from '../station/HandLampShadows.js';
 
 // Local lights (lanterns, lamp posts, path lights, lit windows, the boat's cabin and navigation
 // lights, the handheld flashlight) without a light object per lamp: unrolling every light into every
 // material would multiply shader size and compile time. Instead the CPU picks the
 // MAX lights nearest the camera each frame and packs them into three small uniform arrays; every
 // lit material evaluates them in ONE loop (the physical BRDF: diffuse + GGX
-// specular), inverse-square falloff with a smooth range window, optional spot cone, no shadows.
+// specular), inverse-square falloff with a smooth range window and optional spot cone.
+// The storm lantern additionally samples its geometry-based six-direction shadow atlas.
 // Skipped entirely (uniform loop bound) when no light is active (daytime without the flashlight).
 // They bypass the sun-only terms of the direct light (clouds, caustics, contact shadows).
 //
@@ -21,6 +24,7 @@ import { SceneLighting } from './SceneLighting.js';
 // Exclusions per material define: IS_WATER, NO_LOCAL_LIGHTS (the former `material.localLights = false`);
 // LOCAL_LIGHTS_CHEAP (material.localLightsCheap) = Lambert only.
 const MAX = 8;
+const ROOM_AIR_KINDS = new Set( [ 'lamp', 'kitchenLamp', 'kitchenFire', 'lantern' ] );
 const v4 = () => Array.from( { length: MAX }, () => new THREE.Vector4() );
 const params = new UniformBlock( 'LocalLightParams', {
 	pos: [ `vec4f[${ MAX }]`, v4() ], // xyz, range^2
@@ -28,6 +32,7 @@ const params = new UniformBlock( 'LocalLightParams', {
 	dir: [ `vec4f[${ MAX }]`, v4() ], // spot axis, cos(outer cone) (-2: point light)
 	boundMin: [ `vec4f[${ MAX }]`, v4() ], // optional room extent; w = edge softness (0 disables)
 	boundMax: [ `vec4f[${ MAX }]`, v4() ],
+	shape: [ `vec4f[${ MAX }]`, v4() ], // xyz = lantern up axis, w = housing profile on
 	count: [ 'i32', 0 ],
 	flashOn: [ 'f32', 0 ],
 	flashCone: [ 'vec2f', new THREE.Vector2( 0.99, 0.82 ) ], // cos inner, cos outer
@@ -53,7 +58,7 @@ export const FLASH = {
 
 export const localLightsModule = new ShaderModule( {
 	name: 'localLights',
-	deps: [ commonModule, surfaceModule ],
+	deps: [ commonModule, surfaceModule, handLampLightModule, handLampShadowModule ],
 	uniforms: params,
 	uniformName: 'localLights',
 	code: /* wgsl */`
@@ -89,7 +94,8 @@ fn hookLocalLights( s: Surface, P: vec3f, N: vec3f, V: vec3f, acc: ptr<function,
 			// architectural mask, not a replacement for the sun's shadow maps.
 			let b = localLights.boundMin[ i ];
 			var room = 1.0;
-			if ( b.w > 0.0 ) {
+			let shadowedLantern = i == 0 && localLights.shape[ i ].w > .5 && handLampShadowActive( p.xyz );
+			if ( b.w > 0.0 && ! shadowedLantern ) {
 				let outside = max( max( b.xyz - P, P - localLights.boundMax[ i ].xyz ), vec3f( 0.0 ) );
 				room = 1.0 - smoothstep( 0.0, b.w, length( outside ) );
 			}
@@ -101,7 +107,10 @@ fn hookLocalLights( s: Surface, P: vec3f, N: vec3f, V: vec3f, acc: ptr<function,
 			let under = sat( ( frame.seaLevel - min( P.y, p.y ) ) / max( abs( p.y - P.y ), 1e-3 ) );
 			let Tw = exp( -( frame.waterAbsorption + frame.waterScattering ) * ( r * under ) );
 			// the + 0.15 m^2 softens the near field of a lamp's finite size (no hot spot on the post)
-			let lightColor = c.xyz * Tw * ( win * win * spot * room / ( d2 + 0.15 ) );
+			let housing = handLampEmission( -L, localLights.shape[ i ] );
+			var visibility = 1.0;
+			if ( shadowedLantern ) { visibility = handLampShadowVisibility( P, N ); }
+			let lightColor = c.xyz * Tw * ( win * win * spot * room * housing * visibility / ( d2 + 0.15 ) );
 			let irradiance = max( dot( N, L ), 0.0 ) * lightColor;
 #if LOCAL_LIGHTS_CHEAP
 			// foliage (heavy overdraw): Lambert only
@@ -149,6 +158,14 @@ export class LocalLights {
 		this._list = [];
 		this.time = 0;
 		this.active = 0;
+		// CPU views of the exact packed lamp values, including flicker and source
+		// state. Room air copies at most four; daylight/bounce fills are excluded.
+		this.roomAirLights = [];
+		this._roomAirSlots = Array.from( { length: MAX }, ( _, i ) => ( {
+			position: uPos.array[ i ], color: uCol.array[ i ], direction: uDir.array[ i ],
+			boundMin: F.boundMin.value[ i ], boundMax: F.boundMax.value[ i ],
+			shape: F.shape.value[ i ], scatterStrength: 1,
+		} ) );
 
 	}
 
@@ -172,6 +189,7 @@ export class LocalLights {
 	update( camera, dt ) {
 
 		this.time += dt;
+		this.roomAirLights.length = 0;
 		let n = 0;
 		FLASH.on.value = this.flashlight.on && this.enabled ? 1 : 0;
 		const pos = uPos.array, col = uCol.array, dir = uDir.array;
@@ -184,6 +202,8 @@ export class LocalLights {
 		const fl = this.flashlight;
 		if ( fl.on && this.enabled ) {
 			packBounds( 0, fl.bounds );
+			F.shape.value[ 0 ].set( fl.up?.x ?? 0, fl.up?.y ?? 1, fl.up?.z ?? 0, fl.lantern ? 1 : 0 );
+			this._roomAirSlots[ 0 ].scatterStrength = fl.roomAirStrength ?? 1;
 
 			// held a little right of and below the eye, lagging the view slightly
 			camera.updateMatrixWorld();
@@ -209,6 +229,7 @@ export class LocalLights {
 			pos[ 0 ].set( fl.position.x, fl.position.y, fl.position.z, fl.range * fl.range );
 			col[ 0 ].set( fl.color.r * k, fl.color.g * k, fl.color.b * k, fl.cosInner );
 			dir[ 0 ].set( fl.dir.x, fl.dir.y, fl.dir.z, fl.cosOuter );
+			if ( fl.bounds && fl.roomAir !== false ) this.roomAirLights.push( this._roomAirSlots[ 0 ] );
 			n = 1;
 			FLASH.pos.value.copy( fl.position );
 			FLASH.dir.value.copy( fl.dir );
@@ -248,10 +269,13 @@ export class LocalLights {
 				if ( k <= 1e-4 ) continue;
 				const r = s.range;
 				packBounds( n, s.bounds );
+				F.shape.value[ n ].set( 0, 1, 0, 0 );
+				this._roomAirSlots[ n ].scatterStrength = s.roomAirStrength ?? 1;
 				pos[ n ].set( s.position.x, s.position.y, s.position.z, r * r );
 				col[ n ].set( s.color.r * k, s.color.g * k, s.color.b * k, s.cosInner ?? - 1.5 );
 				if ( s.dir ) dir[ n ].set( s.dir.x, s.dir.y, s.dir.z, s.cosOuter ?? - 2 );
 				else dir[ n ].set( 0, - 1, 0, - 2 );
+				if ( s.bounds && ( s.roomAir === true || s.roomAir !== false && ROOM_AIR_KINDS.has( s.kind ) ) ) this.roomAirLights.push( this._roomAirSlots[ n ] );
 				n ++;
 
 			}

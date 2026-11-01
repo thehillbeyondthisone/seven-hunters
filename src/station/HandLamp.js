@@ -6,7 +6,7 @@ import { createHandLampMaterials } from './HandLampMaterials.js';
 // The keeper's storm lantern: a tubular paraffin lantern of the 1890s, a tin
 // fount, a glass globe in a wire guard, a cap and a bail. It stands on the keepers' room table until taken
 // (the story's item); carried, it hangs from your hand at your side, swings as you walk, and lights all
-// round it (the app's hand lamp, LocalLights' flashlight, made a point light: see App.js).
+// round it, shaded by the cap and fount (see HandLampLight.js and App.js).
 //
 //   carried: in your hand (else standing at `rest`)
 //   lit: the wick is lit; glow warms up over a couple of seconds, flickers, and dies away when put out
@@ -46,6 +46,8 @@ export class HandLamp {
 
 		const L = buildLantern();
 		this.group = L.group;
+		// Fresh arrivals collect this lantern inside the station after the crossing.
+		this.group.traverse( object => { if ( object.material ) object.material.userData.warmup = 'station'; } );
 		this._glass = L.glass;
 		this._flame = L.flame;
 		this._flameMesh = L.flameMesh;
@@ -55,6 +57,7 @@ export class HandLamp {
 		this.glow = 0;
 		this.rest = null; // { position: Vector3 (the foot), ry }
 		this.lightPosition = new Vector3();
+		this.lightUp = new Vector3( 0, 1, 0 );
 		this._hand = new Vector3();
 		this._lastHand = null;
 		this._handVel = new Vector3();
@@ -71,15 +74,21 @@ export class HandLamp {
 
 	}
 
+	resetMotion() {
+		this._lastHand = null;
+		this._handVel.set( 0, 0, 0 );
+		this._swing.set( 0, 0 ); this._swingV.set( 0, 0 );
+	}
+
 	// show: carried and in view (not in the free camera, not at the signal lamp)
-	update( dt, camera, { show = true, motion = 1 } = {} ) {
+	update( dt, camera, { show = true, motion = 1, colliders = null } = {} ) {
 
 		this._t += dt;
 		// the wick: warms up when lit, and dies quickly when turned down
 		const target = this.lit ? 1 : 0;
 		this.glow += Math.sign( target - this.glow ) * Math.min( Math.abs( target - this.glow ), dt * ( this.lit ? 0.6 : 2.5 ) );
 		const t = this._t;
-		const flicker = 0.93 + 0.05 * Math.sin( t * 9.1 ) * Math.sin( t * 5.7 + 1.3 ) + 0.02 * Math.sin( t * 23.0 );
+		const flicker = .98 + .012 * Math.sin( t * 2.9 ) * Math.sin( t * 4.1 + 1.3 ) + .008 * Math.sin( t * 10.3 );
 		this.flicker = flicker;
 		const k = this.glow * flicker;
 		this._glass.emissive.setRGB( .006 * k, .0035 * k, .0015 * k );
@@ -100,6 +109,7 @@ export class HandLamp {
 			}
 
 			this.lightPosition.set( g.position.x, g.position.y + FLAME, g.position.z );
+			this.lightUp.set( 0, 1, 0 );
 			for ( const m of this._metals ) m.uniforms.flamePos.value.copy( this.lightPosition );
 			this._lastHand = null;
 			return;
@@ -143,6 +153,22 @@ export class HandLamp {
 		g.position.copy( hand ).addScaledVector( down, HEIGHT );
 		g.rotation.set( sf, this._yaw, sx, 'YXZ' );
 		this.lightPosition.copy( hand ).addScaledVector( down, HEIGHT - FLAME );
+		this.lightUp.copy( down ).negate();
+		// Keep the flame on the player's side of a wall when the hanging hand
+		// reaches beyond it. Move the whole lantern, so model and light agree.
+		if ( colliders ) {
+			const eye = _r.setFromMatrixPosition( camera.matrixWorld );
+			const distance = _v.subVectors( this.lightPosition, eye ).length();
+			if ( distance > 1e-4 ) {
+				_v.divideScalar( distance );
+				const hit = colliders.raycast( eye, _v, distance + .08 );
+				if ( hit < distance + .08 ) {
+					_f.copy( _v ).multiplyScalar( Math.max( .10, hit - .10 ) - distance );
+					g.position.add( _f ); this.lightPosition.add( _f );
+					this._lastHand = null;
+				}
+			}
+		}
 		for ( const m of this._metals ) m.uniforms.flamePos.value.copy( this.lightPosition );
 
 	}

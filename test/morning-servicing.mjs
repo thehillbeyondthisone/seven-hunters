@@ -64,7 +64,9 @@ for ( const familiar of [ false, true ] ) {
 	work( 'morningPour', 3 ); await use( 'morningSeal' );
 	assert.ok( Math.abs( total() - initialOil ) < 1e-8 ); assert.equal( m.state.oil.fountain, 1 );
 	stand( openAngle ); await use( 'morningPanel' ); assert.equal( m.state.panelOpen, false );
-	stand( TOWER.crankAngle ); work( 'crank', 7 );
+	// Work from the supported stair-arrival side of the hatch guard. The radial
+	// crank angle itself lies over the stair opening and cannot support a keeper.
+	place( ...s.towerTravel.top.toArray() ); work( 'crank', 7 );
 	assert.ok( s.lamp.wind >= .999 ); assert.equal( s.lamp.running, false );
 	stand( openAngle ); await use( 'morningCheck' ); assert.ok( m.state.checked );
 	stand( m.layout.angle + .55 ); await use( 'morningShelf' );

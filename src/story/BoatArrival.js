@@ -80,22 +80,19 @@ export class BoatArrival {
 		const stroke = rowingPose( this.rowingTime, this.rowingActive );
 		for ( let i = 0; i < this.oars.length; i ++ ) {
 
-			const phase = this.motionTime * 1.7, rowing = this.speed > 0.1 ? 1 : 0;
-			this.oars[ i ].rotation.y = ( i ? - 1 : 1 ) * Math.sin( phase ) * 0.28 * rowing;
-			this.oars[ i ].rotation.z = ( i ? 1 : - 1 ) * ( rowing ? Math.max( 0, Math.cos( phase ) ) * 0.08 : 0.12 );
-			this.arms[ i ].rotation.x = Math.sin( phase ) * 0.16 * rowing;
+			const side = i ? 1 : -1;
+			let dip = .12;
 			if ( this.detailed ) {
-				const side = i ? 1 : -1;
 				const sea = this.hasWater ? this.waterHeights[ i ? 4 : 3 ] : G.seaLevel.value;
 				const drop = this.oars[ i ].position.y + this.heave - sea + 0.07;
-				const dip = MathUtils.clamp( Math.asin( MathUtils.clamp( drop / 2.78, 0, 0.95 ) ) - 0.159, 0.06, 0.9 );
-				this.oars[ i ].rotation.y = side * stroke.sweep;
-				this.oars[ i ].rotation.z = -side * ( -0.045 + ( dip + 0.045 ) * stroke.immersion );
-				this.arms[ i ].rotation.x = stroke.sweep * 0.42;
+				dip = MathUtils.clamp( Math.asin( MathUtils.clamp( drop / 2.78, 0, 0.95 ) ) - 0.159, 0.06, 0.9 );
 			}
+			// One clock drives entry, pull, recovery, body lean and rowing Foley.
+			this.oars[ i ].rotation.y = side * stroke.sweep;
+			this.oars[ i ].rotation.z = -side * ( -0.045 + ( dip + 0.045 ) * stroke.immersion );
 
 		}
-		if ( this.detailed ) this.rower.rotation.x = stroke.lean;
+		this.boatman.update( this.oars, stroke.lean, this.app.camera, { dt, phase: stroke.phase, paused: this.rowingPaused } );
 		this.group.updateMatrixWorld( true );
 
 	}

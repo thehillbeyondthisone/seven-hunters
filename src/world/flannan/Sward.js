@@ -5,6 +5,7 @@ import { ShaderModule } from '../../engine/gpu/Shader.js';
 import { standard } from '../../materials/Materials.js';
 import { mulberry32, Noise2D, smoothstep } from '../../util/Noise.js';
 import { FlannanSward as LegacySward } from './SwardLegacy.js';
+import { acquireMaritimeTurf, buildTurfShelter, turfShelterAt } from './MaritimeTurf.js';
 
 // Blade taper, natural curvature and height-dependent wind adapted from Terra's MIT grass shaders
 // by Mike Linkovich (2016–2017). See docs/licenses/terra-grass.txt. Native WGSL, no Terra assets.
@@ -73,19 +74,25 @@ export function swardPatch( roots, level, profile = SWARD ) {
 
 // Conservative mask erosion leaves a margin even after bilinear filtering: roots stay off paved
 // paths / building pads, cliffs, water and bare outcrops. Full island domain, no hard meadow rectangle.
-export function buildSwardMask( terrain, footprints, seed = 1901 ) {
+export function buildSwardMask( terrain, footprints, seed = 1901, exposure = null ) {
 	const { res, texel, origin, heights, rock } = terrain, data = new Uint8Array( res * res );
 	const noise = new Noise2D( seed ), n = new Vector3();
+	exposure ||= buildTurfShelter( terrain );
 	for ( let j = 1; j < res - 1; j ++ ) for ( let i = 1; i < res - 1; i ++ ) {
 		const k = j * res + i, y = heights[ k ];
 		if ( y < 8 || y > 100 || rock[ k ] > .38 ) continue;
 		const x = origin + ( i + .5 ) * texel, z = origin + ( j + .5 ) * texel;
-		if ( footprints.some( f => Math.hypot( x - f.x, z - f.z ) < f.r + 1.05 ) ) continue;
-		if ( terrain.pathDistance( x, z ) < 1.05 ) continue;
+		const buildingEdge = footprints.reduce( ( d, f ) => Math.min( d, Math.hypot( x - f.x, z - f.z ) - f.r ), Infinity );
+		const pathEdge = terrain.pathDistance( x, z );
+		if ( buildingEdge < 1.05 || pathEdge < 1.05 ) continue;
 		terrain.normalAt( x, z, n );
 		if ( n.y < .82 ) continue;
 		const patch = noise.noise( x / 9, z / 9 ) * .5 + .5;
-		const density = ( .62 + patch * .32 ) * smoothstep( .82, .96, n.y ) * ( 1 - smoothstep( .12, .38, rock[ k ] ) );
+		const shelter = turfShelterAt( exposure, x, z ).growth;
+		// Feather outward from the original safety margin; never invade the path/pad.
+		const wear = smoothstep( 1.05, 2.0 + patch * .7, pathEdge ) * smoothstep( 1.05, 2.0, buildingEdge );
+		const density = ( .62 + patch * .32 ) * smoothstep( .82, .96, n.y ) * ( 1 - smoothstep( .12, .38, rock[ k ] ) )
+			* ( .88 + shelter * .12 ) * wear;
 		data[ k ] = Math.round( density * 255 );
 	}
 	return data;
@@ -98,7 +105,8 @@ export class FlannanSward {
 		this.terrain = terrain;
 		this.profile = profile;
 		this.group = new Group(); this.group.name = 'Flannan maritime turf · Terra blades';
-		this.mask = buildSwardMask( terrain, village.getFootprints(), seed );
+		this.turf = acquireMaritimeTurf( terrain, village.colliders );
+		this.mask = buildSwardMask( terrain, village.getFootprints(), seed, this.turf );
 		this.heightTex = new Texture( { label: 'swardHeights', width: terrain.res, height: terrain.res, format: 'r32float', data: terrain.heights } );
 		this.maskTex = new Texture( { label: 'swardMask', width: terrain.res, height: terrain.res, format: 'r8unorm', data: this.mask } );
 		this.material = swardMaterial( this );
@@ -163,13 +171,13 @@ export class FlannanSward {
 	dispose() {
 		this.group.removeFromParent();
 		for ( const l of this.levels ) l.geometry.dispose();
-		this.material.dispose(); this.heightTex.destroy(); this.maskTex.destroy();
+		this.material.dispose(); this.heightTex.destroy(); this.maskTex.destroy(); this.turf.release();
 	}
 }
 
 function swardMaterial( field ) {
 	const t = field.terrain, p = field.profile, f = x => Number( x ).toFixed( 6 );
-	const bladeModule = new ShaderModule( { name: 'maritimeSward', code: /* wgsl */`
+	const bladeModule = new ShaderModule( { name: 'maritimeSward', deps: [ field.turf.module ], code: /* wgsl */`
 fn swHash( p: vec2f ) -> f32 { return fract( sin( dot( p, vec2f( 127.1, 311.7 ) ) ) * 43758.5453 ); }
 // Progressive density and width compensation are continuous BEFORE each cell's LOD swap.
 fn swDensity( d: f32 ) -> f32 {
@@ -177,21 +185,20 @@ fn swDensity( d: f32 ) -> f32 {
 }
 struct SwBlade { position: vec3f, normal: vec3f };
 fn swBlade( xz: vec2f, ground: f32, shape: vec4f, yaw: f32, across: f32, h: f32, rank: f32,
-	density: f32, time: f32, cam: vec3f ) -> SwBlade {
+	density: f32, environment: vec4f, flat: f32, time: f32, cam: vec3f ) -> SwBlade {
 	let d = length( xz - cam.xz );
 	let fraction = swDensity( d );
 	let keep = ( 1.0 - smoothstep( fraction - .02, fraction, rank ) ) * ( 1.0 - smoothstep( ${ f( p.far * 2 / 3 ) }, ${ f( p.far ) }, d ) );
 	let present = smoothstep( swHash( xz * 7.13 ) - .025, swHash( xz * 7.13 ) + .025, density ) * select( 0.0, 1.0, density > .001 );
-	let growth = .92 + .18 * sin( xz.x * .21 + sin( xz.y * .17 ) );
-	let height = shape.y * growth;
+	let growth = ( .70 + .20 * environment.x + .10 * environment.z ) * mix( .72, 1.0, smoothstep( .12, .65, density ) );
+	let height = shape.y * growth * mix( 1.0, .63, flat );
 	let front = vec2f( -sin( yaw ), cos( yaw ) );
 	let side = vec3f( cos( yaw ), 0.0, sin( yaw ) );
-	let gust = .5 + .28 * sin( dot( xz, vec2f( .19, .12 ) ) - time * 1.1 )
-		+ .22 * sin( dot( xz, vec2f( -.11, .27 ) ) - time * .67 );
-	let wind = min( frame.windSpeed / 18.0, 1.4 );
+	let gust = maritimeGust( xz, time );
+	let wind = min( frame.windSpeed / 18.0, 1.4 ) * ( 1.0 - environment.y * .73 );
 	let flutter = sin( time * 4.0 + yaw * .2 * height + xz.x + xz.y );
 	// Terra's cubic taper and increasing lean/curve. Direction normalisation preserves blade length.
-	let angle = shape.z + ( shape.w * 2.0 + .07 * flutter ) * h;
+	let angle = shape.z + flat * .72 + ( shape.w * 2.0 + .07 * flutter ) * h;
 	let natural = vec3f( front.x * sin( angle ), cos( angle ), front.y * sin( angle ) );
 	let direction = normalize( natural + vec3f( frame.windDir.x, 0.0, frame.windDir.y ) * ( h * wind * ( .24 + gust * .62 ) ) );
 	let width = shape.x * min( 3.2, inverseSqrt( fraction ) ) * ( 1.0 - h * h * h );
@@ -215,25 +222,30 @@ fn swBlade( xz: vec2f, ground: f32, shape: vec4f, yaw: f32, across: f32, h: f32,
 	let ground = mix( mix( textureLoad( swardHeights, ij, 0 ).r, textureLoad( swardHeights, ij + vec2i( 1, 0 ), 0 ).r, w.x ),
 		mix( textureLoad( swardHeights, ij + vec2i( 0, 1 ), 0 ).r, textureLoad( swardHeights, ij + vec2i( 1, 1 ), 0 ).r, w.x ), w.y );
 	let mask = textureSampleLevel( swardMask, smpLinearClamp, ( xz - ${ f( t.origin ) } ) / ${ f( t.size ) }, 0.0 ).r;
+	let shelter = maritimeShelterAt( xz );
+	let growthShelter = maritimeGrowthShelter( shelter );
+	let tuft = maritimeTuft( xz );
+	let dry = maritimeDryness( xz, growthShelter );
+	let environment = vec4f( growthShelter, maritimeWindShelter( shelter, frame.windDir ), tuft, dry );
+	let density = mask * mix( .87, 1.0, smoothstep( .14, .82, tuft ) );
+	let flat = smoothstep( .88, .99, swHash( xz * 2.31 ) ) * smoothstep( .48, .78, dry );
 	let yaw = v.aRoot.z + swHash( v.iCell.xy + 17.0 ) * 6.283185;
-	let blade = swBlade( xz, ground, v.aShape, yaw, v.position.x, v.uv.y, v.aRoot.w, mask, frame.time, frame.cameraPos );
+	let blade = swBlade( xz, ground, v.aShape, yaw, v.position.x, v.uv.y, v.aRoot.w, density, environment, flat, frame.time, frame.cameraPos );
 	v.useWorld = true; v.worldPos = blade.position; v.worldNormal = blade.normal;
 #if PASS_MAIN
-	let prev = swBlade( xz, ground, v.aShape, yaw, v.position.x, v.uv.y, v.aRoot.w, mask, frame.time - frame.dt, frame.prevCameraPos );
+	let prev = swBlade( xz, ground, v.aShape, yaw, v.position.x, v.uv.y, v.aRoot.w, density, environment, flat, frame.time - frame.dt, frame.prevCameraPos );
 	v.prevWorldPos = prev.position;
 #endif
-	let tonePatch = .5 + .5 * sin( xz.x * .073 + sin( xz.y * .091 ) * 2.0 );
-	o.vSward = vec4f( v.uv.y, swHash( xz * 2.31 ), tonePatch, v.uv.x );
+	o.vSward = vec4f( v.uv.y, swHash( xz * 2.31 ), dry, v.uv.x );
 `,
 		surface: /* wgsl */`
-	let h = in.vs.vSward.x; let rnd = in.vs.vSward.y; let tonePatch = in.vs.vSward.z;
-	// Linear colours: subdued living olive mixed with old straw. No ornamental flowers / seed heads.
-	let green = mix( vec3f( .105, .142, .045 ), vec3f( .18, .205, .075 ), tonePatch );
-	let straw = vec3f( .29, .245, .115 );
-	let dry = smoothstep( .70, .94, rnd + tonePatch * .15 );
-	let tone = mix( green, straw, dry * .7 );
-	let root = tone * vec3f( .42, .40, .32 );
-	s.albedo = mix( root, tone, smoothstep( .02, .85, h ) ) * ( .88 + rnd * .24 );
+	let h = in.vs.vSward.x; let rnd = in.vs.vSward.y; let dry = in.vs.vSward.z;
+	let baseTone = maritimeTurfTone( dry );
+	// A few old leaves sit low in coherent patches; never ornamental heads.
+	let oldLeaf = smoothstep( .88, .99, rnd ) * smoothstep( .48, .78, dry );
+	let tone = mix( baseTone, vec3f( .225, .193, .107 ), oldLeaf * .48 );
+	let root = baseTone * vec3f( .56, .53, .46 );
+	s.albedo = mix( root, tone, smoothstep( .0, .7, h ) ) * ( .92 + rnd * .16 );
 	// A restrained centre rib gives Terra's leaf detail without an alpha / texture card.
 	s.albedo *= 1.0 + pow( 1.0 - abs( in.vs.vSward.w * 2.0 - 1.0 ), 6.0 ) * .09;
 	s.ao = mix( .48, 1.0, smoothstep( 0.0, .8, h ) );

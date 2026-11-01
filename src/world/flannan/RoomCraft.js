@@ -47,6 +47,7 @@ export function roomCraft( B, name, x = 0, y = 0, z = 0, options = {}, overrides
 export function roomLampGlassMaterial() {
 	const material = physical( { color:0xdde5dd, roughness:.06, ior:1.45, transparent:true, opacity:.12, side:'double', depthWrite:false, velocityWeight:0 } );
 	material.name = 'room-lamp-clear-chimneys';
+	material.userData.warmup = 'station';
 	material.surface = `
 		let grazing = pow(1.0 - abs(dot(normalize(in.N), normalize(in.V))), 3.0);
 		s.albedo = mat.color;
@@ -59,6 +60,7 @@ export function roomLampGlassMaterial() {
 export function roomLampFlameMaterial() {
 	const material = physical( { transparent:true, depthWrite:false, side:'double', defines:{NO_LOCAL_LIGHTS:1} } );
 	material.name = 'room-lamp-wicks';
+	material.userData.warmup = 'station';
 	material.surface = `
 		let nightOn = smoothstep(0.15, 0.75, frame.night);
 		let flicker = 0.92 + 0.08 * sin(frame.time * 8.3) * sin(frame.time * 5.7);

@@ -1,6 +1,12 @@
+import { GateWorkProps } from '../world/flannan/GateWorkProps.js';
 import { Vector3, MathUtils } from '../engine/math/index.js';
 import { Interact } from './Interact.js';
 import { StoryUI } from './StoryUI.js';
+import { ArrivalConversation } from './ArrivalConversation.js';
+import { GuidedSignal } from './GuidedSignal.js';
+import { FirstWatchRevision } from './FirstWatchRevision.js';
+import { upkeepHours } from './WatchPacing.js';
+import { StoryAudioCues } from './StoryAudioCues.js';
 import { installArchiveDocuments } from './ArchiveDocuments.js';
 import { BoatArrival, CROSSING_SECONDS, DEPARTURE_VISIBLE_SECONDS } from './BoatArrival.js';
 import { IslandReveal } from './IslandReveal.js';
@@ -16,7 +22,10 @@ import { TowerTravel } from './TowerTravel.js';
 import { KeeperSafety } from '../player/KeeperSafety.js';
 import { ReturningLight, isletLightPosition } from './ReturningLight.js';
 import { StormReview } from './StormReview.js';
-import { storyGuidance } from './Guidance.js';
+import { LaterWatch } from './LaterWatch.js';
+import { Photography } from './Photography.js';
+import { CutsceneReview } from './CutsceneReview.js';
+import { storyGuidance, lanternPickupGuidance } from './Guidance.js';
 import { Watcher } from './Watcher.js';
 import * as S from './Script.js';
 import { WARN } from '../station/Lamp.js';
@@ -74,12 +83,13 @@ export class Story {
 
 		this.app = app;
 		this.saveKey = app.qs?.has( 'interiorPreview' ) ? 'sevenhunters.interior-preview.v1' : app.qs?.has( 'unpackingPreview' ) ? 'sevenhunters.unpacking-preview.v1' : app.qs?.has( 'firstWatchPreview' ) ? 'sevenhunters.first-watch-preview.v1' : app.isArrivalAtmosphere ? 'sevenhunters.arrival-atmosphere-preview.v1' : app.qs?.has( 'keeperPreview' ) ? 'sevenhunters.keeper-duty-preview.v1' : app.qs?.has( 'islandRevealPreview' ) ? 'sevenhunters.island-reveal-preview.v1' : app.qs?.has( 'chapterPreview' ) ? `sevenhunters.chapter-preview.${ app.qs.get( 'chapterPreview' ) || 'kitchen' }.v1` : app.qs?.has( 'arrivalPreview' ) ? 'sevenhunters.arrival-preview.v1' : SAVE_KEY;
-		if ( app.qs?.has( 'weatherObservationsPreview' ) ) this.saveKey = `sevenhunters.weather-observations-preview.${ app.qs.get( 'weatherObservationsPreview' ) === '21' ? '21' : '18' }.v1`;
+		if ( app.qs?.has( 'weatherObservationsPreview' ) ) this.saveKey = `sevenhunters.weather-observations-preview.${ [ '21', '33' ].includes( app.qs.get( 'weatherObservationsPreview' ) ) ? app.qs.get( 'weatherObservationsPreview' ) : '18' }.v1`;
 		if ( app.qs?.has( 'morningPreview' ) ) this.saveKey = `sevenhunters.morning-servicing-preview.${ app.qs.get( 'morningPreview' ) === 'familiar' ? 'familiar' : 'first' }.v1`;
 		if ( app.qs?.has( 'signalLampPreview' ) ) this.saveKey = 'sevenhunters.signal-lamp-preview.v1';
 		if ( app.qs?.has( 'returningLightPreview' ) ) this.saveKey = 'sevenhunters.returning-light-preview.v1';
 		if ( app.qs?.has( 'stormPreview' ) ) this.saveKey = 'sevenhunters.storm-preview.v1';
 		if ( app.qs?.has( 'coastPreview' ) ) this.saveKey = 'sevenhunters.coast-preview.v1';
+		if ( app.qs?.has( 'laterWatchPreview' ) ) this.saveKey = `sevenhunters.later-watch-preview.${app.qs.get('laterWatchPreview')||'photography'}.v1`;
 		const st = app.village.station;
 		this.station = st;
 		this.moving = st.moving;
@@ -164,6 +174,16 @@ export class Story {
 		this.towerTravel.install();
 		this.returningLight = new ReturningLight( this ); this.returningLight.install();
 		this.storm = new StormReview( this ); this.storm.install();
+		this.photography = new Photography( this ); this.photography.install();
+		this.later = new LaterWatch( this ); this.later.install();
+		this.cutsceneReview = new CutsceneReview( this );
+		this.arrivalConversation = new ArrivalConversation( this );
+		this.guidedSignal = new GuidedSignal( this );
+		this.firstWatch = new FirstWatchRevision( this ); this.firstWatch.install();
+		this.gateWork = new GateWorkProps( this );
+		this.audioCues = new StoryAudioCues( this );
+		this.ui.onPaper = () => this.audioCues.play( 'paper' );
+		this.onStoryCue = name => name === 'morning-preparation-end' ? this.audioCues.stop() : this.audioCues.play( name );
 		if ( app.coastal ) app.keeperSafety = new KeeperSafety( app, this );
 
 	}
@@ -179,11 +199,17 @@ export class Story {
 
 	// ---------------------------------------------------------------- the clock
 
+	get cinematic() { return !! ( this.keeper?.cinematic || this.firstWatch?.cutscene.active || this.storm?.cutscene?.active || this.next?.cinematic ); }
+
+	get signalCanLeave() { return !! this.signal && ! this.guidedSignal?.active && ! [ 'sending', 'replying' ].includes( this.watcher.state ) && ! this.ui.open; }
+
 	get hour() {
 
 		return this.h;
 
 	}
+
+	get clockRate() { return this.lamp.lit || this.h > 24 ? RATE_NIGHT : RATE_DAY; }
 
 	_applyClock() {
 
@@ -198,7 +224,8 @@ export class Story {
 
 		const date = new Date( Date.UTC( 1901, 0, 3 + Math.floor( h / 24 ) ) );
 		const day = date.getUTCDate(), suffix = day === 1 || day === 21 || day === 31 ? 'st' : day === 2 || day === 22 ? 'nd' : day === 3 || day === 23 ? 'rd' : 'th';
-		return `${ [ 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday' ][ date.getUTCDay() ] } ${ day }${ suffix } January 1901`;
+		const month=['January','February','March','April','May','June','July','August','September','October','November','December'][date.getUTCMonth()];
+		return `${ [ 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday' ][ date.getUTCDay() ] } ${ day }${ suffix } ${month} ${date.getUTCFullYear()}`;
 
 	}
 
@@ -243,6 +270,7 @@ export class Story {
 			} );
 			if ( v !== 'new' ) {
 
+				if ( saved.beat !== 'crossing' ) await this.app.ensureSceneReady?.();
 				this._restore( saved );
 				this.paused = false;
 				return;
@@ -269,6 +297,7 @@ export class Story {
 			return;
 		}
 		if ( this.app.qs?.has( 'returningLightPreview' ) ) { await this.returningLight.begin( true ); return; }
+		if ( this.app.qs?.has( 'laterWatchPreview' ) ) { await this.later.begin( this.app.qs.get('laterWatchPreview') || 'photography' ); return; }
 		if ( this.app.qs?.has( 'stormPreview' ) || this.app.qs?.has( 'coastPreview' ) ) { await this.storm.begin( !! this.app.qs?.has( 'coastPreview' ) ); return; }
 		if ( this.morning.enabled ) { await this.morning.start(); return; }
 		if ( this.app.qs?.has( 'keeperPreview' ) ) { await this._previewKeeper(); return; }
@@ -328,7 +357,7 @@ export class Story {
 	}
 
 	async _previewWeatherObservations() {
-		const app = this.app, p = app.player, at = app.qs.get( 'weatherObservationsPreview' ) === '21' ? 21 : 18;
+		const app = this.app, p = app.player, at = [ '21', '33' ].includes( app.qs.get( 'weatherObservationsPreview' ) ) ? Number( app.qs.get( 'weatherObservationsPreview' ) ) : 18;
 		this.h = at; this.arrival.group.visible = false;
 		this.flags.landed = this.flags.islandRevealSeen = this.flags.boardRead = true;
 		this.flags.roomArrival.done = true; this.flags.unpacking.stage = 5;
@@ -337,7 +366,12 @@ export class Story {
 		this.flags.litAt = S.SUNSET;
 		if ( at === 21 ) this.obs[ 18 ] = { wind: 'Fresh breeze, SW', sea: 'Moderate', visibility: 'Earlier round already entered for this preview' };
 		this.keeper.sync(); this.unpacking.sync();
-		this.lamp.wind = .95; this.lamp.ignite(); this.lamp.start(); this.lamp.glow = this.lamp.speed = 1;
+		this.lamp.wind = .95;
+		if ( at === 33 ) {
+			this.lamp.extinguish(); this.lamp.stop();
+			this.flags.firstNightComplete = 32.9;
+			Object.assign( this.next.state, { started: true, crate: true, fireLit: true, weatherIntroduced: true } );
+		} else { this.lamp.ignite(); this.lamp.start(); this.lamp.glow = this.lamp.speed = 1; }
 		this.hand.carried = this.hand.lit = true; this.hasTelescope = true; this.moving.telescope.visible = false;
 		this.watcher.state = 'done';
 		for ( const d of this.doors.house ) d.target = d.open = 1;
@@ -354,8 +388,9 @@ export class Story {
 		if ( location === 'slate' ) { p.position.set( ROOM.slate.x, TOWER.floor, ROOM.slate.z+.9 ); target = ROOM.slate; }
 		if ( target ) { const dx = target.x-p.position.x, dz = target.z-p.position.z; p.yaw = Math.atan2(-dx,-dz); p.pitch = Math.atan2(target.y-p.position.y-1.62,Math.hypot(dx,dz)); }
 		p._camY = null; p.update( 0 ); this._applyClock(); app.cameraCut?.();
-		await this.ui.card( [ 'Read the barometer in the room and the shaded thermometer outside the north wall.', 'Observe the roof vane from the yard, then the sea and landmark bearings from the balcony. Return to chalk the slate.', 'This study has a separate save. Instrument designs, placement and game weather are reconstructions.' ], { kicker: S.TITLE, title: `${ at === 18 ? 'Six' : 'Nine' } o’clock observations` } );
-		this.setBeat( 'evening' ); this.paused = false;
+		this.setBeat( at === 33 ? 'd2weather' : 'evening' );
+		await this.ui.card( [ 'Read the barometer in the room and the shaded thermometer outside the north wall.', 'Observe the roof vane from the yard. Then step onto the balcony, observe the sea and identify Gallan Head and Eilean Tighe. Return to chalk the slate.', 'This study has a separate save. Instrument designs, placement and game weather are reconstructions.' ], { kicker: S.TITLE, title: at === 33 ? 'Day two · Morning weather and the lookout' : `${ at === 18 ? 'Six' : 'Nine' } o’clock observations` } );
+		this.paused = false;
 	}
 
 	async _previewUnpacking() {
@@ -417,12 +452,25 @@ export class Story {
 	async _disembark() {
 
 		if ( this.beat !== 'crossing' || ! this.arrival.ready || this.paused || this.ui.open ) return;
+		if ( this.arrivalConversation.advance() ) return;
 		this.paused = true;
-		await this.ui.fade( 'A hand on the stone. Your bag follows you up.' );
+		try {
+
+			await this.ui.fade( 'A hand on the stone. Your bag follows you up.', 1600, () => this.app.ensureSceneReady?.() );
+
+		} catch ( error ) {
+
+			console.error( 'Station warmup failed:', error );
+			await this.ui.card( [ 'The station could not be prepared. Reload the page to try again; your watch is still aboard the boat.' ], { title: 'Waiting at the landing' } );
+			this.paused = false;
+			return;
+
+		}
 		this.h = START;
 		this._placeAtLanding();
 		this.arrival.departure = 0;
-		this.row( this.h, 'Landed at the east landing from the Hesperus. The boat could not remain; the Principal Keeper and the Occasional Keeper still aboard.' );
+		this.arrivalConversation.depart();
+		this.row( this.h, 'Landed at the east landing from Hesperus. The boat went back. Instructions await at the station.' );
 		this.flags.landed = true;
 		this.setBeat( 'climb' );
 		this.paused = false;
@@ -464,15 +512,19 @@ export class Story {
 
 	// the most pressing thing to do now
 	goal() {
+		if ( this.later?.active ) return this.later.goal();
 		if ( this.storm?.active ) return this.storm.goal();
 		if ( this.returningLight?.active ) return this.returningLight.goal();
 		if ( this.morning?.enabled ) return this.morning.goal();
+		const firstWatchGoal = this.firstWatch?.goal();
+		if ( firstWatchGoal ) return firstWatchGoal;
 		const keeperGoal = this.keeper?.goal();
 		if ( keeperGoal ) return keeperGoal;
 
 		if ( this.next?.active ) return this.next.goal();
 		const b = this.beat;
 		if ( b === 'intro' || b === 'end' ) return '';
+		if ( b === 'crossing' && this.arrivalConversation?.active ) return this.app.isMobile ? 'Listen to the boatman. Read papers opens the packet; Next remark continues.' : 'Listen to the boatman. B opens the papers; Enter continues one remark.';
 		if ( b === 'crossing' && this.app.isMobile ) return this.arrival.ready ? 'Tap Step ashore to leave the boat.' : 'Read your papers, or tap Go to landing.';
 		if ( b === 'crossing' ) return this.arrival.ready ? 'Enter · Step ashore. B · Read your papers.' : S.GOALS.crossing;
 		if ( this.lamp.lit && this.lamp.wind < WARN && this.lamp.running ) return S.GOALS.bell;
@@ -481,9 +533,10 @@ export class Story {
 		const due = this._obsDue();
 		if ( due && b !== 'dawn' && b !== 'journal' ) return this.weatherObservations.goal();
 		if ( this.watcher.state === 'calling' || this.watcher.state === 'waiting' || ( this.watcher.state === 'steady' && this.lamp.lit ) ) return this.hasTelescope ? S.GOALS.answer : S.GOALS.gallan;
+		if ( this.watcher.talking && ! this.signal ) return 'Return to the balcony signal lamp to continue the exchange. Your place is kept.';
 		const unpackingGoal = this.unpacking?.goal();
 		if ( unpackingGoal ) return unpackingGoal;
-		if ( b === 'haar' ) return this.islet ? 'Keep watch on the balcony. Look out over the sea.' : 'Sea fog has arrived. Step onto the balcony outside the lantern and keep watch.';
+		if ( b === 'haar' ) return 'The far shore is lost in fog. Examine the sea from the east balcony rail.';
 		if ( b === 'light' && this._inLantern() ) return this.h < S.SUNSET - 0.25 ? S.GOALS.lightWait : S.GOALS.lightHere;
 		if ( b === 'machine' && this._inLantern() ) return S.GOALS.machineHere;
 		return S.GOALS[ b ] || '';
@@ -498,9 +551,14 @@ export class Story {
 	}
 
 	_obsDue() {
+		if ( this.later?.active ) return 0;
 		if ( this.returningLight?.active || this.storm?.active ) return 0;
 
-		if ( this.next?.active ) return 0;
+		if ( this.next?.active ) return this.next.observationDue();
+		// The opening watch teaches the light and contact with Cate. The full
+		// observation routine starts in daylight on day two; old preview URLs
+		// retain their own isolated six/nine o'clock rounds.
+		if ( ! this.app.qs?.has( 'weatherObservationsPreview' ) ) return 0;
 		for ( const at of [ 18, 21 ] ) if ( this.h >= at - 0.1 && ! this.obs[ at ] && this.h < at + 2.5 && this.lamp.lit ) return at;
 		return 0;
 
@@ -519,10 +577,11 @@ export class Story {
 
 		// the gate and the doors
 		I.add( { id: 'gate', at: new Vector3( STATION.eastGate.x - 0.25, STATION.yard + 0.8, STATION.eastGate.z ), reach: 2.4, size: 1.3, ...door( 'gate', 'gate' ) } );
-		I.add( { id: 'southGate', at: new Vector3( STATION.southGate.x, STATION.yard+.8, STATION.southGate.z-.25 ), reach:2.4,size:1.1,
+		const southGate = I.add( { id: 'southGate', at: new Vector3( STATION.southGate.x, STATION.yard+.8, STATION.southGate.z-.25 ), reach:2.4,size:1.1,
 			when:()=>this.beat!=='storm-prepare'||!!this.storm?.state.secured,
-			text:()=>this.doors.gate[1].target>.5?'Shut the south gate':'Open the south gate',
-			use:()=>{const d=this.doors.gate[1];d.target=d.target>.5?0:1;this.sound?.door('gate',d.target,d.center);this.save();} } );
+			text:()=>this.doors.southGate[0].target>.5?'Close the south gate and wrap the rope':this.flags.gateRopes?.[1]?.secured?'Unwrap the rope and open the south gate':'Open the south gate',
+			use:()=>{const ds=this.doors.southGate;if(ds[0].target>.5){this.firstWatch.secureGate(1,{reason:'routine'});this.toast('The south gate is shut. I have drawn the rope tight.',4200);return;}for(const d of ds)d.target=1;this.firstWatch.openGate(1);this.sound?.door('gate',1,ds[0].center);this.save();} } );
+		Object.defineProperty( southGate, 'hold', { configurable: true, get: () => this.doors.southGate[0].target > .5 ? 1.2 : 0 } );
 		I.add( { id: 'houseDoor', at: new Vector3( R.door.x - 0.1, T.floor + 1.1, R.door.z ), reach: 2.0, size: 0.6, ...door( 'house' ) } );
 		I.add( { id: 'galleryDoor', at: () => _v.set( Math.cos( T.galleryDoor ) * 2.28, T.deck + 1.0, Math.sin( T.galleryDoor ) * 2.28 ), reach: 1.8, size: 0.45, ...door( 'gallery' ) } );
 
@@ -545,10 +604,11 @@ export class Story {
 		I.add( { id: 'clock', at: R.clock, size: 0.2, text: 'The clock', use: () => this.toast( `The clock says ${ clockText( this.h ) }.` ) } );
 		I.add( { id: 'oilskins', at: R.oilskins, size: 0.45, text: 'The oilskins', use: read( S.NOTES.oilskins ) } );
 		I.add( { id: 'stove', at: R.stove, size: 0.4, text: 'The stove', use: read( S.NOTES.stove ) } );
-		if ( R.bag ) I.add( { id: 'bag', at: R.bag, size: .28, text: 'Your bag', use: read( S.NOTES.bag ) } );
-		I.add( { id: 'westDoor', at: R.westDoor, size: 0.5, text: 'The bedrooms', use: read( S.NOTES.westDoor ) } );
+		if ( R.bag ) I.add( { id: 'bag', at: R.bag, size: .5, halfSize: new Vector3( .49, .23, .25 ), reach: 2.1,
+			text: 'Your bag', use: read( S.NOTES.bag ) } );
+		I.add( { id: 'westDoor', at: R.westDoor, size: 0.5, when:()=>!this.later?.active, text: 'The bedrooms', use: read( S.NOTES.westDoor ) } );
 		I.add( { id: 'kitchenDoor', at: R.kitchenDoor, size: 0.5, text: 'The kitchen', use: read( S.NOTES.kitchenDoor ) } );
-		I.add( { id: 'handLamp', at: () => _v.copy( this.hand.rest.position ).setY( this.hand.rest.position.y + 0.15 ), size: 0.22, when: () => ! this.hand.carried, text: 'Take the storm lantern', use: () => {
+		I.add( { id: 'handLamp', at: () => _v.copy( this.hand.rest.position ).setY( this.hand.rest.position.y + 0.15 ), size: 0.32, reach: 2.2, when: () => ! this.hand.carried, text: 'Take the storm lantern', use: () => {
 
 			this.hand.carried = true;
 			this.toast( this.app.isMobile ? 'Open Tools and tap Lantern to light it or put it out.' : 'L lights the lantern and puts it out.', 5000 );
@@ -565,12 +625,18 @@ export class Story {
 			use: () => this._useLens(),
 		} );
 		I.add( { id: 'crank', at: T.crank, reach: 1.7, size: 0.3, hold: 1e9,
+			when: () => ! this.keeper?.linear || this.keeper.allows( 'crank' ),
 			text: () => ( this.lamp.wind >= 0.999 ? 'The machine is fully wound' : 'Wind the machine' ),
 			progress: () => this.lamp.wind,
+			// keeper duties and the morning study wind at half the story's pace (KeeperDuties.wind)
+			rate: () => ( this.keeper?.active || this.morning?.enabled ) && ! this.storm?.active && ! this.returningLight?.active ? 0.1 : 0.2,
+			detail: () => ( this.lamp.wind >= 0.999 ? 'Fully raised. Release E.' : 'Raises the weight whose slow fall turns the lens' ),
 			onHold: ( dt ) => this._wind( dt ),
 			onRelease: () => this.sound && this.sound.ratchet( false ),
 		} );
-		I.add( { id: 'telescope', at: T.telescope, size: 0.3, when: () => ! this.hasTelescope, text: 'Take the telescope', use: () => {
+		// Approach the instrument on its sill; the stair arrival is a place to
+		// take in the lantern before choosing something to use.
+		I.add( { id: 'telescope', at: T.telescope, reach: 1.0, size: 0.2, when: () => ! this.hasTelescope, text: 'Take the telescope', use: () => {
 
 			this.hasTelescope = true;
 			this.moving.telescope.visible = false;
@@ -583,6 +649,19 @@ export class Story {
 			when: () => this.watcher.state !== 'away' && this.watcher.state !== 'done',
 			text: () => ( this.hasTelescope ? 'Signal Gallan Head' : 'The signal lamp (you will want the telescope)' ),
 			use: () => ( this.hasTelescope ? this._enterSignal() : this.toast( 'The telescope is on the lantern\'s sill, inside.' ) ),
+		} );
+		if ( T.daySignals ) I.add( { id: 'daySignals', at: T.daySignals.at, reach: 2.1, size: .28,
+			text: 'Examine the daylight signals',
+			when: () => ! [ 'intro', 'crossing', 'end' ].includes( this.beat )
+				&& Math.abs( this.app.player.position.y - T.deck ) < .35
+				&& Math.hypot( this.app.player.position.x, this.app.player.position.z ) > T.gallery.ledgeOuter,
+			use: () => this.ui.read( {
+				title: 'A request across the water',
+				body: [
+					'The dark discs are lashed beneath the rail, their lines made fast. Shown on the poles projecting from the balcony, their number and position ask the watchers on Lewis for assistance.',
+					'They stay stowed until they are needed. There is no daily all-well signal; haze can hide the island from the shore for days at a time.',
+				],
+			} ),
 		} );
 
 		// out on the island
@@ -608,20 +687,18 @@ export class Story {
 		const open = ds[ 0 ].target > 0.5 ? 0 : 1;
 		for ( const d of ds ) d.target = open;
 		if ( this.sound ) this.sound.door( name, open, ds[ 0 ].center );
-		if ( name === 'gate' && this.beat === 'gate' ) {
+		if ( name === 'gate' && open ) this.firstWatch?.openGate( 0 );
 
-			this.flags.gateSecured = this.h;
-			this.setBeat( 'night' );
-
-		}
 		this.save();
 
 	}
 
 	_lensText() {
+		if ( this.later?.active ) return this.later.lensText();
 		if ( this.storm?.active ) return this.storm.lensText();
 		if ( this.returningLight?.active ) return this.returningLight.lensText();
 		if ( this.morning?.enabled ) return this.lamp.lit ? 'Extinguish the lamp and stop the machine' : '';
+		if ( this.keeper?.linear ) return this.keeper.active ? this.keeper.lensText() : '';
 		if ( this.keeper?.active ) {
 			const text = this.keeper.lensText();
 			if ( text ) return text;
@@ -644,9 +721,11 @@ export class Story {
 	}
 
 	async _useLens() {
+		if ( this.later?.active ) return this.later.useLens();
 		if ( this.storm?.active ) return this.storm.useLens();
 		if ( this.returningLight?.active ) return this.returningLight.useLens();
 		if ( this.morning?.enabled ) return this.morning.act( 'extinguish' );
+		if ( this.keeper?.linear && ! this.keeper.allows( 'lens' ) ) return;
 		if ( this.keeper?.active && await this.keeper.useLens() ) return;
 
 		if ( this.next?.active ) return this.next.useLens();
@@ -700,9 +779,10 @@ export class Story {
 	}
 
 	_wind( dt ) {
-		const later = this.storm?.active ? this.storm : this.returningLight?.active ? this.returningLight : null;
+		const later = this.storm?.active ? this.storm : this.returningLight?.active ? this.returningLight : this.later?.active ? this.later : null;
 		if ( later ) { this.lamp.addWind( dt / 5 ); this.sound?.ratchet( this.lamp.wind < .999 ); later.onWind(); return; }
 		if ( this.morning?.enabled ) { this.morning.wind( dt ); return; }
+		if ( this.keeper?.linear && ! this.keeper.allows( 'crank' ) ) return;
 		if ( this.keeper?.active ) { this.keeper.wind( dt ); return; }
 
 		const L = this.lamp;
@@ -744,9 +824,10 @@ export class Story {
 
 	_readSlate() {
 
-		const lines = Object.keys( this.obs ).sort( ( a, b ) => Number( a ) - Number( b ) ).filter( k => this.obs[ k ] && typeof this.obs[ k ] === 'object' ).map( ( k ) => `${ k === '18' ? '6' : '9' } p.m.: ${ this.obs[ k ].wind }; sea ${ this.obs[ k ].sea.toLowerCase() }; ${ this.obs[ k ].visibility }.` );
+		const label = at => Number( at ) === 33 ? '4 Jan · morning lesson' : `${ 3 + Math.floor( Number( at ) / 24 ) } Jan · ${ clockText( Number( at ) ) }`;
+		const lines = Object.keys( this.obs ).sort( ( a, b ) => Number( a ) - Number( b ) ).filter( k => this.obs[ k ] && typeof this.obs[ k ] === 'object' ).map( ( k ) => `${ label( k ) }: ${ this.obs[ k ].wind }; sea ${ this.obs[ k ].sea.toLowerCase() }; ${ this.obs[ k ].visibility }.` );
 		if ( this.obs[ 27 ] === 'auto' ) lines.push( '3 a.m.: entered during the small-hours watch.' );
-		for ( const [ at, draft ] of Object.entries( this.flags.weatherObservations || {} ) ) if ( ! this.obs[ at ] ) lines.push( `${ at === '18' ? 'Six' : 'Nine' } o’clock round unfinished (${ Object.keys( draft.readings || {} ).length } readings); not chalked.` );
+		for ( const [ at, draft ] of Object.entries( this.flags.weatherObservations || {} ) ) if ( ! this.obs[ at ] && ( Number( at ) >= 33 || this.app.qs?.has( 'weatherObservationsPreview' ) ) ) lines.push( `${ label( at ) } round unfinished (${ Object.keys( draft.readings || {} ).length } readings); not chalked.` );
 		return this.ui.read( { title: 'The slate', body: lines.length ? lines : S.NOTES.slate.body } );
 
 	}
@@ -758,19 +839,20 @@ export class Story {
 		const h = this.h, L = this.lamp, out = [];
 		if ( this.watcher.state === 'away' ) out.push( HER_APPEAR + 0.02 );
 		if ( L.lit && L.running ) out.push( h + Math.max( 0, L.wind - WARN ) * 3 - 0.03 );
-		for ( const at of [ 18, 21 ] ) if ( ! this.obs[ at ] ) out.push( at - 0.05 );
+		if ( this.app.qs?.has( 'weatherObservationsPreview' ) ) for ( const at of [ 18, 21 ] ) if ( ! this.obs[ at ] ) out.push( at - 0.05 );
 		out.push( this.haar + 0.05 );
 		return Math.min( ...out.filter( ( t ) => t > h + 0.05 ) );
 
 	}
 
 	_watchText() {
+		if ( this.later?.active ) return this.later.watchText();
 		if ( this.storm?.active ) return this.storm.watchText();
 		if ( this.returningLight?.active ) return this.returningLight.watchText();
 
 		if ( this.watcher.talking || this.signal ) return '';
 		if ( this.next?.active ) return this.next.watchText();
-		if ( this.keeper?.active && ! this.keeper.state.rewound && this.h < S.SUNRISE + 24 - .25 ) return '';
+		if ( this.keeper?.linear && ! this.keeper.allows( 'watch' ) ) return '';
 		if ( this.unpacking?.pending ) return '';
 		const b = this.beat;
 		if ( b === 'night' ) return 'Keep the watch until dawn';
@@ -787,11 +869,12 @@ export class Story {
 	}
 
 	async _keepWatch() {
+		if ( this.later?.active ) return this.later.keepWatch();
 		if ( this.storm?.active ) return this.storm.keepWatch();
 		if ( this.returningLight?.active ) return this.returningLight.keepWatch();
 
 		if ( this.next?.active ) return this.next.keepWatch();
-		if ( this.keeper?.active && ! this.keeper.state.rewound && this.h < S.SUNRISE + 24 - .25 ) return;
+		if ( this.keeper?.linear && ! this.keeper.allows( 'watch' ) ) return;
 		if ( this.unpacking?.pending ) return;
 		const b = this.beat;
 		if ( b === 'night' ) {
@@ -843,14 +926,17 @@ export class Story {
 		// stand at the lamp
 		const p = this.app.player;
 		p.position.set( TOWER.signalStand.x, TOWER.deck, TOWER.signalStand.z );
-		if ( this.watcher.state === 'calling' || this.watcher.state === 'steady' ) this.watcher.answer();
+		if ( ! this.guidedSignal.enter() && ( this.watcher.state === 'calling' || this.watcher.state === 'steady' ) ) this.watcher.answer();
 		this.ui.setHUD( false );
 
 	}
 
 	_leaveSignal() {
 
+		this.guidedSignal?.pause();
 		this.signal = false;
+		this._signalEpoch = ( this._signalEpoch || 0 ) + 1;
+		this._hurry = false;
 		this.app.player.busy = false;
 		this.app.input.enabled = true;
 		this.ui.strip( null );
@@ -872,8 +958,10 @@ export class Story {
 	}
 
 	_key( e ) {
+		if ( this.cutsceneReview?.active ) return;
 		if ( this.app.devMenu?.open ) return;
-		if ( this.lampStudy?.active ) return;
+		if ( this.cinematic ) return;
+		if ( this.lampStudy?.active || this.guidedSignal?.active ) return;
 
 		if ( this.islandReveal.active ) {
 			if ( e.code === 'Escape' && ! e.repeat ) { e.preventDefault(); this.islandReveal.skip(); }
@@ -888,15 +976,15 @@ export class Story {
 
 		}
 
-		if ( ! this.signal || this.ui.open ) return;
+		if ( ! this.signal || this.ui.open || this.paused || this.app.mobile?.paused ) return;
 		if ( e.code === 'Space' ) {
 
-			this._hurry = true;
+			if ( ! e.repeat && [ 'sending', 'replying' ].includes( this.watcher.state ) ) this._hurry = true;
 			e.preventDefault();
 
 		}
 
-		if ( e.code === 'Escape' || e.code === 'KeyE' ) {
+		if ( ! e.repeat && ( e.code === 'Escape' || e.code === 'KeyE' && this.signalCanLeave ) ) {
 
 			e.preventDefault();
 			this._leaveSignal();
@@ -906,17 +994,20 @@ export class Story {
 	}
 
 	mobileCommand( command ) {
-		if ( this.islandReveal?.active ) return;
+		if ( this.cutsceneReview?.active ) return;
+		if ( this.cinematic ) return;
+		if ( this.islandReveal?.active || this.guidedSignal?.active ) return;
 		if ( this.ui.open || this.paused || this.app.mobile?.paused || this.beat === 'intro' || this.beat === 'end' ) return;
 		if ( command === 'leave' && this.lampStudy?.active ) return this.lampStudy.leave();
 		if ( command === 'papers' && ! this.signal ) return this._readPapers();
 		if ( command === 'landing' && this.beat === 'crossing' ) return this._advanceArrival();
-		if ( command === 'leave' && this.signal ) this._leaveSignal();
-		if ( command === 'read' && this.signal ) this._hurry = true;
+		if ( command === 'leave' && this.signalCanLeave ) this._leaveSignal();
+		if ( command === 'read' && this.signal && [ 'sending', 'replying' ].includes( this.watcher.state ) ) this._hurry = true;
 	}
 
 	_advanceArrival() {
 		if ( this.beat !== 'crossing' || this.paused || this.ui.open || this.app.mobile?.paused || this.app.freeCam || this.app.ui?.ui?.photoMode ) return;
+		if ( this.arrivalConversation.advance() ) return;
 		if ( this.arrival.ready ) return this._disembark();
 		this.arrival.elapsed = CROSSING_SECONDS;
 		this.arrival.pose( 0 );
@@ -927,11 +1018,11 @@ export class Story {
 
 	async _choose() {
 
-		const w = this.watcher;
+		const w = this.watcher, epoch = this._signalEpoch || 0;
 		this._choosing = true;
 		const v = await this.ui.choose( {
 			title: S.SIGNAL_UI.title,
-			intro: `Gallan Head: ${ w.node.her.replace( / K$/, '' ) }\n\n${ S.SIGNAL_UI.replyInstruction }`,
+			intro: `Gallan Head: ${ w.node.her.replace( / K$/, '' ) }\n\nChoose your reply. ${ this.guidedSignal.eligible && ! this.guidedSignal.state.firstReplyDone ? 'The shutter guide will help you send it.' : 'The lamp sends your chosen words.' }`,
 			options: w.options.map( ( o, i ) => ( {
 				label: o.code ? `${ o.code } · ${ o.text }` : o.text,
 				sub: `${ o.code ? 'Station signal' : 'Spelled out' } · about ${ o.minutes } ${ o.minutes === 1 ? 'minute' : 'minutes' }`,
@@ -940,6 +1031,7 @@ export class Story {
 			cancel: 'Step away from the lamp',
 		} );
 		this._choosing = false;
+		if ( epoch !== ( this._signalEpoch || 0 ) || w !== this.watcher || ! this.signal ) return;
 		if ( v === null || v === undefined ) {
 
 			this._leaveSignal();
@@ -947,7 +1039,7 @@ export class Story {
 
 		}
 
-		w.reply( v );
+		if ( ! this.guidedSignal.reply( v ) ) w.reply( v );
 		if ( this.sound ) this.sound.shutter();
 
 	}
@@ -997,7 +1089,10 @@ export class Story {
 
 		}
 
+		if ( this.guidedSignal.update( dt ) ) { this._hurry = false; return; }
+
 		const wasDone = w.state === 'done';
+		const completedByInput = this._hurry && w.state === 'sending' && watched;
 		w.update( dt, { watched, hurry: this._hurry } );
 		this._hurry = false;
 		if ( ! wasDone && w.state === 'done' ) {
@@ -1012,7 +1107,10 @@ export class Story {
 			}
 
 			if ( ! w.lost ) this.row( this.h, 'Signals exchanged with Gallan Head.' );
-			this._leaveIn = 1.8;
+			this.firstWatch?.afterContact();
+			// A revealed final line still needs reading time. E/Esc or the
+			// touch leave action can return to the watch sooner.
+			this._leaveIn = completedByInput && ! w.lost ? Math.max( 3.5, ( w.node?.her || '' ).split( /\s+/ ).length / 3 ) : 1.8;
 			this.save();
 
 		}
@@ -1025,14 +1123,14 @@ export class Story {
 		// the strip
 		if ( this.signal ) {
 
-			if ( w.state === 'sending' ) this.ui.strip( { from: 'Gallan Head', text: w.text, cursor: true, hint: visible ? ( this.app.isMobile ? 'Tap Read on to read faster' : 'Space: read on' ) : 'Her light is lost in the haze', morse: w.rawMorse.slice( -100 ), translation: w.translation, language: w.node.language } );
-			else if ( w.state === 'replying' ) this.ui.strip( { from: 'You', text: w.log[ w.log.length - 1 ].text, morse: w.rawMorse.slice( -100 ) } );
+			if ( w.state === 'sending' ) this.ui.strip( { from: 'Gallan Head', text: w.text, cursor: true, hint: visible ? ( this.app.isMobile ? 'Tap Finish message to reveal the full message' : 'Space: finish this message' ) : 'Her light is lost in the haze', morse: w.rawMorse.slice( -100 ), translation: w.translation, language: w.node.language } );
+			else if ( w.state === 'replying' ) this.ui.strip( { from: 'You', text: w.log[ w.log.length - 1 ].text, hint: this.app.isMobile ? 'Tap Finish message to finish sending' : 'Space: finish sending', morse: w.rawMorse.slice( -100 ) } );
 			else if ( w.state === 'waiting' ) {
 
 				this.ui.strip( { from: 'Gallan Head', text: w.node.her.replace( / K$/, '' ), hint: S.SIGNAL_UI.replyHint, morse: w.rawMorse.slice( -100 ), translation: w.translation, language: w.node.language } );
 				if ( ! this._choosing ) this._choose();
 
-			} else if ( w.state === 'done' ) this.ui.strip( { from: 'Gallan Head', text: w.node?.her.replace( / K$/, '' ) || 'GOOD NIGHT', hint: '', morse: w.rawMorse.slice( -100 ), translation: w.translation, language: w.node?.language } );
+			} else if ( w.state === 'done' ) this.ui.strip( { from: 'Gallan Head', text: w.node?.her.replace( / K$/, '' ) || 'GOOD NIGHT', hint: this.app.isMobile ? 'Tap Leave signal when you are ready' : 'E or Esc: leave the signal lamp', morse: w.rawMorse.slice( -100 ), translation: w.translation, language: w.node?.language } );
 
 		} else if ( watched && w.state === 'sending' ) {
 
@@ -1048,51 +1146,10 @@ export class Story {
 
 	// ---- the haar's beats: the light on Eilean Tighe, the gate
 
-	_updateEerie( dt ) {
-		const ISLET = this.isletAt;
-
-		const p = this.app.player, cam = this.app.camera;
-		const onWalkway = Math.abs( p.position.y - TOWER.deck ) < 0.3 && Math.hypot( p.position.x, p.position.z ) > 2.3;
-		const B = Beams.uniforms.far.value[ 1 ];
-		if ( this.beat === 'haar' && ! this.islet && this.h > this.haar + 0.6 && onWalkway ) this.islet = { t: 0, seen: false, at: this.h };
-		if ( this.islet && this.islet.t < 40 ) {
-
-			const I = this.islet;
-			I.t += dt;
-			const k = MathUtils.smoothstep( I.t, 0, 3 ) * ( 1 - MathUtils.smoothstep( I.t, 34, 40 ) ) * ( 0.75 + 0.25 * Math.sin( I.t * 7.3 ) * Math.sin( I.t * 3.1 ) );
-			B.set( ISLET.x, ISLET.y, ISLET.z, 160 * k );
-			_v.subVectors( ISLET, cam.position ).normalize();
-			const fwd = new Vector3( 0, 0, - 1 ).applyQuaternion( cam.quaternion );
-			if ( k > 0.3 && fwd.dot( _v ) > Math.cos( MathUtils.degToRad( 22 ) ) ) I.seen = true;
-			if ( I.t > 9 && ! I.seen && ! I.hinted ) {
-
-				I.hinted = true;
-				this.toast( 'Something catches your eye, to the south-east.' );
-
-			}
-
-			if ( I.t >= 40 ) {
-
-				B.w = 0;
-				this.flags.isletSeen = I.seen ? I.at : 0;
-
-			}
-
-		} else B.w = 0;
-
-		// after it, the gate
-		if ( this.beat === 'haar' && this.islet && this.islet.t >= 40 && ! this.flags.gateMoved ) {
-
-			this.flags.gateMoved = this.h;
-			const ds = this.doors.gate, open = ds[ 0 ].target > 0.5 ? 0 : 1;
-			for ( const d of ds ) d.target = open;
-			this.flags.gateWas = open ? 'open' : 'shut';
-			if ( this.sound ) this.sound.door( 'gate', open, ds[ 0 ].center, true );
-			this.toast( open ? 'Below in the yard, the gate bangs.' : 'Below in the yard, the gate clashes shut.', 4500 );
-			this.setBeat( 'gate' );
-
-		}
-
+	_updateEerie() {
+		// Removed first-night islet event. The rail examination owns the gate reveal.
+		Beams.uniforms.far.value[ 1 ].w = 0;
+		this.islet = null;
 	}
 
 	// ---- the journal at dawn
@@ -1101,11 +1158,9 @@ export class Story {
 
 		const rows = this._journalRows();
 		const remarks = [];
-		if ( this.flags.isletSeen ) remarks.push( { key: 'islet', ask: S.REMARKS.islet.ask } );
 		if ( this.flags.gateMoved ) remarks.push( { key: 'gate', ask: S.REMARKS.gate.ask } );
 		const chosen = await this.ui.journal( { heading: 'Thursday 3rd to Friday 4th January 1901', rows, remarks, footer: 'W. Innes, Assistant Keeper' } );
 		if ( ! chosen ) return;
-		if ( chosen.islet ) this.row( this.flags.isletSeen, S.REMARKS.islet.yes.replace( '{t}', clockText( this.flags.isletSeen ) ) );
 		if ( chosen.gate ) this.row( this.flags.gateMoved, S.REMARKS.gate.yes.replace( '{t}', clockText( this.flags.gateMoved ) ).replace( 'standing open', this.flags.gateWas === 'open' ? 'standing open' : 'shut' ) );
 		if ( ! this.flags.talked ) this.row( 23.9, S.REMARKS.gallan.no );
 		this.flags.firstNightComplete = this.h;
@@ -1115,7 +1170,7 @@ export class Story {
 
 	_journalRows() {
 
-		const rows = this.rows.slice().sort( ( a, b ) => a[ 0 ] - b[ 0 ] ).map( ( [ h, t ] ) => [ clockText( h ), t ] );
+		const rows = this.rows.filter( ( [ , text ] ) => ! /light seen on Eilean Tighe/i.test( text ) ).sort( ( a, b ) => a[ 0 ] - b[ 0 ] ).map( ( [ h, t ] ) => [ clockText( h ), t ] );
 		// the three o'clock line on the slate, chalked in the small hours: copied fair with the rest
 		if ( this.obs[ 27 ] ) {
 
@@ -1138,14 +1193,25 @@ export class Story {
 	}
 
 	update( dt ) {
+		this.gateWork?.update();
+		if ( this.guidedSignal?.active && this.guidedSignal.blocked ) this.guidedSignal.update( 0 );
+		this.audioCues?.update( dt, this.paused || this.ui.open || !! this.app.mobile?.paused || !! globalThis.document?.hidden );
+		if ( this.firstWatch?.updateReveal( dt, this.paused || !! this.app.mobile?.paused || !! this.app.devMenu?.open || !! globalThis.document?.hidden ) ) { this.lamp.update( dt, 0 ); return; }
+		if ( this.cutsceneReview?.update( dt ) ) return;
 		if ( this.titleView ) { this._titleCamera(); return; }
 		if(this.ruinInspect){this.app.camera.position.copy(this.ruinInspect.position);this.app.camera.lookAt(this.ruinInspect.target);this.lamp.update(dt,0);return;}
+		if ( this.towerTravel.update() ) return;
 		if ( this.morning?.enabled ) { this.morning.update( dt ); return; }
 		this.keeper?.sync();
+		this.photography?.update();
 
 		const app = this.app;
 		const modal = this.ui.open || !! this.app.mobile?.paused || !! app.devMenu?.open;
-		if ( app.mobile?.paused ) { this.islandReveal?.update( 0 ); return; }
+		if ( this.keeper?.updateCutscene( dt, this.paused || !! app.mobile?.paused || !! app.devMenu?.open || app.freeCam || !! app.ui?.ui?.photoMode || !! globalThis.document?.hidden ) ) {
+			this.keeper.sync();
+			return;
+		}
+		if ( app.mobile?.paused ) { this.weatherObservations.updateLabels(); this.islandReveal?.update( 0 ); return; }
 		this.arrival.update( dt, { aboard: this.aboard, paused: this.paused || modal || app.freeCam || !! app.ui?.ui?.photoMode || !! globalThis.document?.hidden } );
 		if ( this.beat === 'crossing' ) {
 
@@ -1155,13 +1221,14 @@ export class Story {
 			const w = weatherAt( this.h );
 			if ( app.haze ) app.haze.density.value = hazeDensityForVisibility( w.vis );
 			if ( app.clouds?.coverage ) app.clouds.coverage.value = w.clouds;
-			const line = S.CROSSING_LINES.find( ( l ) => this.arrival.elapsed >= l.at && this.arrival.elapsed < l.until );
 			const hide = modal || this.paused || app.freeCam || app.ui?.ui?.photoMode || globalThis.document?.hidden;
-			const hint = app.isMobile ? 'Read papers · Go to landing · Step ashore' : this.arrival.ready ? 'B · Papers     Enter · Step ashore' : 'B · Papers     Enter · Bring the landing closer';
+			const line = this.arrivalConversation.update( dt, { blocked: hide } );
+			const hint = this.arrivalConversation.active ? this.arrivalConversation.hint : app.isMobile ? 'Read papers · Go to landing · Step ashore' : this.arrival.ready ? 'B · Papers     Enter · Step ashore' : 'B · Papers     Enter · Bring the landing closer';
 			this.ui.arrival( hide ? null : line, hide ? '' : hint );
 			this.ui.setClock( `${ clockText( this.h ) } · ${ this.dayText() }` );
 			this.ui.setObjective( this.goal() );
 			this.ui.guidance( null, app.camera );
+			this.ui.guidance( null, app.camera, false, this.ui.pickupGuide );
 			if ( ! modal && ! this.paused && ! app.freeCam && ! app.ui?.ui?.photoMode ) {
 
 				if ( app.input.hit( 'Enter' ) ) this._advanceArrival();
@@ -1181,15 +1248,16 @@ export class Story {
 			return;
 		}
 		if ( this.next.active ) { this.ui.arrival( null ); this.next.update( dt, modal ); this.lampStudy.update( dt ); return; }
-		if ( this.storm?.active ) { this.storm.update( dt ); return; }
-		if ( this.returningLight.active ) { this.returningLight.update( dt ); return; }
+		if ( this.storm?.active ) { this.storm.update( dt ); this.weatherObservations.updateLabels(); return; }
+		if ( this.later?.active ) { this.later.update( dt ); this.weatherObservations.updateLabels(); return; }
+		if ( this.returningLight.active ) { this.returningLight.update( dt ); this.weatherObservations.updateLabels(); return; }
 		if ( ! this.paused && ! modal && this.beat !== 'end' ) {
 
 			// (her messages come slowly by lamp; the night's clock slows with them)
-			const rate = ( this.lamp.lit || this.h > 24 ? RATE_NIGHT : RATE_DAY ) * ( this.watcher.state === 'sending' ? 0.25 : 1 );
-			const dh = this.unpacking.holdsClock ? 0 : dt * rate * this.weatherObservations.clockScale;
+			const rate = this.clockRate * ( this.watcher.state === 'sending' ? 0.25 : 1 );
+			const dh = this.unpacking.holdsClock ? 0 : this.firstWatch.clockAdvance( dt * rate * this.weatherObservations.clockScale );
 			this.h += dh;
-			this.lamp.update( dt, dh );
+			this.lamp.update( dt, upkeepHours( this, dh ) );
 
 		} else this.lamp.update( dt, 0 );
 
@@ -1221,7 +1289,7 @@ export class Story {
 		if ( this.beat === 'climb' && p.x > c.x0 && p.x < c.x1 && p.z > c.z0 && p.z < c.z1 ) this.setBeat( 'room' );
 		if ( ( this.beat === 'room' || this.beat === 'climb' ) && p.x > ROOM.x0 && p.x < ROOM.x1 && p.z > ROOM.z0 && p.z < ROOM.z1 ) this.setBeat( 'letter' );
 		if ( this.beat === 'watch' && this.watcher.state !== 'away' ) this.setBeat( 'gallan' );
-		if ( this.beat === 'gallan' && this.watcher.state === 'done' ) this.setBeat( 'evening' );
+		if ( this.beat === 'gallan' && this.watcher.state === 'done' ) this.firstWatch.afterContact();
 
 		// doors swing
 		for ( const name in this.doors ) for ( const d of this.doors[ name ] ) updateDoor( d, dt );
@@ -1241,7 +1309,7 @@ export class Story {
 		this.ui.telescope( MathUtils.smoothstep( this.tel, 0.4, 0.95 ) );
 		Beams.uniforms.gain.value = 1 + 6 * this.tel;
 
-		this._updateWatcher( dt, density );
+		if ( ! this.paused && ! modal && ! app.freeCam && ! app.ui?.ui?.photoMode && ! globalThis.document?.hidden ) this._updateWatcher( dt, density );
 		this._updateEerie( dt );
 		if ( this._leaveIn > 0 && ( this._leaveIn -= dt ) <= 0 && this.signal ) this._leaveSignal();
 
@@ -1262,10 +1330,12 @@ export class Story {
 		}
 
 		this.weatherObservations.update();
+		if ( this.cinematic ) return;
 		// the HUD
 		this.ui.setClock( `${ clockText( this.h ) } · ${ this.dayText() }` );
 		this.ui.setObjective( this.beat === 'intro' ? '' : this.goal() );
 		this.ui.guidance( storyGuidance( this ), app.camera, !! app.player.prompt );
+		this.ui.guidance( lanternPickupGuidance( this ), app.camera, this.interact.current?.id === 'handLamp', this.ui.pickupGuide );
 		const blockedReading = this.paused || modal || app.freeCam || app.ui?.ui?.photoMode || !! globalThis.document?.hidden;
 		const keeperLine = this.keeper?.update( dt, { blocked: blockedReading } );
 		const unpackingLine = this.unpacking.update( dt, { blocked: blockedReading || !! keeperLine } );
@@ -1300,6 +1370,7 @@ export class Story {
 	}
 
 	save() {
+		if ( this.cutsceneReview?.active ) return;
 		this.morning?.beforeSave(); this.saveT = 0;
 		if ( this.beat === 'intro' || this.beat === 'end' ) return;
 		const safety = this.app.keeperSafety;
@@ -1348,6 +1419,9 @@ export class Story {
 	}
 
 	_restore( s ) {
+		this.next?.smoke?.release?.(); this.next?.releaseFogLighting?.(); this.firstWatch?.closeReveal(); this.storm?.cutscene?.close(); this.next?.smoke?.close?.(); this.guidedSignal?.pause(); this.audioCues?.stop();
+		this.signal = false; this._signalEpoch = ( this._signalEpoch || 0 ) + 1; this._choosing = false; this._hurry = false;
+		this.keeper?.cutscene.close(); this.keeper?.firstLight.close(); this.keeper?.firstLight.stopMusic();
 		this.safeCheckpoint = s.safeCheckpoint || JSON.parse( JSON.stringify( { ...s, safeCheckpoint: undefined } ) );
 		this.app.coastal?.load( s.coast );
 		this.app.keeperSafety?.reset();
@@ -1366,22 +1440,27 @@ export class Story {
 		this.keeper.note = null;
 		this.keeper.sync();
 		this.unpacking.sync();
-		if ( this.storm?.active ) this.storm.restore( s.watcher );
+		this.photography?.restore();
+		if ( this.later?.active ) this.later.restore( s.watcher );
+		else if ( this.storm?.active ) this.storm.restore( s.watcher );
 		else if ( this.returningLight.active ) this.returningLight.restore( s.watcher );
 		else if ( this.next.active ) this.next.restore( s.watcher ); else this.watcher.load( s.watcher );
 		// (a night saved before the lantern: it is in your hand)
 		this.hand.load( s.hand || { carried: true } );
 		// Recover older wake saves which stranded the keeper without a light.
 		if ( this.beat === 'd2wake' && ! this.hand.carried ) this.next.wakeLantern();
-		if ( ! this.next.active && ! this.returningLight.active && ! this.storm.active && ( this.watcher.state === 'sending' || this.watcher.state === 'waiting' || this.watcher.state === 'replying' ) ) this.watcher.state = 'steady';
-		const legacyDoors = this.moving.doors.filter( d => ! [ 'kitchen', 'berth' ].includes( d.name ) );
+		// Positional version-one saves predate the west rooms. Match their original
+		// door order explicitly; new doors start shut instead of borrowing a gate state.
+		const oldNames = s.doors?.length===4 ? ['gallery','house','gate','gate'] : s.doors?.length===6 ? ['gallery','house','kitchen','berth','gate','gate'] : ['gallery','house','kitchen','berth','oilStore','gate','gate'];
 		this.moving.doors.forEach( ( d, i ) => {
 
 			const named = s.doorStates?.[ d.name ]?.[ this.doors[ d.name ].indexOf( d ) ];
-			const index = s.doors?.length === this.moving.doors.length ? i : legacyDoors.indexOf( d );
+			const first=oldNames.indexOf(d.name);
+			const index = s.doors?.length === this.moving.doors.length ? i : first<0?-1:first+this.doors[d.name].indexOf(d);
 			d.target = d.open = named ?? ( index >= 0 ? s.doors?.[ index ] || 0 : 0 );
 
 		} );
+		this.firstWatch?.restore();
 		if ( this.hasTelescope ) this.moving.telescope.visible = false;
 		const p = this.app.player;
 		p.position.set( ...s.pos );

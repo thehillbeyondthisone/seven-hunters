@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Seven Hunters · atmosphere study</title>
+<style>
+html,body{margin:0;overflow:hidden;background:#111b20;color:#eee6d4}canvas{display:block}#fps{display:none}
+.study{position:fixed;z-index:200;top:16px;left:16px;width:min(350px,calc(100vw - 64px));max-height:calc(100vh - 70px);overflow:auto;padding:18px 20px;background:#142025ed;border:1px solid #8f9b9355;border-radius:6px;font:16px/1.5 Georgia,serif;box-shadow:0 8px 32px #0005}
+.study h1{font-size:22px;font-weight:normal;margin:0 0 4px}.study p{font-size:14px;color:#c0c8c2;margin:4px 0 12px}.study fieldset{border:0;padding:0;margin:0}.study label{display:block;margin:12px 0 2px}.study output{float:right;color:#f0d7a6;font-variant-numeric:tabular-nums}.study input[type=range]{width:100%;accent-color:#d8be87;cursor:pointer}.study select,.study button{font:14px Georgia,serif;color:#eee6d4;border:1px solid #97a69b66;background:#233239;border-radius:3px;padding:8px 10px;cursor:pointer}.study select{width:100%;margin-top:4px}.study button:hover{background:#394a4d}.study nav{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.study button[aria-pressed=true]{border-color:#edd7a3;background:#3a443f}.study .actions{display:flex;gap:8px;margin-top:12px}.study .stats{display:block;font:13px/1.6 system-ui,sans-serif;color:#c2d0ca;border-top:1px solid #8f9b9344;margin-top:14px;padding-top:10px;min-height:42px}.study a{color:#d4c59e}.study details summary{cursor:pointer;color:#d4c59e;margin-top:10px}
+@media(max-height:650px){.study{top:8px;left:8px;max-height:calc(100vh - 48px);overflow:auto;padding:12px 16px}.study p{margin-bottom:4px}.study nav{margin:6px 0}.study label{margin-top:6px}}
+</style>
+<div id="app"></div><div id="fps"></div>
+<section class="study" aria-label="Atmosphere study controls">
+<h1>Light in the station</h1><p>Winter sun through stone reveals; warm air around oil lamps. This local study opens no watch save.</p>
+<div id="loading" role="status">Preparing the island…</div>
+<fieldset id="controls" disabled>
+<nav aria-label="Study viewpoints"><button data-view="airBerth" aria-pressed="true">Window shafts</button><button data-view="airBerthSide" aria-pressed="false">Across the shafts</button><button data-view="dFirstDesk" aria-pressed="false">Lamplight</button><button data-view="dRoom" aria-pressed="false">North window</button><button data-view="airKitchen" aria-pressed="false">Kitchen dawn</button><button data-view="fApproach" aria-pressed="false">Coastal fog</button><button data-view="dBeams" aria-pressed="false">Night beams</button></nav>
+<label><input id="room-air" type="checkbox" checked> Room atmosphere <small>· toggle to compare</small></label>
+<label for="window-light">Window shafts <output id="window-value" for="window-light">1×</output></label>
+<input id="window-light" type="range" min="0" max="3" step="0.05" value="1">
+<label for="lamp-haze">Lamp haze <output id="lamp-value" for="lamp-haze">1×</output></label>
+<input id="lamp-haze" type="range" min="0" max="3" step="0.05" value="1">
+<label for="dust">Interior dust <output id="dust-value" for="dust">1×</output></label>
+<input id="dust" type="range" min="0" max="10" step="0.05" value="1">
+<p>1× recommended · 10× for comparison. More dust adds motes without making each one brighter.</p>
+<details><summary>Outdoor atmosphere</summary>
+<label for="shafts">Outdoor sun rays <output id="shaft-value" for="shafts">1×</output></label>
+<input id="shafts" type="range" min="0" max="3" step="0.05" value="1">
+<label for="visibility">Coastal visibility <output id="visibility-value" for="visibility">30 km</output></label>
+<input id="visibility" type="range" min="2" max="90" step="1" value="30">
+</details>
+<label for="quality">Light ray detail</label><select id="quality"><option value="0.5">Low</option><option value="1" selected>Balanced · recommended</option><option value="1.5">High</option></select>
+<div class="actions"><button id="reset">Recommended dust</button><button id="pause">Pause motion</button><button id="settings">All settings</button></div>
+<span class="stats" id="stats" role="status" aria-live="off">Waiting for the first frames…</span>
+<details><summary>What to look for</summary><p>South windows admit low winter sun; the north window stays diffuse. Thick stone reveals limit the shafts. Lamp haze follows the flame’s color and flicker. Toggle Room atmosphere to compare; 1× is recommended for both.</p><p>Light ray detail changes the resolution of indoor and outdoor rays. High uses 2.25 times Balanced’s ray pixels. Coastal visibility changes the outdoor fog.</p><p>WASD moves · click the scene to look · Esc releases the mouse. The game’s controls are under H → Sky → Atmosphere. Use Performance for live frame rate and Room air GPU.</p></details>
+</fieldset></section>
+<script type="module">
+import '../src/ui/ui.css';
+import { App } from '../src/App.js';
+import { AppUI } from '../src/ui/AppUI.js';
+import { saveStationDustAmount } from '../src/fx/StationMotes.js';
+import { hazeDensityForVisibility } from '../src/post/AirHaze.js';
+import { VIEWS } from '../src/core/DebugViews.js';
+const $ = id => document.getElementById(id);
+for(const [name,v] of Object.entries({
+ airBerth:{p:[-.4,82.67,11.4],at:[-3.5,82.5,14.6],fov:72,time:12},
+ airBerthSide:{p:[0,82.6,13],at:[-4.7,82.3,13],fov:72,time:12},
+ airKitchen:{p:[-4.2,82.67,6.9],at:[.9,82.5,9.6],fov:74,time:9.1},
+})) {const [x,y,z]=v.p,[a,b,c]=v.at;VIEWS[name]={...v,yaw:Math.atan2(x-a,z-c),pitch:Math.atan2(b-y,Math.hypot(a-x,c-z))};}
+const app = new App();
+app.qs.set('nostory',''); app.qs.set('noAudio','');
+try {
+ await app.init((p,label)=>{$('loading').textContent=label||`${Math.round(p*100)}%`;});
+ app.ui=new AppUI(app);app.ui.ui.rail.hidden=true;
+ app.post.autoExposure.snap.value=1;
+ let paused=false;
+ const refresh=()=>{if(paused)app.frame(0);};
+ const dust=()=>{$('dust-value').textContent=app.stationMotes.amount===0?'Off':`${Number(app.stationMotes.amount.toFixed(2))}×`;refresh();};
+ $('dust').value=app.stationMotes.amount;dust();
+ $('dust').oninput=()=>{app.stationMotes.amount=Number($('dust').value);dust();};
+ $('dust').onchange=()=>saveStationDustAmount(app.stationMotes.amount);
+ $('reset').onclick=()=>{app.stationMotes.amount=1;$('dust').value=1;saveStationDustAmount(1);dust();};
+ $('room-air').onchange=()=>{app.roomAir.strength.value=$('room-air').checked?1:0;refresh();};
+ for(const [id,key,output] of [['window-light','sunStrength','window-value'],['lamp-haze','lampStrength','lamp-value']]) {
+  $(id).oninput=()=>{app.roomAir[key].value=Number($(id).value);$(output).textContent=`${Number($(id).value)}×`;refresh();};
+ }
+ $('shafts').value=app.haze.shafts.value;
+ $('shafts').oninput=()=>{app.haze.shafts.value=Number($('shafts').value);app.ui.s.shafts=app.haze.shafts.value;$('shaft-value').textContent=`${app.haze.shafts.value.toFixed(2)}×`;refresh();};
+ $('visibility').oninput=()=>{const km=Number($('visibility').value);app.haze.density.value=hazeDensityForVisibility(km);app.ui.s.haze=app.haze.density.value;app.ui.s.visibility=km;$('visibility-value').textContent=`${km} km`;refresh();};
+ $('quality').onchange=()=>{app.haze.setQuality(Number($('quality').value));app.ui.s.rayDetail=app.haze.resolutionScale;app.post.cut();refresh();};
+ const view=name=>{window.__view(name);const km=VIEWS[name]?.vis||30;$('visibility').value=km;$('visibility-value').textContent=`${km} km`;app.ui.s.haze=app.haze.density.value;app.ui.s.visibility=km;for(const b of document.querySelectorAll('[data-view]'))b.setAttribute('aria-pressed',String(b.dataset.view===name));refresh();};
+ for(const b of document.querySelectorAll('[data-view]'))b.onclick=()=>view(b.dataset.view);
+ $('pause').onclick=()=>{paused=!paused;if(paused)app.engine.stop();else app.start();$('pause').textContent=paused?'Resume motion':'Pause motion';};
+ $('settings').onclick=()=>{app.ui.ui.selectTab('sky');app.ui.ui.togglePanel(true);};
+ view('airBerth');$('controls').disabled=false;$('loading').hidden=true;app.start();
+ setInterval(()=>{
+  const haze=app.haze,active=haze.activePassNames,amount=app.stationMotes.amount;
+  $('dust').value=amount;$('dust-value').textContent=amount===0?'Off':`${Number(amount.toFixed(2))}×`;
+  $('shafts').value=haze.shafts.value;$('shaft-value').textContent=`${Number(haze.shafts.value.toFixed(2))}×`;
+  $('quality').value=haze.resolutionScale;
+  $('room-air').checked=app.roomAir.strength.value>0;
+  $('window-light').value=app.roomAir.sunStrength.value;$('window-value').textContent=`${Number(app.roomAir.sunStrength.value.toFixed(2))}×`;
+  $('lamp-haze').value=app.roomAir.lampStrength.value;$('lamp-value').textContent=`${Number(app.roomAir.lampStrength.value.toFixed(2))}×`;
+  const km=haze.density.value>0?hazeDensityForVisibility(1)/haze.density.value:Infinity;
+  $('visibility').value=Number.isFinite(km)?Math.max(2,Math.min(90,km)):90;
+  $('visibility-value').textContent=Number.isFinite(km)?`${Math.round(km*10)/10} km`:'Clear';
+  const rays=active.length?`${haze.low.width} × ${haze.low.height}`:'off';
+  const timings=active.map(name=>app.profiler.result.items.find(item=>item.name==='post '+name));
+  const gpu=!active.length?'off':!app.profiler.enabled?'not profiling':timings.some(item=>!item)?'measuring':`${timings.reduce((sum,item)=>sum+item.ms,0).toFixed(2)} ms`;
+  const air=app.roomAir,item=app.profiler.result.items.find(item=>item.name==='post room air');
+  const airGPU=!air.activePassNames.length?'off':!app.profiler.enabled?'not profiling':item?`${item.ms.toFixed(2)} ms`:'measuring';
+  $('stats').textContent=`${paused?'Paused':`${(app.fps||0).toFixed(0)} fps`} · CPU ${(app.cpuMs||0).toFixed(2)} ms · ${app.stationMotes.particleCount.toLocaleString()} motes · room air GPU ${airGPU} · outdoor ray GPU ${gpu}`;
+ },500);
+} catch(error) {$('loading').textContent=`Could not load the study: ${error.message}`;console.error(error);}
+</script></html>

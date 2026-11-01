@@ -1,0 +1,84 @@
+SEVEN HUNTERS — CONCEPT REFERENCE SET v1
+Eilean Mor, Flannan Isles | Game date: 3 January 1901
+Prepared 2 October 2026 using built-in image_gen.
+
+PURPOSE
+Researched visual concepts for atmosphere, architectural type, materials and period objects. These are not measured reconstructions, surveyed terrain, production model sheets or screenshots of the game.
+
+CORRECTIONS TO EXISTING PROJECT ASSUMPTIONS
+The original 1899 optic was hyper-radial, not the smaller third-order lens in modern summaries. This resolves the modern-optic uncertainty in docs/PLAN.md. Use the museum photograph for modelling.
+HES describes a serpentine cast-iron staircase with a timber handrail. The demo's stone-tread description is not historical confirmation.
+The 1901 station was recently built and maintained. Do not make it a century-old ruin.
+Modern solar panels, gantry, automation equipment and replacement railings are not period references.
+Exact 1901 paint colours remain unverified; restrained ochre trim is inferred from the later station.
+Weather, illumination, viewpoints and fictional keeper are art direction, not recorded conditions or a historical portrait.
+
+PLATES
+1. 01-station-approach.png — The station approach
+Evidence: The real tower silhouette, flat-roofed house, diagonal lantern glazing and masonry enclosure guide this plate.
+Reconstruction: Reconstructed rail alignment, facade details, trim colour and camera position. Do not trace this as a measured site plan.
+
+2. 02-east-landing.png — Arrival at the east landing
+Evidence: The contemporary record establishes an east landing and supply access; period concrete steps, ironwork and lifting gear shape the scene.
+Reconstruction: The cliff profile, crane design and position, stair route and tower sightline are compositional reconstructions.
+
+3. 03-keepers-kitchen.png — The keeper’s kitchen
+Evidence: The reports describe a kitchen fireplace, cleaned utensils, clocks, bedrooms, work slate and log. The room should feel orderly and lived in.
+Reconstruction: Room layout, range model, floor, furniture, lamp model and object placement are period-plausible choices, not recovered inventory.
+
+4. 04-original-optic.png — Keeping the original light
+Evidence: The large 1899 Henry-Lepaute hyper-radial bivalve optic and paired bullseyes follow the museum photograph.
+Reconstruction: Burner detail, clockwork case, room clearances, hatch and light effects remain reconstructed. Use the original photograph for lens modelling.
+
+VISUAL QA AND LIMITS
+All four selected PNGs were viewed. The final selection excludes modern solar equipment, glass-fronted stove styling, invented horizon islands, tropical vegetation and close waves at lantern-room height.
+The archival paired-bullseye arrangement and the immense original lens drive the optic concept. Burner detail, clockwork and optical light effects are interpretive; do not treat pictured mechanisms as engineering evidence.
+The station image does not establish exact window counts, railway gauge/alignment, chapel footprint or historic railing patterns.
+The landing image does not establish east-landing geometry, stair counts, crane type, tower sightline or cliff measurements. It is a materials and route proposal.
+The kitchen is a period-plausible furnishing study. Its dimensions, floor, furniture, stove and lantern models and object positions are not recovered inventory.
+No overturned chair, untouched meal or invented journal quote is used as evidence.
+Concept images have not been promoted into the game. No performance, runtime, device or user-acceptance claim is made by this art task.
+
+ARCHIVE STATUS
+Trove's DP 038541 page was read through the browser. The catalogue identifies an 1896 roof/kitchen/bedroom/coal-cellar drawing (DC 8666B; C/32/9) and directs readers to an archive visit; it does not expose the full drawing. Other listed drawings were located in the catalogue, not inspected at construction detail.
+
+SOURCES — ACCESSED 2 OCTOBER 2026
+[1] Northern Lighthouse Board — contemporary accounts
+https://www.nlb.org.uk/history/flannan-isles/
+Moore's 28 December 1900 letter and Muirhead's 8 January 1901 report: working objects, orderly station, landings and clothing.
+
+[2] Historic Environment Scotland — LB48143
+https://portal.historicenvironment.scot/designation/LB48143
+Architectural type, flat-roofed house, diagonal lantern glazing, cast-iron staircase and enclosure. This later survey includes modern changes.
+
+[3] Museum of Scottish Lighthouses — 1899 prism
+https://www.goindustrial.co.uk/collections/lighthouses-museum/collection/prism-flannan-isle
+Museum object SLM.1997.9316 confirms the original hyper-radial optic.
+
+[4] US Lighthouse Society — Hyper-Radial Lenses
+https://uslhs.org/node/1424
+Henry-Lepaute bivalve optic description and original photograph, courtesy Museum of Scottish Lighthouses.
+
+[5] National Records of Scotland — Flannan keepers
+https://blog.nrscotland.gov.uk/2023/12/12/flannan-isles-lighthouse-keepers-the-disappearance/
+Modern exterior photo © Ian Cowe and circa-1900 keeper group photo. Modern photo supports massing, not 1901 fittings.
+
+[6] Northern Lighthouse Board — station details
+https://www.nlb.org.uk/lighthouses/flannan-islands/
+23-metre tower and 101-metre focal elevation. Current equipment specifications do not describe the original lens.
+
+[7] HES — kitchen and roof drawing DP 038541
+https://www.trove.scot/image/1104665
+1896 drawing, original DC 8666B; C/32/9. Catalogue read, full drawing unavailable in public viewer.
+
+[8] HES — station collection
+https://www.trove.scot/place/171215
+DC 8664: site; DC 8665: station; DC 8666A/B: house; DC 8667–8672: lantern and fixtures. Full drawings still need examination.
+
+LOCAL REFERENCE PHOTOGRAPHS
+reference-sources/flannan-exterior-modern-ian-cowe.jpg — © Ian Cowe, via NRS. Architectural massing reference; its solar installation is later.
+reference-sources/keepers-circa-1900-nrs.jpeg — circa-1900 group photograph reproduced by NRS. Clothing silhouette only; no likeness copied into the fictional keeper.
+reference-sources/flannan-original-1899-optic-museum.jpg — original optic photograph courtesy Museum of Scottish Lighthouses, via US Lighthouse Society.
+
+Source photographs remain local study references with their original rights; they are not cleared redistribution or game assets. No upload, publication or deployment was performed. Consult source holders before republication.
+Exact generation and correction prompts are in prompts.json. Selected PNG copies are in this directory; original generated outputs remain under the Codex generated_images directory.

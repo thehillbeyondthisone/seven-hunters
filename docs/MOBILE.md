@@ -24,8 +24,13 @@ Landscape is recommended; portrait remains usable for reading and playing.
   **Pause** is labelled at the top right; Lantern and Telescope are named in Tools.
   Controls suppress text selection and activate on touch release, including while
   another finger is walking or looking. Cancelled drags cannot activate a button.
-- At the signal lamp, the action leaves the exchange. **Read on** sits beside it to
-  accelerate signals; replies remain tappable options in the code book.
+- At the signal lamp, the action leaves the exchange. **Finish message** sits
+  beside it during a transmission to reveal its full text or finish sending
+  your chosen reply. Each reply remains a separate choice in the code book;
+  the next incoming message starts unread.
+- At either tower stair entrance, tap the named action once to walk the stairs
+  automatically. Walking into an entrance starts the same journey. Holding the
+  balcony rail is a lookout; it never skips time to the next duty.
 - The top-right pause button stops the story, offers sound and graphics settings,
   and explains the controls. App blur/backgrounding clears input and pauses the
   mobile watch. Return to the watch resumes; a user tap can also resume audio.

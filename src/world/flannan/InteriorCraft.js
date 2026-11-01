@@ -1,3 +1,4 @@
+import { keeperCraft } from './KeeperCraft.js';
 import { gridPart } from '../village/GeoBuilder.js';
 import { lin, WOOD, HARD } from '../Props.js';
 import { roomCraft } from './RoomCraft.js';
@@ -96,7 +97,7 @@ export function berthBedding( B, F ) {
     const edge=Math.max(0,Math.abs(u-.5)-.44)/.06;
     return [x,F+.59+Math.sin(u*Math.PI)*.027+.007*Math.sin(v*38+u*15)-edge*.11,z];
   },blanket,40,36);
-  // Foot blanket, turned over at one end; no invented personal names or insignia.
-  clothSurface(B,(u,v)=>[-4.05+(u-.5)*1.63,F+.605+Math.sin(u*Math.PI)*.025+Math.sin(v*Math.PI)*.025-Math.max(0,Math.abs(u-.5)-.44)*1.6,11.48+v*.42],{tint:lin(0x9a8970),data:HARD(.72,0,0,.97)});
+  keeperCraft(B,'blanket',-4.05,F+.605,11.69);
+  keeperCraft(B,'hangingCloth',-4.05,F+.94,11.39,{lod:'far'});
   B.lathe('hard',-4.05,F+.625,13.11,[[0,0],[.13,.01],[.16,.045],[.14,.10],[.075,.14],[0,.15]],{segs:32,sx:3.0,sz:1.55,...linen});
 }

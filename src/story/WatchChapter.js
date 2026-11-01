@@ -1,3 +1,4 @@
+import { upkeepHours } from './WatchPacing.js';
 import { Vector3, MathUtils } from '../engine/index.js';
 import { TOWER, updateDoor } from '../world/flannan/Station.js';
 import { Beams } from '../station/Beams.js';
@@ -7,7 +8,7 @@ import { storyGuidance } from './Guidance.js';
 // Selected watches share the existing apparatus, signalling and touch actions.
 export function chapterFrame( s, dt, { communicate=false, visibility=60, clouds=.62, rate=0, cap=Infinity, blocked=false }={} ) {
 	const a=s.app,hold=blocked||s.paused||s.ui.open||a.mobile?.paused||a.devMenu?.open||a.freeCam||a.ui?.ui?.photoMode||globalThis.document?.hidden||a.keeperSafety?.state==='dead';
-	const dh=hold?0:Math.max(0,Math.min(dt*rate,cap-s.h));s.h+=dh;s.lamp.update(dt,dh);s._applyClock();
+	const dh=hold?0:Math.max(0,Math.min(dt*rate,cap-s.h));s.h+=dh;s.lamp.update(dt,upkeepHours(s,dh));s._applyClock();
 	const density=hazeDensityForVisibility(visibility);if(a.haze)a.haze.density.value=density;if(a.clouds?.coverage)a.clouds.coverage.value=clouds;
 	for(const ds of Object.values(s.doors))for(const d of ds)updateDoor(d,hold?0:dt);
 	const want=s.signal||s.hasTelescope&&a.input.rightDown&&a.input.enabled&&!hold;

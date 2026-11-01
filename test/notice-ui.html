@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <title>Keeper's notices · visual review</title>
+ <link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+ <style>
+  html body { background: #172023 url('/artifacts/lantern-interior/after/threshold-all.png') center/cover; }
+  .tw-start, .tw-rail, .tw-tl { display:none !important; }
+  #review { position:fixed; bottom:20px; left:20px; z-index:100; display:flex; flex-wrap:wrap; gap:8px; max-width:90vw; }
+  #review[hidden] { display:none; }
+  #review button { padding:8px 12px; background:#e9dec6; color:#2a2118; border:1px solid #b9a77f; font:16px Georgia,serif; cursor:pointer; }
+ </style>
+</head>
+<body>
+ <div id="review">
+  <button id="short">Short notice</button>
+  <button id="long">Long notice</button>
+  <button id="repeat">Repeat notice</button>
+  <button id="clear">Clear notices</button>
+ </div>
+ <script type="module">
+  import '../src/ui/ui.css';
+  import { UI } from '../src/ui/UI.js';
+  const ui = new UI(); ui.root.classList.add('is-story');
+  const message = 'Something catches your eye, to the south-east.';
+  document.getElementById('short').onclick = () => ui.toast(message, 15000);
+  document.getElementById('long').onclick = () => ui.toast('The weight is nearly down. Return to the winding crank and fully raise it before keeping the remaining watch.', 15000);
+  document.getElementById('repeat').onclick = () => ui.toast(message, 15000);
+  document.getElementById('clear').onclick = () => { for (const t of [...ui._toasts]) t.dismiss(); };
+  if (new URLSearchParams(location.search).has('still')) document.getElementById('review').hidden = true;
+  ui.toast(message, 60000);
+ </script>
+</body>
+</html>

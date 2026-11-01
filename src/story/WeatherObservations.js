@@ -1,50 +1,22 @@
-import { Vector3, Matrix4, Ray, MathUtils } from '../engine/index.js';
+import { Vector3, MathUtils } from '../engine/index.js';
+import { opaqueSegmentBlocked, prepareObservationOcclusion } from './ObservationOcclusion.js';
+export { opaqueSegmentBlocked } from './ObservationOcclusion.js';
 import { G } from '../core/Globals.js';
 import { STATION, TOWER, ROOM } from '../world/flannan/Station.js';
+import { GALLERY_WATCH_BAYS, galleryBayAt, galleryBayPosition, nearestGalleryBay } from '../world/flannan/GalleryStations.js';
 import { Beams, hazeTransmittance } from '../station/Beams.js';
 import { pressureAt, temperatureAt, windReading, seaReading, landmarkReport, visibilityReading } from '../weather/WeatherReadings.js';
+import { projectGuidance } from './Guidance.js';
 
 const FIELDS = [ [ 'pressure', 'Barometer' ], [ 'temperature', 'Thermometer' ], [ 'wind', 'Wind' ], [ 'sea', 'Sea' ], [ 'visibility', 'Visibility' ] ];
 const NEAR = new Vector3( 164, 44.6, 540 );
+const SEA_SAMPLE_SPACING = 25;
+const VANE_AIM_DEGREES = 24;
+const LANDMARK_AIM_DEGREES = 35;
+const SEA_AIM_DEGREES = 55;
+const LANDMARK_NAMES = { far: 'Gallan Head', near: 'Eilean Tighe' };
+const roundName = at => at === 33 ? 'Morning observations' : `${ at % 24 === 18 ? 'Six' : 'Nine' } o’clock observations`;
 const clock = h => `${ String( Math.floor( h % 24 ) ).padStart( 2, '0' ) }.${ String( Math.floor( ( h % 1 ) * 60 + 1e-6 ) ).padStart( 2, '0' ) }`;
-
-// Test actual opaque station triangles, including the cupola and open doors.
-// Called on capture (and cached during a sea hold), never for every distant pixel.
-export function opaqueSegmentBlocked( meshes, origin, target ) {
-	const inverse = new Matrix4(), a = new Vector3(), b = new Vector3(), dir = new Vector3(), ray = new Ray();
-	for ( const mesh of meshes ) {
-		if ( ! mesh.visible || ! mesh.geometry || /glass|lens|flame/i.test( mesh.material?.name || mesh.name || '' ) ) continue;
-		let hidden = false;
-		for ( let parent = mesh.parent; parent; parent = parent.parent ) if ( parent.visible === false ) { hidden = true; break; }
-		if ( hidden ) continue;
-		mesh.updateWorldMatrix?.( true, false );
-		inverse.copy( mesh.matrixWorld ).invert();
-		a.copy( origin ).applyMatrix4( inverse ); b.copy( target ).applyMatrix4( inverse );
-		const distance = dir.subVectors( b, a ).length(); dir.normalize(); ray.set( a, dir );
-		const geo = mesh.geometry;
-		if ( ! geo.boundingBox ) geo.computeBoundingBox();
-		if ( ! ray.intersectsBox( geo.boundingBox ) ) continue;
-		const pos = geo.getAttribute( 'position' ), idx = geo.index, count = idx?.count ?? pos.count;
-		for ( let i = 0; i < count; i += 3 ) {
-			const ia = idx ? idx.getX( i ) : i, ib = idx ? idx.getX( i + 1 ) : i + 1, ic = idx ? idx.getX( i + 2 ) : i + 2;
-			const ax = pos.getX( ia ), ay = pos.getY( ia ), az = pos.getZ( ia );
-			const ex = pos.getX( ib ) - ax, ey = pos.getY( ib ) - ay, ez = pos.getZ( ib ) - az;
-			const fx = pos.getX( ic ) - ax, fy = pos.getY( ic ) - ay, fz = pos.getZ( ic ) - az;
-			const px = dir.y * fz - dir.z * fy, py = dir.z * fx - dir.x * fz, pz = dir.x * fy - dir.y * fx;
-			const det = ex * px + ey * py + ez * pz;
-			if ( Math.abs( det ) < 1e-9 ) continue;
-			const tx = a.x - ax, ty = a.y - ay, tz = a.z - az;
-			const u = ( tx * px + ty * py + tz * pz ) / det;
-			if ( u < 0 || u > 1 ) continue;
-			const qx = ty * ez - tz * ey, qy = tz * ex - tx * ez, qz = tx * ey - ty * ex;
-			const v = ( dir.x * qx + dir.y * qy + dir.z * qz ) / det;
-			if ( v < 0 || u + v > 1 ) continue;
-			const t = ( fx * qx + fy * qy + fz * qz ) / det;
-			if ( t > .04 && t < distance - .08 ) return true;
-		}
-	}
-	return false;
-}
 
 export class SeaObservation {
 	constructor( query ) {
@@ -52,42 +24,49 @@ export class SeaObservation {
 		this.slot = query?.allocate( 'weather-observation', 9 );
 		this.reset();
 	}
-	reset() { this.patch = null; this.elapsed = 0; this.heights = []; this.version = -1; this.versions = 0; }
+	reset() { this.patch = null; this.elapsed = 0; this.heights = []; this.version = -1; this.versions = 0; this.ready = false; }
 	begin( patch ) {
 		this.reset(); this.patch = patch.clone();
-		for ( let i = 0; i < 9; i++ ) this.query?.setPoint( this.slot + i, patch.x + ( i % 3 - 1 ) * 25, patch.z + ( Math.floor( i / 3 ) - 1 ) * 25 );
+		for ( let i = 0; i < 9; i++ ) this.query?.setPoint( this.slot + i, patch.x + ( i % 3 - 1 ) * SEA_SAMPLE_SPACING, patch.z + ( Math.floor( i / 3 ) - 1 ) * SEA_SAMPLE_SPACING );
 	}
 	step( dt, now ) {
 		const q = this.query;
-		if ( ! this.patch || this.slot === undefined || ! q?.cpuValid || ! Number.isFinite( q.resultTime ) || now - q.resultTime > .4 || q.resultTime > now + .01 ) return this.invalidate();
+		// GPU readbacks can arrive several frames late. A delayed result pauses the
+		// hold; it must not erase several seconds of otherwise valid observation.
+		this.ready = false;
+		const freshFor = Math.max( .4, Math.min( 1, ( q?.latency || 0 ) * 4 ) );
+		if ( ! this.patch || this.slot === undefined || ! q?.cpuValid || ! Number.isFinite( q.resultTime ) || q.resultTime > now + .01 ) return this.invalidate();
+		if ( now - q.resultTime > freshFor ) return null;
 		const heights = [];
 		for ( let i = 0; i < 9; i++ ) {
-			const j = ( this.slot + i ) * 4, x = this.patch.x + ( i % 3 - 1 ) * 25, z = this.patch.z + ( Math.floor( i / 3 ) - 1 ) * 25;
+			const j = ( this.slot + i ) * 4, x = this.patch.x + ( i % 3 - 1 ) * SEA_SAMPLE_SPACING, z = this.patch.z + ( Math.floor( i / 3 ) - 1 ) * SEA_SAMPLE_SPACING;
 			if ( ! [0,1,2,3].every( k => Number.isFinite(q.cpu[j+k]) ) || ! q.resultInputs || ! Number.isFinite( q.resultInputs[ j ] ) || ! Number.isFinite( q.resultInputs[ j + 1 ] ) || Math.hypot( q.resultInputs[ j ] - x, q.resultInputs[ j + 1 ] - z ) > .1 || q.cpu[ j + 3 ] > -5 ) return this.invalidate();
 			heights.push( q.cpu[ j ] );
 		}
+		this.ready = true;
 		this.elapsed += Math.max( 0, Math.min( dt, .1 ) );
 		if ( q.version !== this.version ) { this.heights.push( ...heights ); this.version = q.version; this.versions++; }
 		return this.elapsed >= 4 - 1e-6 && this.versions >= 2 ? seaReading( this.heights ) : null;
 	}
-	invalidate() { this.elapsed = 0; this.heights = []; this.version = -1; this.versions = 0; return null; }
-	get reading() { return this.elapsed >= 4 - 1e-6 && this.versions >= 2 ? seaReading( this.heights ) : null; }
+	invalidate() { this.elapsed = 0; this.heights = []; this.version = -1; this.versions = 0; this.ready = false; return null; }
+	get reading() { return this.ready && this.elapsed >= 4 - 1e-6 && this.versions >= 2 ? seaReading( this.heights ) : null; }
 }
 
 export class WeatherObservations {
 	constructor( story ) {
 		this.s = story; this.app = story.app; this.focus = null;
 		this.sampler = new SeaObservation( this.app.query || this.app.player.query );
-		this.seaTarget = new Vector3(); this.seaHolding = false; this.seaCapturedHold = false;
+		this.seaTarget = new Vector3(); this.seaHolding = false; this.seaCapturedHold = false; this.fogSeaElapsed = 0;
 		this.windStand = new Vector3( -23, STATION.yard + 1.2, -4.3 );
 	}
 	get due() { return this.s._obsDue(); }
 	get drafts() { return this.s.flags.weatherObservations || {}; }
 	get draft() { return this.drafts[ this.due ]; }
+	get fogLesson() { return this.due === 33 && !! this.s.next?.active && ! this.s.next.state.fogReturned; }
 	get clockScale() {
-		const active = [18,21].find( at => !this.s.obs[at] && this.s.h >= at-.1 && this.s.h < at+2.5 );
-		return !this.s.next?.active && active && ( this.due || this.drafts[active] ) ? .4 : 1;
+		return this.due ? .4 : 1;
 	}
+	lessonInstrumentsComplete() { return [ 'pressure', 'temperature', 'wind' ].every( key => !! this.draft?.readings[ key ] ); }
 	begin() {
 		const at = this.due;
 		if ( ! at ) return null;
@@ -98,7 +77,29 @@ export class WeatherObservations {
 		const s = this.s, a = this.app;
 		return ! s.paused && ! a.freeCam && ! a.ui?.ui?.photoMode && ! a.mobile?.paused && ! a.devMenu?.open && ! globalThis.document?.hidden && ! s.signal && ! s.ui.open;
 	}
-	onBalcony() { const p = this.app.player.position, r = Math.hypot( p.x, p.z ); return Math.abs( p.y - TOWER.deck ) < .4 && r > 2.35 && r < 3.8; }
+	onBalcony() { const p = this.app.player.position, r = Math.hypot( p.x, p.z ); return Math.abs( p.y - TOWER.deck ) < .55 && r > 2.35 && r < 4; }
+	get watchBay() { return galleryBayAt( this.app.player.position, TOWER.deck ); }
+	observationReady( field ) { return !! this.due && ! this.draft?.readings[ field ] && ( field !== 'visibility' || !! this.draft?.readings.sea ) && this.available() && ( this.s.next?.active || ! this.s.keeper?.goal() ); }
+	outwardView() {
+		if ( ! this.onBalcony() ) return false;
+		const p = this.app.player.position, radius = Math.hypot( p.x, p.z );
+		const dir = this.app.camera.getWorldDirection( new Vector3() );
+		return ( dir.x * p.x + dir.z * p.z ) / radius > -.05 && dir.y > -.9 && dir.y < .75;
+	}
+	bayTarget() {
+		const p = this.app.player.position;
+		if ( this.onBalcony() ) { const r = TOWER.gallery.rail / Math.hypot( p.x, p.z ); return new Vector3( p.x * r, TOWER.deck + 1.06, p.z * r ); }
+		return galleryBayPosition( nearestGalleryBay( p ), TOWER.deck, 1.06, TOWER.gallery.rail );
+	}
+	clearForPrompt( at, key = 'sea' ) {
+		const now = performance.now(), origin = this.app.camera.position;
+		this._clearCache ||= new Map();
+		const cache = this._clearCache.get( key );
+		if ( cache && now - cache.time < 150 && cache.origin.distanceTo( origin ) < .08 && cache.target.distanceTo( at ) < 5 ) return cache.clear;
+		const clear = this.clear( at );
+		this._clearCache.set( key, { time: now, origin: origin.clone(), target: at.clone(), clear } );
+		return clear;
+	}
 	onYard() { const p = this.app.player.position, c = STATION.compound; return Math.abs( p.y - STATION.yard ) < .2 && p.x > c.x0 && p.x < c.x1 && p.z > c.z0 && p.z < c.z1 && !( p.x > ROOM.x0 && p.x < ROOM.x1 && p.z > ROOM.z0 && p.z < ROOM.z1 ) && Math.hypot( p.x, p.z ) > 3; }
 	aimed( at, degrees = 10 ) { const cam = this.app.camera; return cam.getWorldDirection( new Vector3() ).dot( at.clone().sub( cam.position ).normalize() ) > Math.cos( degrees * Math.PI / 180 ); }
 	meshes() {
@@ -127,16 +128,26 @@ export class WeatherObservations {
 		this.s.save(); return true;
 	}
 	install() {
+		prepareObservationOcclusion( this.meshes() );
 		const I = this.s.interact;
 		I.get( 'barometer' ).use = () => this.inspect( 'pressure' );
 		I.add( { id: 'thermometer', at: ROOM.thermometer, size: .2, text: 'Read the shaded thermometer', use: () => this.inspect( 'temperature' ) } );
-		I.add( { id: 'weatherVane', at: this.s.station.parts.windVane, reach: 60, size: .8, when: () => this.onYard(), text: 'Observe the roof vane and wind', use: () => this.wind() } );
-		I.add( { id: 'weatherSea', at: () => this.seaTarget, reach: 1800, size: 12,
-			when: () => this.seaView(), text: 'Watch the open sea', hold: 4, progress: () => Math.min( 1, this.sampler.elapsed / 4 ),
+		I.add( { id: 'weatherVane', at: this.s.station.parts.windVane, reach: 60, size: .8, aimDegrees: VANE_AIM_DEGREES, distanceWeight: .005,
+			when: () => this.observationReady( 'wind' ) && this.onYard() && this.clearForPrompt( this.s.station.parts.windVane, 'vane' ),
+			text: 'Observe the roof vane and wind', use: () => this.wind() } );
+		const debugZones = GALLERY_WATCH_BAYS.map( bay => ( { ...bay, at: galleryBayPosition( bay, TOWER.deck, .02 ) } ) );
+		I.add( { id: 'weatherSea', at: () => this.bayTarget(), reach: 2.5, size: .65, aimDegrees: 80, debugZones,
+			when: () => this.seaView() && this.clearForPrompt( this.seaTarget ), text: () => this.seaObscured() ? 'Observe the fog over the sea' : 'Observe the sea', detail: () => this.seaObscured() ? 'Hold E to note that the sea state cannot be judged' : 'Hold E while looking out over open water; you can look around', hold: 4, progress: () => Math.min( 1, ( this.seaObscured() ? this.fogSeaElapsed : this.sampler.elapsed ) / 4 ),
 			onHold: dt => this.holdSea( dt ), onRelease: () => this.releaseSea() } );
-		for ( const [ id, key, title ] of [ [ 'weatherGallan', 'far', 'Check Gallan Head’s bearing' ], [ 'weatherIsland', 'near', 'Check the nearby island’s bearing' ] ] ) {
-			I.add( { id, at: () => this.landmarkPosition( key ), reach: 100000, size: key === 'far' ? 150 : 25,
-				when: () => this.onBalcony(), text: title, use: () => this.landmark( key ) } );
+		I.add( { id: 'galleryRail', at: () => this.bayTarget(), reach: 2.5, size: .5, aimDegrees: 80, debugZones,
+			when: () => ! this.due && this.available() && ! this.s.keeper?.goal() && this.outwardView(),
+			// A continuous lookout, with no completed task or jump to the next duty.
+			// Deliberate waiting remains at the chair and stool inside the station.
+			text: 'Hold the rail and look out', detail: 'Release to move on', hold: Infinity, hideProgress: true } );
+		for ( const [ id, key ] of [ [ 'weatherGallan', 'far' ], [ 'weatherIsland', 'near' ] ] ) {
+			I.add( { id, at: () => this.landmarkPosition( key ), reach: 100000, size: key === 'far' ? 150 : 25, aimDegrees: LANDMARK_AIM_DEGREES, distanceWeight: 0,
+				when: () => this.observationReady( 'visibility' ) && this.outwardView() && ! this.draft?.landmarks[ key ] && ( key !== 'near' || !! this.draft?.landmarks.far ) && this.aimed( this.landmarkPosition( key ), LANDMARK_AIM_DEGREES ) && this.clearForPrompt( this.landmarkPosition( key ), key ), debugZones,
+				text: () => this.fogLesson ? `Check the ${ LANDMARK_NAMES[ key ] } bearing` : `Identify ${ LANDMARK_NAMES[ key ] }`, detail: 'Look along the bearing and press E; note whether it can be seen', use: () => this.landmark( key ) } );
 		}
 	}
 	async inspect( key ) {
@@ -150,7 +161,7 @@ export class WeatherObservations {
 		const record = () => {
 			const value = key === 'pressure' ? { value: pressureAt( this.s.h ), label: `${ pressureAt( this.s.h ).toFixed( 2 ) } inches` } : { value: temperatureAt( this.s.h ), label: `${ temperatureAt( this.s.h ).toFixed( 1 ) }°F` };
 			if ( this.store( key, value, key === 'pressure' ? 'room barometer' : 'shaded north-wall thermometer' ) ) this.s.toast( `${ value.label } noted for the slate.` );
-			else this.s.toast( `${ value.label }. No evening observation is due.` );
+			else this.s.toast( `${ value.label }. No observation is due.` );
 		};
 		try { await this.s.ui.inspection( { title: key === 'pressure' ? 'The barometer · inches of mercury' : 'Shaded air · Fahrenheit', onRecord: record } ); }
 		finally {
@@ -170,22 +181,33 @@ export class WeatherObservations {
 	}
 	wind() {
 		const at = this.s.station.parts.windVane;
-		if ( ! this.available() || ! this.onYard() || ! this.aimed( at ) || ! this.clear( at ) ) { this.s.toast( 'Find an open view of the arrow above the cupola.' ); return false; }
+		if ( ! this.available() || ! this.onYard() || ! this.aimed( at, VANE_AIM_DEGREES ) || ! this.clear( at ) ) { this.s.toast( 'Look toward the top of the tower from an open part of the yard.' ); return false; }
 		const v = windReading( G.windDir.value.x, G.windDir.value.y, G.windSpeed.value );
 		if ( ! v ) return false;
 		this.store( 'wind', v, 'cupola vane and rendered wind' );
 		this.s.toast( `${ v.label }. The arrow points into the wind. Lewis lies to the east.`, 5000 ); return true;
 	}
 	seaView() {
-		if ( ! this.onBalcony() ) return false;
-		if ( this.seaHolding && this.sampler.patch ) { this.seaTarget.copy( this.sampler.patch ); return this.aimed( this.seaTarget, 12 ); }
+		if ( ! this.observationReady( 'sea' ) || ! this.outwardView() ) return false;
+		if ( this.seaHolding && this.sampler.patch ) { this.seaTarget.copy( this.sampler.patch ); return this.aimed( this.seaTarget, SEA_AIM_DEGREES ); }
 		const cam = this.app.camera, dir = cam.getWorldDirection( new Vector3() );
-		if ( dir.y > -.065 || dir.y < -.8 ) return false;
-		const distance = ( ( G.seaLevel?.value || 0 ) - cam.position.y ) / dir.y;
-		if ( distance < 120 || distance > 1600 ) return false;
-		this.seaTarget.copy( cam.position ).addScaledVector( dir, distance );
-		return this.app.terrainData?.heightAt( this.seaTarget.x, this.seaTarget.z ) < -5;
+		// Observe an open patch in the broad view, including when looking at the
+		// horizon. The player need not aim a ray at an exact point on the water.
+		const bearing = Math.atan2( dir.z, dir.x );
+		for ( const offset of [ 0, .35, -.35, .7, -.7 ] ) for ( const distance of [ 600, 900, 1200 ] ) {
+			this.seaTarget.set( cam.position.x + Math.cos( bearing + offset ) * distance, G.seaLevel?.value || 0, cam.position.z + Math.sin( bearing + offset ) * distance );
+			if ( ! this.aimed( this.seaTarget, SEA_AIM_DEGREES ) ) continue;
+			// Every rendered sample must be over deep water, even if the centre is clear.
+			let water = true;
+			for ( let i = 0; i < 9 && water; i ++ ) {
+				const x = this.seaTarget.x + ( i % 3 - 1 ) * SEA_SAMPLE_SPACING, z = this.seaTarget.z + ( Math.floor( i / 3 ) - 1 ) * SEA_SAMPLE_SPACING;
+				water = this.app.terrainData?.heightAt( x, z ) < -5;
+			}
+			if ( water && this.clearForPrompt( this.seaTarget ) ) return true;
+		}
+		return false;
 	}
+	seaObscured() { return this.fogLesson && hazeTransmittance( this.app.camera.position, this.seaTarget, this.app.haze?.density.value || 0 ) < .02; }
 	holdSea( dt ) {
 		if ( this.seaCapturedHold ) return;
 		if ( ! this.available() || ! this.seaView() ) return this.releaseSea();
@@ -197,14 +219,23 @@ export class WeatherObservations {
 			if ( ! this.clear( this.sampler.patch ) ) return this.releaseSea();
 			this.seaOrigin.copy( this.app.camera.position );
 		}
-		if ( this.sampler.step( dt, G.time.value ) ) this.recordSea();
+		if ( this.seaObscured() ) {
+			this.fogSeaElapsed += Math.max( 0, Math.min( dt, .1 ) );
+			if ( this.fogSeaElapsed >= 4 - 1e-6 ) this.recordSea();
+		} else if ( this.sampler.step( dt, G.time.value ) ) this.recordSea();
 	}
-	releaseSea() { this.seaHolding = false; this.seaCapturedHold = false; this.sampler.reset(); }
+	releaseSea() { this.seaHolding = false; this.seaCapturedHold = false; this.fogSeaElapsed = 0; this.sampler.reset(); }
 	recordSea() {
+		if ( this.seaObscured() ) {
+			if ( ! this.observationReady( 'sea' ) || ! this.outwardView() || this.fogSeaElapsed < 4 - 1e-6 ) return false;
+			const noted = this.store( 'sea', { status: 'fog', label: 'Sea obscured by fog; state not judged' }, 'outward lookout; water hidden by fog' );
+			this.s.toast( 'I cannot judge the sea through this fog. Noted for the slate.', 4200 );
+			this.releaseSea(); this.seaCapturedHold = true; return noted;
+		}
 		const value = this.sampler.step( 0, G.time.value );
-		if ( ! this.available() || ! this.onBalcony() || ! this.sampler.patch || ! this.aimed( this.sampler.patch, 12 ) || ! value || ! this.clear( this.sampler.patch ) ) { this.s.toast( 'Keep an open view of the sea.' ); this.releaseSea(); return false; }
+		if ( ! this.observationReady( 'sea' ) || ! this.outwardView() || ! this.sampler.patch || ! this.aimed( this.sampler.patch, SEA_AIM_DEGREES ) || ! value || ! this.clear( this.sampler.patch ) ) { this.s.toast( 'Look out over open water from the balcony rail.' ); this.releaseSea(); return false; }
 		const noted = this.store( 'sea', value, 'nine rendered water samples, four-second observation' );
-		this.s.toast( `Sea ${ value.label.toLowerCase() } — ${ noted ? 'noted for the slate' : 'no evening observation is due' }.` ); this.releaseSea(); this.seaCapturedHold = true; return true;
+		this.s.toast( `Sea ${ value.label.toLowerCase() } — ${ noted ? 'noted for the slate' : 'no observation is due' }.` ); this.releaseSea(); this.seaCapturedHold = true; return true;
 	}
 	landmarkPosition( key ) {
 		const at = key === 'far' ? this.s.her.clone() : NEAR.clone(), cam = this.app.camera;
@@ -214,23 +245,27 @@ export class WeatherObservations {
 	}
 	landmark( key ) {
 		const at = this.landmarkPosition( key );
-		if ( ! this.available() || ! this.onBalcony() || ! this.aimed( at ) ) return false;
+		if ( ! this.observationReady( 'visibility' ) || ! this.outwardView() || ! this.aimed( at, LANDMARK_AIM_DEGREES ) || this.draft?.landmarks[ key ] || key === 'near' && ! this.draft?.landmarks.far ) return false;
 		const value = landmarkReport( { blocked: ! this.clear( at ), transmittance: hazeTransmittance( this.app.camera.position, at, this.app.haze?.density.value || 0 ),
 			daylight: 1 - G.night.value, lit: key === 'far' && Beams.uniforms.far.value[ 0 ].w > 0, nearby: key === 'near' } );
 		if ( ! value || value.status === 'blocked' ) { this.s.toast( value?.label || 'The view cannot be read yet.' ); return false; }
+		// A checked bearing lost in fog is a valid visibility observation. The
+		// first lesson must teach what Walter can actually see on this watch;
+		// only a truly visible shore earns an identified-landmark flag.
 		const draft = this.begin();
 		if ( draft ) {
-			draft.landmarks[ key ] = { ...value, h: this.s.h, source: key === 'far' ? 'Gallan Head bearing' : 'Eilean Tighe bearing', position: this.app.player.position.toArray() };
+			draft.landmarks[ key ] = { ...value, h: this.s.h, source: LANDMARK_NAMES[ key ], position: this.app.player.position.toArray() };
+			if ( value.status === 'visible' ) { this.s.flags.identifiedLandmarks ||= {}; this.s.flags.identifiedLandmarks[ key ] = this.s.h; }
 			const v = visibilityReading( draft.landmarks.far, draft.landmarks.near );
-			if ( v ) this.store( 'visibility', v, 'both landmark bearings checked' );
+			if ( v ) this.store( 'visibility', v, 'both landmarks observed' );
 			else this.s.save();
 		}
-		this.s.toast( value.label, 4200 ); return true;
+		this.s.toast( `${ LANDMARK_NAMES[ key ] } · ${ value.label }`, 4200 ); return true;
 	}
 	complete( draft = this.draft ) { return FIELDS.every( ( [ key ] ) => !! draft?.readings[ key ] ); }
 	goal() {
 		const r = this.draft?.readings || {}, missing = FIELDS.find( ( [ key ] ) => ! r[ key ] )?.[ 0 ];
-		return { pressure: 'Read the room barometer for the evening observations.', temperature: 'Read the shaded thermometer outside the north wall.', wind: 'Step into the yard and inspect the vane above the cupola.', sea: 'On the balcony, look down at open water and hold to observe the sea.', visibility: this.draft?.landmarks.far ? 'Check the nearby island’s bearing from the balcony.' : 'Check Gallan Head’s bearing from an open part of the balcony.' }[ missing ] || 'Return to the slate and chalk the captured observations.';
+		return { pressure: 'Read the room barometer beside the desk.', temperature: 'Read the shaded thermometer outside the north wall.', wind: 'From the yard, look toward the top of the tower and press E to observe the wind.', sea: 'Step onto the balcony and look out over the sea.', visibility: this.draft?.landmarks.far ? 'Check the Eilean Tighe bearing; note whether the island can be seen.' : 'Check the Gallan Head bearing to the east; note whether Lewis can be seen.' }[ missing ] || 'Return to the slate and chalk the captured observations.';
 	}
 	guidance() {
 		const r = this.draft?.readings || {};
@@ -241,15 +276,15 @@ export class WeatherObservations {
 		if ( ! r.temperature ) return { at: ROOM.thermometer, label: 'Shaded thermometer · E', id: 'thermometer', zone: 'yard' };
 		if ( ! r.wind ) return { at: this.onYard() && this.app.player.position.distanceTo( this.windStand ) < 5 ? this.s.station.parts.windVane : this.windStand, label: 'Roof vane · look up', id: 'weatherVane', zone: 'yard' };
 		if ( this.onYard() && p.z < -2.8 && p.x < 3.5 ) return { at: new Vector3( 5, STATION.yard + 1, -3.6 ), label: 'Around the tower to the house door', id: 'weatherNorthPath', zone: 'yard' };
-		if ( ! r.sea ) { const radius = Math.hypot( p.x, p.z ); return { at: this.onBalcony() ? new Vector3( p.x / radius * 600, G.seaLevel?.value || 0, p.z / radius * 600 ) : new Vector3( 450, 0, 80 ), label: 'Open sea · look outward and down', id: 'weatherSea', zone: 'gallery' }; }
+		if ( ! r.sea ) { const bay = nearestGalleryBay( p ); return { at: this.onBalcony() ? new Vector3( Math.cos( bay.seaBearing ) * 600, G.seaLevel?.value || 0, Math.sin( bay.seaBearing ) * 600 ) : galleryBayPosition( bay, TOWER.deck, 1.06, TOWER.gallery.rail ), label: this.onBalcony() ? this.fogLesson ? 'Fog over the sea - hold E to observe' : 'Open water · hold E to observe' : `${ bay.label } · pale timber hand-rest`, labelAlways: true, id: 'weatherSea', zone: 'gallery' }; }
 		if ( ! r.visibility ) {
 			const key = this.draft?.landmarks.far ? 'near' : 'far', target = this.landmarkPosition( key );
 			if ( this.onBalcony() ) {
 				const a = Math.atan2( p.z, p.x ), bearing = Math.atan2( target.z-p.z, target.x-p.x );
 				const turn = Math.atan2( Math.sin(bearing-a), Math.cos(bearing-a) );
-				if ( Math.abs(turn) > 1.2 ) { const next = a+Math.sign(turn)*.45; return { at: new Vector3(Math.cos(next)*3.1,TOWER.deck+1,Math.sin(next)*3.1), label: 'Around the balcony for an open bearing', id:'weatherBalconyPath', zone:'gallery' }; }
+				if ( Math.abs(turn) > 1.55 || ! this.clearForPrompt( target, key ) ) { const next = a+Math.sign(turn || 1)*.45; return { at: new Vector3(Math.cos(next)*3.1,TOWER.deck+1,Math.sin(next)*3.1), label: 'Around the balcony for an open view', id:'weatherBalconyPath', zone:'gallery' }; }
 			}
-			return { at: target, label: key === 'far' ? 'Gallan Head bearing · E' : 'Nearby island bearing · E', id: key === 'far' ? 'weatherGallan' : 'weatherIsland', zone: 'gallery' };
+			return { at: target, label: `${ this.fogLesson ? 'Check bearing' : 'Identify' } ${ LANDMARK_NAMES[ key ] } · E`, labelAlways: true, id: key === 'far' ? 'weatherGallan' : 'weatherIsland', zone: 'gallery' };
 		}
 		return { at: ROOM.slate, label: 'Chalk observations · E', id: 'slate', zone: 'room' };
 	}
@@ -257,16 +292,42 @@ export class WeatherObservations {
 		const at = this.due, draft = this.begin();
 		if ( ! at || ! draft ) return this.s._readSlate();
 		const rows = FIELDS.map( ( [ key, title ] ) => ( { title, value: draft.readings[ key ] ? `${ draft.readings[ key ].label } · ${ clock( draft.readings[ key ].h ) }` : 'Not yet observed' } ) );
-		const result = await this.s.ui.observations( { title: `The slate · ${ at === 18 ? 'six' : 'nine' } o’clock`, rows, complete: this.complete( draft ), hint: this.goal() } );
+		const result = await this.s.ui.observations( { title: `The slate · ${ roundName( at ).toLowerCase() }`, rows, complete: this.complete( draft ), hint: this.goal() } );
 		if ( result !== 'chalk' || this.due !== at || this.s.obs[ at ] || ! this.complete( draft ) ) return false;
 		const r = draft.readings;
 		this.s.obs[ at ] = { wind: r.wind.label, sea: r.sea.label, visibility: r.visibility.label, pressure: r.pressure.value, temperature: r.temperature.value, capturedAt: this.s.h, evidence: structuredClone( draft ) };
-		this.s.row( this.s.h, `${ at === 18 ? 'Six' : 'Nine' } o’clock observations chalked. Bar. ${ r.pressure.value.toFixed( 2 ) }. Therm. ${ r.temperature.value.toFixed( 1 ) }°F. Wind: ${ r.wind.label }. Sea: ${ r.sea.label.toLowerCase() }. Visibility: ${ r.visibility.label }.` );
+		this.s.row( this.s.h, `${ roundName( at ) } chalked. Bar. ${ r.pressure.value.toFixed( 2 ) }. Therm. ${ r.temperature.value.toFixed( 1 ) }°F. Wind: ${ r.wind.label }. Sea: ${ r.sea.label.toLowerCase() }. Visibility: ${ r.visibility.label }.` );
 		delete this.s.flags.weatherObservations[ at ]; this.s.save(); return true;
 	}
 	update() {
 		if ( this.due ) this.begin();
-		if ( ! this.available() || this.s.interact.current?.id !== 'weatherSea' || ! this.app.input.down( 'KeyE' ) ) this.releaseSea();
+		if ( ! this.observationReady( 'sea' ) || ! this.onBalcony() || this.s.interact.current?.id !== 'weatherSea' || ! this.app.input.down( 'KeyE' ) ) this.releaseSea();
 		this.updateFocus();
+		this.updateLabels();
+	}
+	updateLabels() {
+		if ( ! this.s.ui.root ) return;
+		if ( ! this.labels ) {
+			this.labels = {};
+			for ( const key of [ 'far', 'near', 'rail' ] ) {
+				const label = document.createElement( 'div' ); label.className = `sh-weather-label${ key === 'rail' ? ' sh-weather-rail' : '' }`;
+				label.textContent = key === 'rail' ? 'Lookout rail' : LANDMARK_NAMES[ key ]; label.hidden = true;
+				this.s.ui.root.append( label ); this.labels[ key ] = label;
+			}
+		}
+		const canShow = this.available() && this.onBalcony() && this.app.settings?.guidance !== false && ! this.s.keeper?.firstLight?.active && ! this.s.keeper?.cutscene?.active;
+		for ( const [ key, label ] of Object.entries( this.labels ) ) {
+			const known = key === 'rail' ? this.observationReady( 'sea' ) : this.s.flags.identifiedLandmarks?.[ key ] !== undefined;
+			label.hidden = true;
+			if ( ! canShow || ! known ) continue;
+			const at = key === 'rail' ? galleryBayPosition( nearestGalleryBay( this.app.player.position ), TOWER.deck, 1.1, TOWER.gallery.rail ) : this.landmarkPosition( key );
+			const position = projectGuidance( at, this.app.camera, window.innerWidth, window.innerHeight, { left: 100, right: 100, top: 110, bottom: 150 } );
+			if ( ! position?.onScreen ) continue;
+			if ( ! this.clearForPrompt( at, `label-${ key }` ) ) continue;
+			// A remembered name locates a visible landmark; it must never label a
+			// shore currently hidden in fog or darkness as though it were in sight.
+			if ( key !== 'rail' && landmarkReport( { blocked: false, transmittance: hazeTransmittance( this.app.camera.position, at, this.app.haze?.density.value || 0 ), daylight: 1 - G.night.value, lit: key === 'far' && Beams.uniforms.far.value[ 0 ].w > 0, nearby: key === 'near' } )?.status !== 'visible' ) continue;
+			label.style.left = `${ position.x }px`; label.style.top = `${ position.y + 14 }px`; label.hidden = false;
+		}
 	}
 }

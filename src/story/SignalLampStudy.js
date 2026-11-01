@@ -463,6 +463,7 @@ export class SignalLampStudy {
 		this.press( false );
 		this.active = false;
 		if ( s.moving?.balconyRail ) s.moving.balconyRail.visible = this._railVisible ?? true;
+		this.paperDeck?.destroy(); this.paperDeck = null;
 		this.el?.remove();
 		this.el = null;
 		window.removeEventListener( 'keydown', this._down, true );
@@ -562,6 +563,7 @@ export class SignalLampStudy {
 		el.querySelector( '.sh-lamp-key-row' ).append( clear );
 		foot.append( read, back );
 		root.append( el );
+		this.paperDeck = this.s.ui.paperPanel?.( el.querySelector( '.sh-lamp-scroll' ) );
 		this._down = ( e ) => this.keydown( e );
 		this._up = ( e ) => this.keyup( e );
 		window.addEventListener( 'keydown', this._down, true );
@@ -816,9 +818,9 @@ export class SignalLampStudy {
 	sync( dt = 0 ) {
 
 		const L = this.s.moving?.signalLamp, st = this.state;
-		const out = this.output, open = this.open;
+		const out = this.output, open = Math.max( this.open, this.s.watcher?.yourLamp || 0, this.s.guidedSignal?.lamp || 0 );
 		// (the night exchange drives the same light while you reply to Cate)
-		if ( this.s.signalLight ) this.s.signalLight.scale = Math.max( this.s.watcher?.yourLamp || 0, out * open );
+		if ( this.s.signalLight ) this.s.signalLight.scale = Math.max( this.s.watcher?.yourLamp || 0, this.s.guidedSignal?.lamp || 0, out * open );
 		if ( ! L ) return;
 		const P = L.parts, k = dt > 0 ? 1 - Math.exp( - dt / 0.12 ) : 1;
 		const ease = ( obj, key, to ) => {

@@ -15,6 +15,7 @@ export async function loadInteriorArchive( village ) {
     const tex=await loadTexture(ARCHIVE_DOCUMENTS[display.id].texture,true);
     const material=standard({name:'archive-'+display.id,roughness:.94,side:'double',textures:{archivePaper:tex},surface:`s.albedo = textureSample( archivePaper, smpAnisoClamp, vec2f( in.uv.x, 1.0-in.uv.y ) ).rgb * vec3f( 0.91, 0.86, 0.74 ); s.roughness = 0.94;`});
     const B=new Builder();
+    material.userData.warmup='station';
     B.part('paper',quad01Part(display.width,display.height),0,0,0);
     const mesh=new Mesh(B.batches.paper.build(),material);
     mesh.position.copy(display.at);mesh.rotation.set(display.rx,display.ry,0);

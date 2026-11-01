@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Action prompt states</title>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet" />
+	<style>
+		html body { background: linear-gradient(180deg, #1b2334 0%, #39405a 55%, #11151d 56%, #06080b 100%); }
+		html body.bright { background: linear-gradient(#dce5e6, #b8cbcf 55%, #f4f0dd 56%, #84989d); }
+		.tw-start, .tw-rail, .tw-tl { display: none !important; }
+	</style>
+</head>
+<body>
+<script type="module">
+// Dev page: the interaction prompt (src/ui/UI.js setPrompt) over a dusk backdrop, one state per ?view=
+//   press | hold | holding | complete | ratchet | wide | play (default: a hold played through, looping)
+// ?bright puts it over a daylight backdrop; ?setting=tidewater shows Tidewater's pill instead.
+import '../src/ui/ui.css';
+import { UI } from '../src/ui/UI.js';
+
+const query = new URLSearchParams( location.search );
+const view = query.get( 'view' ) || 'play';
+if ( query.has( 'bright' ) ) document.body.classList.add( 'bright' );
+const ui = new UI();
+const wind = { detail: 'Raises the weight whose slow fall turns the lens' };
+const SECS = 6;
+
+if ( view === 'press' ) ui.setPrompt( 'E', 'Open the lamp-room door' );
+if ( view === 'hold' ) ui.setPrompt( 'E', 'Wind the clockwork', 0, { ...wind, eta: SECS } );
+if ( view === 'holding' ) ui.setPrompt( 'E', 'Wind the clockwork', 0.62, { ...wind, active: true, eta: SECS * 0.38 } );
+if ( view === 'complete' ) ui.setPrompt( 'E', 'Wind the clockwork', 1, { detail: 'Fully raised. Release E.', active: true } );
+if ( view === 'ratchet' ) ui.setPrompt( 'E', 'Hold the rail and look out', null, { hold: true, hideProgress: true, active: true, detail: 'Release to move on' } );
+if ( view === 'wide' ) ui.setPrompt( 'Space', 'Climb ladder' );
+if ( view === 'play' ) {
+
+	let t0 = performance.now();
+	const frame = () => {
+
+		const t = ( performance.now() - t0 ) / 1000;
+		if ( t < 1.5 ) ui.setPrompt( 'E', 'Wind the clockwork', 0, { ...wind, eta: SECS } );
+		else if ( t < 1.5 + SECS ) {
+
+			const p = ( t - 1.5 ) / SECS;
+			ui.setPrompt( 'E', 'Wind the clockwork', p, { ...wind, active: true, eta: SECS * ( 1 - p ) } );
+
+		} else if ( t < 3 + SECS ) ui.setPrompt( 'E', 'Wind the clockwork', 1, { detail: 'Fully raised. Release E.', active: true } );
+		else if ( t < 4.5 + SECS ) ui.setPrompt( 'E', 'Open the lamp-room door' );
+		else t0 = performance.now();
+		requestAnimationFrame( frame );
+
+	};
+
+	frame();
+
+}
+</script>
+</body>
+</html>

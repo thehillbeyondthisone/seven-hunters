@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seven Hunters — paper sheets review</title><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(ellipse at 50% 30%,#66716d,#162730 60%,#0b151b);}</style></head><body><script type="module">
+import '../src/story/story.css';
+import '../src/mobile/mobile.css';
+import { StoryUI } from '../src/story/StoryUI.js';
+import { CROSSING_PAPERS, LETTER } from '../src/story/Script.js';
+import { SignalLampStudy, SIGNAL_LAMP_PAPER } from '../src/story/SignalLampStudy.js';
+import { ARCHIVE_DOCUMENTS } from '../src/story/ArchiveDocuments.js';
+const input={enabled:true,keys:new Set(),reset(){this.keys.clear()},requestLock(){this.restored=true}};
+window.paperUI=new StoryUI({input}); window.paperInput=input;
+window.paperErrors=[]; window.addEventListener('error',e=>paperErrors.push(e.message)); window.addEventListener('unhandledrejection',e=>paperErrors.push(String(e.reason)));
+const ui=paperUI;
+const mobile=()=>document.documentElement.classList.toggle('is-mobile',innerWidth<600);mobile();window.addEventListener('resize',mobile);
+window.showPaper=async(kind='read')=>{
+ document.querySelectorAll('.sh-page-wrap,.sh-end').forEach(n=>n.remove());ui.modal=0;ui.root.classList.remove('is-modal');input.enabled=true;
+ let pending;
+ if(kind==='read')pending=ui.read({title:'The instructions in your coat',body:Array.from({length:18},(_,i)=>`Entry ${i+1}. The upper tramway leads back to the station. Follow the iron rails through the fog, keep above the lower landing, and leave yourself time to look at the sea. Each word of this sheet remains available when the window changes size.`)});
+ if(kind==='study'){const s={flags:{},ui,app:{isMobile:innerWidth<900},save(){}};const study=window.paperStudy=new SignalLampStudy(s);study.active=true;study.focus=()=>{};study.sync=()=>{};study.buildPanel();study.refresh();pending=new Promise(()=>{})}
+ if(kind==='packet')pending=ui.packet(CROSSING_PAPERS);
+ if(kind==='guide')pending=ui.read(SIGNAL_LAMP_PAPER);
+ if(kind==='letter')pending=ui.read(LETTER);
+ if(kind==='archive')pending=ui.archive(ARCHIVE_DOCUMENTS.islandMap);
+ if(kind==='choice')pending=ui.choose({title:'Your reply',intro:'Cate is waiting at her lamp. Choose one reply.',options:Array.from({length:6},(_,i)=>({label:`Reply ${i+1}: THE SAME WORK. GLAD TO SEE YOUR LAMP.`,sub:'Send this reply deliberately; then wait for the next message.',value:i})),cancel:null});
+ if(kind==='journal')pending=ui.journal({heading:'Thursday, 3rd January 1901',rows:Array.from({length:22},(_,i)=>[`${15+i}.00`,`Entry ${i+1}. Apparatus examined and the light kept in order. The gate has been secured with the rope.`]),remarks:[{key:'gate',ask:'Record the open gate?'},{key:'weather',ask:'Record the weather?'}],footer:'W. Innes, Assistant Keeper'});
+ if(kind==='form')pending=ui.form({title:'Evening observations',fields:[{key:'wind',label:'Wind',options:['North','South','East','West']},{key:'force',label:'Force',options:['Light','Fresh','Strong','Gale']},{key:'sky',label:'Sky',options:['Clear','Clouded','Fog']}]});
+ if(kind==='save')pending=ui.savedWatch({date:'Thursday, 3rd January 1901',time:'18.30',objective:'Return to the lantern, wind the machine, and prepare for the next watch.',entry:'The gate was open. I remember securing it with the rope before I went inside.'});
+ if(kind==='album'){const image=document.createElement('canvas');image.width=image.height=384;const c=image.getContext('2d');c.fillStyle='#8c8973';c.fillRect(0,0,384,384);c.fillStyle='#2c3c40';c.fillRect(120,120,144,264);pending=ui.album({title:'Lewis — the prints',intro:'The shop has developed the roll. The views you exposed are here.',frames:Array.from({length:6},(_,i)=>({image:image.toDataURL(),label:`Your view ${i+1}`}))})}
+ window.paperPending=pending; window.paperResult='pending';Promise.resolve(pending).then(r=>window.paperResult=r??'closed');
+};
+await showPaper(new URLSearchParams(location.search).get('view')||'read');
+window.paperReady=true;
+</script></body></html>

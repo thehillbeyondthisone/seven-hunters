@@ -1,0 +1,81 @@
+import './headless.mjs';
+import assert from 'node:assert/strict';
+import { installBrowser } from '../tools/shots/browser.mjs';
+import { Vector3, PerspectiveCamera } from '../src/engine/index.js';
+import { HandLamp } from '../src/station/HandLamp.js';
+import { configureHandLampLight, updateHandLampLight } from '../src/station/HandLampLight.js';
+import { LocalLights, localLightsModule } from '../src/materials/LocalLights.js';
+import { Colliders } from '../src/world/Colliders.js';
+import { G } from '../src/engine/render/Frame.js';
+import { GPU } from '../src/engine/gpu/GPU.js';
+import { RenderTarget } from '../src/engine/gpu/Texture.js';
+import { FullscreenPass } from '../src/engine/render/FullscreenPass.js';
+import { readTexture } from '../src/engine/gpu/Readback.js';
+import { RoomAir } from '../src/post/RoomAir.js';
+import { ShaderModule } from '../src/engine/gpu/Shader.js';
+
+installBrowser( { root: 'public' } );
+const lamp = new HandLamp(), lights = new LocalLights(), light = lights.flashlight;
+const camera = new PerspectiveCamera( 70, 1, .1, 100 ); camera.position.set( 0, 1.62, 0 );
+lamp.carried = true; lamp.lit = true;
+configureHandLampLight( light, lamp );
+for ( let i = 0; i < 120; i ++ ) lamp.update( 1 / 60, camera );
+assert.equal( lamp.glow, 1 ); assert.ok( lamp.flicker >= .96 && lamp.flicker <= 1 );
+const freePosition = lamp.lightPosition.clone(), freeModel = lamp.group.position.clone();
+const colliders = new Colliders();
+colliders.addBox( new Vector3( .5, 1.2, 0 ), new Vector3( .3, 1, 2 ) );
+lamp.update( 0, camera, { colliders } );
+assert.ok( lamp.lightPosition.x < .2, 'approaching a wall retracts the flame to the player side' );
+assert.ok( lamp.group.position.clone().sub( freeModel ).distanceTo( lamp.lightPosition.clone().sub( freePosition ) ) < 1e-8, 'the visible model follows the corrected source' );
+lamp.lit = false; lamp.update( .5, camera );
+assert.equal( lamp.glow, 0 ); updateHandLampLight( light, lamp, null, .1 ); assert.equal( light.on, false );
+lamp.lit = true; lamp.update( 2, camera );
+updateHandLampLight( light, lamp, { min: [-4,0,-4], max: [4,3,4] }, .05 );
+assert.ok( light.boost > 0 && light.boost < 1, 'shelter brightness blends through doorways' );
+
+await GPU.init( { headless: true } ); GPU.syncPipelines = true;
+GPU.device.pushErrorScope( 'validation' );
+G.night.value = 1; G.seaLevel.value = -100;
+light.at = new Vector3(); light.up.set( 0, 1, 0 ); light.scale = 1; light.bounds = null;
+lights.update( camera, 0 );
+const W = 129, output = new RenderTarget( W, W, { colors: [ 'rgba8unorm' ] } );
+const pass = new FullscreenPass( { label: 'lantern emission fixture', modules: [ localLightsModule ], colorFormats: ['rgba8unorm'], defines: { LOCAL_LIGHTS_CHEAP: 1 }, code: /* wgsl */`
+fn fragment( in: FSIn ) -> vec4f {
+	let P = vec3f( ( in.uv.x * 2.0 - 1.0 ) * 7.0, ( 1.0 - in.uv.y * 2.0 ) * 7.0, -1.0 );
+	let N = vec3f( 0.0, 0.0, 1.0 );
+	var acc: LightAccum;
+	hookLocalLights( defaultSurface( N ), P, N, N, &acc );
+	return vec4f( acc.directDiffuse, 1.0 );
+}` } );
+async function draw() {
+	GPU.beginFrame(); pass.render( { colorViews: [ output.texture ] } ); GPU.submit();
+	return new Uint8Array( ( await readTexture( output.texture ) ).data );
+}
+const housing = await draw(); light.lantern = false; lights.update( camera, 0 ); const point = await draw();
+const red = ( pixels, x, y ) => pixels[ ( y * W + x ) * 4 ];
+assert.ok( red( housing, 64, 64 ) > 0, 'the globe lights nearby surfaces' );
+assert.equal( red( housing, 64, 64 ), red( point, 64, 64 ), 'sideways emission remains useful' );
+assert.ok( red( housing, 64, 40 ) < red( point, 64, 40 ) * .35, 'the cap shades surfaces above the flame' );
+assert.ok( red( housing, 64, 88 ) < red( point, 64, 88 ) * .45, 'the fount shapes the pool below the flame' );
+assert.equal( red( housing, 0, 64 ), 0, 'the lantern falls to zero beyond its local range' );
+assert.ok( housing[ (64 * W + 64) * 4 ] > housing[ (64 * W + 64) * 4 + 2 ], 'the flame casts warm light' );
+light.lantern = true; light.up.set( 1, 0, 0 ); lights.update( camera, 0 );
+const tilted = await draw();
+assert.ok( red( tilted, 88, 64 ) < red( point, 88, 64 ) * .35, 'the housing shade follows the lantern axis as it swings' );
+light.lantern = true; light.bounds = { min: [-4,-4,-4], max: [4,4,4] }; lights.update( camera, 0 );
+assert.equal( lights.roomAirLights[ 0 ].scatterStrength, .12, 'surface light does not become full-strength indoor fog' );
+const air = new RoomAir( { haze: { module: new ShaderModule( { name: 'lamp-scatter-fixture' } ) }, localLights: lights,
+	layout: [ { id: 'test', min: [-4,-4,-4], max: [4,4,4], windows: [] } ] } );
+air.update( camera );
+assert.equal( air.uniforms.fields.lampCount.value, 1 );
+const source = lights.roomAirLights[ 0 ];
+assert.equal( air.uniforms.fields.lampCol.value[ 0 ].x, source.color.x * .12, 'the reduced aerosol contribution reaches the actual volume uniforms' );
+assert.equal( air.uniforms.fields.lampShape.value[ 0 ].x, 1, 'surfaces and air share the tilted housing mask' );
+light.on = false;
+lights.add( { position: new Vector3(), color: light.color, intensity: 1, range: 3, kind: 'lamp', always: true, bounds: light.bounds } );
+lights.update( camera, 0 );
+assert.equal( lights.roomAirLights[ 0 ].shape.w, 0, 'a fixed source reusing slot zero does not inherit the lantern housing' );
+assert.equal( lights.roomAirLights[ 0 ].scatterStrength, 1, 'a fixed source reusing the slot keeps its authored aerosol strength' );
+assert.equal( await GPU.device.popErrorScope(), null );
+console.log( 'PASS actual GPU lantern housing, warm color, finite reach, wall contact, gentle flame, extinguishing and doorway adaptation.' );
+process.exit( 0 );

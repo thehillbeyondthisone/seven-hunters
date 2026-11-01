@@ -13,6 +13,6 @@ export class RoomArrival {
 		state.elapsed += Math.max( 0, Math.min( dt, 1 ) );
 		if ( state.elapsed < 2 ) return null;
 		if ( state.elapsed >= 16 ) { state.done = true; s.save(); return null; }
-		return { from: 'The keepers’ room', text: 'Three chairs around the table. Only your bag has come ashore.', lesson: true };
+		return { from: 'Walter', text: 'Three chairs around the table. Only my bag has come ashore.', lesson: true };
 	}
 }

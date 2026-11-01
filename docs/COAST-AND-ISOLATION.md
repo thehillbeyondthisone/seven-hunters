@@ -56,6 +56,33 @@ impacts, clockwork and room sounds remain. Exertion/recovery breaths and bounded
 fitting rattles use the existing mixer. The sea-dread grade retains more coastal
 detail; camera-bob and reduced-motion preferences suppress optional shake.
 
+### Landing readability · 16 October
+
+The west works now assemble their concrete batches as well as ironwork and
+derrick wire. Previously the moving-part material list omitted the concrete,
+leaving the rendered flight and platform incomplete. The pale cast surfaces now
+separate from the wet rock, with a gentler storm vignette and shadow grade. The
+nearby service lantern has a small warm core instead of an overpowering halo.
+
+The observation point is on the surviving upper steps, closer to the break.
+It remains above the wash and makes the exposed joint visible.
+One larger set follows the actual coastal phase after an intact viewing interval;
+its broad offshore front focuses into higher run-up within the rock cutting,
+instead of displacing a narrow offshore strip to the full run-up height. CPU
+water queries and WGSL use the same shape. The return objective waits for
+drainage. The visual, terrain and collision cut
+share the same stair joint. Chipped concrete, bent attached rails and fallen
+slabs remain after the lower works are lost; retries restore the original works.
+These fracture details are an authored reconstruction.
+
+`npm run test:storm` checks visible structure, reversible support, the complete
+walking route, and observation/impact/aftermath timing across coastal phases and
+frame rates. `npm run shots:storm -- --preview` renders selected motion-review
+frames; `npm run shots:storm` records a continuous first-person MP4 under
+`artifacts/storm-readability/`. The replay uses the real walker, story and coastal
+hazards from a prepared storm checkpoint. It is silent, has no HUD and does not
+measure real-time browser performance.
+
 ## Checks
 
 - `node test/coastal-safety.mjs`: sets, pause, saved retry, immersion, handhold

@@ -32,7 +32,10 @@ function watch() {
 	for ( let i = 0; i < Math.ceil( railTime ); i ++ ) lessons.update( 1 );
 	assert.equal( lessons.update( 0 ), null, 'there is silence between passages' );
 	for ( let i = 0; i < 6; i ++ ) lessons.update( 1 );
-	assert.equal( lessons.update( 0 ).id, 'shore' );
+	assert.equal( lessons.update( 0 ).id, 'established', 'the added historical beat follows a quiet gap' );
+	const historyTime = story.flags.introLessons.active.remaining;
+	for ( let i = 0; i < Math.ceil( historyTime ) + 6; i++ ) lessons.update( 1 );
+	assert.equal( lessons.update( 0 ).id, 'shore', 'the final shore observation stays in its own passage' );
 	story.beat = 'room';
 	for ( let i = 0; i < 40 && lessons.update( 0 )?.id !== 'yard'; i ++ ) lessons.update( 1 );
 	assert.equal( lessons.update( 0 ).id, 'yard', 'entering the yard finishes with the keepers rather than a route backlog' );
@@ -56,6 +59,7 @@ function watch() {
 	delete story.flags.introLessons; story.beat = 'room';
 	assert.equal( lessons.update( 1 ), null, 'legacy saves already in the house do not replay an intro' );
 }
+assert.equal( INTRO_CLIMB.filter( cue => cue.route === 'steps' ).length, 5, 'five location-led beats add useful observations along the first ascent' );
 assert.equal( new Set( INTRO_PAPERS.map( p => p.id ) ).size, INTRO_PAPERS.length );
 {
 	const { story, lessons } = watch();

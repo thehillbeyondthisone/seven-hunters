@@ -7,7 +7,9 @@ import { SeaWeatherState } from './SeaWeatherState.js';
 
 export function stationShelter( p ) {
 	return ( Math.hypot( p.x, p.z ) < TOWER.rIn && p.y < TOWER.deck + 4.3 && p.y >= TOWER.floor - 0.15 ) ||
-		( p.x > ROOM.x0 && p.x < ROOM.x1 && p.z > ROOM.z0 && p.z < ROOM.z1 && p.y < ROOM.ceiling && p.y >= TOWER.floor - 0.15 );
+		( p.x > -21.4 && p.x < ROOM.x1 && p.z > ROOM.z0 && p.z < ROOM.z1 && p.y < ROOM.ceiling && p.y >= TOWER.floor - 0.15 ) ||
+		( p.x > -5.4 && p.x < 1.2 && p.z > 5.4 && p.z < 14.4 && p.y < ROOM.ceiling && p.y >= TOWER.floor-.15 ) ||
+		( p.x > 7.25 && p.x < 11.35 && p.z > -4.35 && p.z < -.85 && p.y < TOWER.floor+2.9 && p.y >= TOWER.floor-.15 );
 }
 
 export class SeaWeather {
@@ -27,8 +29,10 @@ export class SeaWeather {
 		this.module = new ShaderModule( { name: 'seaWeather', deps: [ commonModule ], uniforms: this.uniforms, uniformName: 'seaWeather', code: /* wgsl */`
 fn seaWeatherShelter( p: vec3f ) -> bool {
 	let tower = length( p.xz ) < ${ f( TOWER.rIn ) } && p.y < ${ f( TOWER.deck + 4.3 ) } && p.y >= ${ f( TOWER.floor - 0.15 ) };
-	let room = p.x > ${ f( ROOM.x0 ) } && p.x < ${ f( ROOM.x1 ) } && p.z > ${ f( ROOM.z0 ) } && p.z < ${ f( ROOM.z1 ) } && p.y < ${ f( ROOM.ceiling ) } && p.y >= ${ f( TOWER.floor - 0.15 ) };
-	return tower || room;
+	let room = p.x > -21.4 && p.x < ${ f( ROOM.x1 ) } && p.z > ${ f( ROOM.z0 ) } && p.z < ${ f( ROOM.z1 ) } && p.y < ${ f( ROOM.ceiling ) } && p.y >= ${ f( TOWER.floor - 0.15 ) };
+	let wing = p.x > -5.4 && p.x < 1.2 && p.z > 5.4 && p.z < 14.4 && p.y < ${ f( ROOM.ceiling ) } && p.y >= ${ f( TOWER.floor-.15 ) };
+	let store = p.x > 7.25 && p.x < 11.35 && p.z > -4.35 && p.z < -.85 && p.y < ${ f( TOWER.floor+2.9 ) } && p.y >= ${ f( TOWER.floor-.15 ) };
+	return tower || room || wing || store;
 }
 ` } );
 		// Fixed storm-capable spectrum; smooth displacement scaling avoids rebuilding FFT phases
@@ -76,7 +80,8 @@ fn seaWeatherShelter( p: vec3f ) -> bool {
 	let side = normalize( cross( axis, toEye ) + vec3f( 0.00001 ) );
 	let uv = v.uv * 2.0 - 1.0;
 	let world = q + side * uv.x * 0.014 + axis * uv.y * 0.6;
-	let inside = seaWeatherShelter( world ) || seaWeatherShelter( cam );
+	// Roofs shelter each drop, so the rain outside stays visible from a dry room.
+	let inside = seaWeatherShelter( world );
 	let live = ! inside && world.y > max( terrainHeightAt( world.xz ) + 0.1, frame.seaLevel ) && frame.cameraUnderwater < 0.5;
 	v.useWorld = true; v.worldPos = select( vec3f( 0.0, -1e5, 0.0 ), world, live );
 	v.worldNormal = toEye; v.prevWorldPos = v.worldPos - vel * frame.dt;

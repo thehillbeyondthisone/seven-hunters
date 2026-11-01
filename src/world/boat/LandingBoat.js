@@ -1,8 +1,10 @@
 import { Group, Mesh, Vector3 } from '../../engine/index.js';
 import { Builder } from '../village/GeoBuilder.js';
-import { lin, WOOD, HARD, ropeCoil } from '../Props.js';
+import { lin, WOOD, HARD } from '../Props.js';
 import { standard } from '../../materials/Materials.js';
 import { commonModule } from '../../engine/render/wgsl/common.js';
+import { Boatman } from './Boatman.js';
+import { keeperCraft } from '../flannan/KeeperCraft.js';
 import { detailedLandingMaterials } from './LandingBoatMaterials.js';
 
 // Artistic reconstruction of an open clinker landing boat. +Z is the bow;
@@ -152,7 +154,8 @@ export function buildLandingBoat( group, { detailed = false, textures = null } =
 	B.cyl( 'hard', 0.3, 0.861, 2.2, 0.019, 0.019, 0.004, { tint: lin( 0x73352c ), data: HARD( 0.3, 0, 0, 0.75 ), segs: 12 } );
 	const canvas = { tint: lin( 0x8a8265 ), data: HARD( 0.4, 0, 0, 0.95 ) };
 	B.lathe( 'hard', - 0.53, 0.4, 2.5, [ [ 0.16, 0 ], [ 0.23, 0.06 ], [ 0.21, 0.25 ], [ 0.1, 0.36 ], [ 0.02, 0.4 ] ], { ...canvas, segs: 16 } );
-	ropeCoil( B, - 0.38, 0.41, 1.98, 0.016, 0.2, 5, 0.41 );
+	keeperCraft(B,'ropeCoil',-.38,.41,1.98,{lod:'far'});
+	keeperCraft(B,'ropeKnot',-.55,.43,2.28,{lod:'far',sx:.7,sy:.7,sz:.7});
 	B.tube( 'hard', [ new Vector3( - 0.5, 0.43, 2.02 ), new Vector3( - 0.65, 0.43, 2.3 ), new Vector3( - 0.71, 0.7, 2.86 ), new Vector3( - 0.5, 1.12, 3.03 ) ], 0.014, rope );
 	// Cleats and leather-protected bronze rowlocks.
 	for ( const z of [ 2.9, - 2.85 ] ) {
@@ -167,7 +170,7 @@ export function buildLandingBoat( group, { detailed = false, textures = null } =
 		for ( const dz of [ - 0.057, 0.057 ] ) B.rod( 'hard', [ x, 1.18, z + dz ], [ x, 1.32, z + dz ], 0.018, 0.018, brass );
 		const O = new Builder(), oar = new Group();
 		oar.position.set( x, 1.25, z );
-		O.rod( 'wood', [ - s * 0.85, 0, 0 ], [ s * 2.45, - 0.39, 0 ], 0.039, 0.029, pale );
+		O.rod( 'wood', [ - s * 0.63, - 0.026, 0 ], [ s * 2.45, - 0.39, 0 ], 0.033, 0.029, pale );
 		O.rod( 'wood', [ - s * 0.85, 0, 0 ], [ - s * 0.63, - 0.026, 0 ], 0.027, 0.027, oak );
 		O.box( 'hard', 0, 0, 0, 0.17, 0.088, 0.087, { tint: lin( 0x59452f ), data: HARD( 0.1, 0, 0, 0.8 ), rz: - s * 0.12 } );
 		// Tapered, rounded-ended blade, instead of a rectangular paddle stuck on a rod.
@@ -175,39 +178,8 @@ export function buildLandingBoat( group, { detailed = false, textures = null } =
 		O.slab( 'wood', blade.map( ( [ a, z ] ) => new Vector3( s * a, - a * 0.16, z ) ), 0.024, { ...pale, up: new Vector3( 0, 1, 0 ), uDir: new Vector3( 1, 0, 0 ) } );
 		meshes( O, oar, mats, 'arrival-oar' ); group.add( oar ); oars.push( oar );
 	}
-	const C = new Builder(), rower = new Group();
-	// Boatman facing aft: oilskin cape, knitted cap, trousers and separate boots.
-	const coat = { tint: lin( 0x6f6a4f ), data: HARD( 0.6, 0, 0, 0.76 ) };
-	const wool = { tint: lin( 0x343c3c ), data: HARD( 0.2, 0, 0, 0.98 ) };
-	const skin = { tint: lin( 0xab856b ), data: HARD( 0.2, 0, 0, 0.88 ) };
-	const boot = { tint: lin( 0x322b25 ), data: HARD( 0.4, 0, 0, 0.64 ) };
-	C.lathe( 'cloth', 0, 0.86, - 0.42, [ [ 0.24, 0 ], [ 0.3, 0.12 ], [ 0.27, 0.46 ], [ 0.19, 0.57 ] ], { ...coat, segs: 24 } );
-	C.lathe( 'cloth', 0, 1.36, - 0.42, [ [ 0.09, 0 ], [ 0.13, 0.04 ], [ 0.09, 0.09 ] ], { ...wool, segs: 20 } );
-	C.lathe( 'hard', 0, 1.41, - 0.45, [ [ 0.062, 0 ], [ 0.09, 0.045 ], [ 0.113, 0.12 ], [ 0.105, 0.22 ], [ 0.06, 0.265 ], [ 0, 0.28 ] ], { ...skin, segs: 24 } );
-	C.cyl( 'hard', 0, 1.54, - 0.55, 0.018, 0.027, 0.05, { ...skin, rx: - Math.PI / 2, segs: 10 } );
-	// Small face features, ears and collar; readable on an exterior inspection.
-	const beard = { tint: lin( 0x5e5548 ), data: HARD( 0.8, 0, 0, 0.96 ) };
-	for ( const s of [ - 1, 1 ] ) {
-		C.cyl( 'hard', s * 0.11, 1.54, - 0.45, 0.023, 0.023, 0.025, { ...skin, rz: s * Math.PI / 2, segs: 12 } );
-		C.box( 'cloth', s * 0.043, 1.585, - 0.551, 0.018, 0.006, 0.006, wool );
-		C.beam( 'cloth', [ s * 0.11, 1.38, - 0.47 ], [ s * 0.08, 1.3, - 0.61 ], 0.09, 0.022, coat );
-	}
-	C.lathe( 'cloth', 0, 1.445, - 0.495, [ [ 0.06, 0 ], [ 0.095, 0.04 ], [ 0.088, 0.08 ] ], { ...beard, segs: 20 } );
-	C.beam( 'cloth', [ 0, 0.93, - 0.715 ], [ 0, 1.31, - 0.62 ], 0.024, 0.016, wool );
-	for ( const y of [ 1.0, 1.12, 1.24 ] ) C.box( 'hard', 0.022, y, - 0.7 + ( y - 1 ) * 0.25, 0.014, 0.014, 0.013, iron );
-	C.lathe( 'cloth', 0, 1.64, - 0.45, [ [ 0.132, 0 ], [ 0.132, 0.035 ], [ 0.113, 0.035 ], [ 0.11, 0.11 ], [ 0.025, 0.15 ] ], { ...wool, segs: 24 } );
-	for ( const s of [ - 1, 1 ] ) {
-		C.rod( 'cloth', [ s * 0.14, 0.9, - 0.5 ], [ s * 0.2, 0.61, - 0.97 ], 0.11, 0.09, wool );
-		C.rod( 'cloth', [ s * 0.2, 0.61, - 0.97 ], [ s * 0.19, 0.43, - 0.87 ], 0.085, 0.07, wool );
-		C.box( 'hard', s * 0.19, 0.42, - 1.0, 0.17, 0.14, 0.32, boot );
-		const A = new Builder(), arm = new Group();
-		arm.position.set( s * 0.22, 1.33, - 0.42 );
-		A.rod( 'hard', [ 0, 0, 0 ], [ s * 0.17, - 0.26, - 0.3 ], 0.093, 0.065, coat );
-		A.rod( 'hard', [ s * 0.17, - 0.26, - 0.3 ], [ s * 0.12, - 0.1, - 0.25 ], 0.065, 0.043, coat );
-		A.rod( 'hard', [ s * 0.12, - 0.1, - 0.25 ], [ s * 0.13, - 0.08, - 0.27 ], 0.054, 0.052, skin );
-		meshes( A, arm, mats, 'arrival-rower-arm' ); rower.add( arm ); arms.push( arm );
-	}
-	meshes( C, rower, mats, 'arrival-rower' ); group.add( rower );
+	const boatman = new Boatman(group), rower = boatman.group;
+	arms.push(...boatman.arms.map(a=>a.upper));
 	meshes( B, group, mats, 'arrival' );
 	// Closed exclusion volume follows the actual tapered hull, not a vertically
 	// extruded waterplane (which cuts dark wedges out of the sea beside the boat).
@@ -225,5 +197,5 @@ export function buildLandingBoat( group, { detailed = false, textures = null } =
 		for ( let j = 9; j >= 0; j -- ) end.push( shell( z, j / 9, - 1 ) );
 		M.slab( 'wood', end, 0 );
 	}
-	return { oars, arms, rower, hullVolume: M.batches.wood.build(), materials: mats, triangles: B.triangles + C.triangles };
+	return { oars, arms, rower, boatman, hullVolume: M.batches.wood.build(), materials: mats, triangles: B.triangles };
 }

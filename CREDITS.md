@@ -60,6 +60,11 @@ idle, talk, wave and shrug animations from the [Microsoft Rocketbox Avatar Libra
 et al., "The Rocketbox Library and the Utility of Freely Available Rigged Avatars", Frontiers in
 Virtual Reality, 2020.
 
+`boatman.glb` adapts Joe's face, hands and anatomy under the same MIT licence.
+The oilskin coat, wool cuffs and watch cap, stubble, seated rowing performance
+and near/far geometry are authored in `tools/characters/boatman*.py` and the
+editable `boatman.blend`. Clothing is a period-plausible reconstruction.
+
 ## Fonts
 
 [Inter](https://rsms.me/inter/) and [JetBrains Mono](https://www.jetbrains.com/lp/mono/) are both under the

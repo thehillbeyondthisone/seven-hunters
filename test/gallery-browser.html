@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Balcony · interaction review</title>
+<link rel="stylesheet" href="/src/ui/ui.css"><link rel="stylesheet" href="/src/story/story.css">
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#10191d}canvas{display:block}#review{position:fixed;top:12px;left:12px;z-index:105;max-width:440px;background:#10191de8;color:#e4e8d9;padding:12px;font:12px/1.5 system-ui}#review button{background:#35463f;color:#eee6cf;padding:7px;border:1px solid #71857a;margin:3px}#review p{margin:5px 0}</style></head><body>
+<div id="app"></div><div id="fps" hidden></div><section id="review"><strong>Balcony and hot zones · no saves</strong><p id="status">Loading the actual game renderer…</p><div id="controls" hidden><button data-scene="apparatus">Apparatus duty</button><button data-scene="due">18:00 sea round</button><button data-scene="idle">Idle rail watch</button><button data-scene="west">West bay</button></div></section>
+<script type="module">
+import { App } from '../src/App.js';
+import { UI } from '../src/ui/UI.js';
+import { AppUI } from '../src/ui/AppUI.js';
+import { Story } from '../src/story/Story.js';
+import { Vector3 } from '../src/engine/index.js';
+import { TOWER } from '../src/world/flannan/Station.js';
+import { GALLERY_WATCH_BAYS, galleryBayPosition } from '../src/world/flannan/GalleryStations.js';
+import { DebugMenu } from '../src/dev/DebugMenu.js';
+const app = new App(), ui = new UI(), status = document.querySelector('#status');
+// Automation may review this isolated, save-free tab in the background.
+Object.defineProperties(document,{hidden:{configurable:true,get:()=>false},visibilityState:{configurable:true,get:()=>'visible'}});
+app.qs.set('keeperPreview','');app.qs.set('bench','');app.qs.set('noAudio','');
+const raf=window.requestAnimationFrame.bind(window),caf=window.cancelAnimationFrame.bind(window);
+window.requestAnimationFrame=cb=>document.visibilityState==='hidden'?setTimeout(()=>cb(performance.now()),16):raf(cb);
+window.cancelAnimationFrame=id=>{clearTimeout(id);caf(id);};
+await app.init((p,label,until)=>{ui.setLoading(p,label,until);status.textContent=label;});
+app.ui=new AppUI(app,ui);const s=app.story=new Story(app);s.save=()=>{};s.ui.card=s.ui.fade=async()=>{};
+s.flags={landed:true,islandRevealSeen:true,unpacking:{stage:4,examined:true},keeperDuty:{inspected:true,verified:true,rewound:true,driveCutsceneSeen:true},introLessons:{seen:[],pending:[],active:null,gap:0,yard:true,done:true}};
+s.arrival.group.visible=false;s.hand.carried=s.hand.lit=false;s.lamp.wind=1;s.lamp.ignite();s.lamp.start();s.lamp.glow=1;
+app.devMenu=new DebugMenu(app);
+function scene(name){
+ s.weatherObservations.releaseSea();s.flags.weatherObservations={};s.obs={};s.h=name==='apparatus'?15.88:name==='idle'?18.65:18;s.beat='watch';s.paused=false;s.titleView=false;
+ s.keeper.state.verified=name!=='apparatus';s.keeper.state.rewound=name!=='apparatus';
+ const bay=GALLERY_WATCH_BAYS[name==='west'?1:0],p=app.player,feet=galleryBayPosition(bay,TOWER.deck);
+ p.position.copy(feet);p.velocity.set(0,0,0);p.mode='walk';p.grounded=true;p._camY=null;
+ const target=new Vector3(Math.cos(bay.seaBearing)*600,0,Math.sin(bay.seaBearing)*600),d=target.sub(feet.clone().add(new Vector3(0,1.62,0))).normalize();
+ p.yaw=Math.atan2(-d.x,-d.z);p.pitch=Math.asin(d.y);p.update(0);s._applyClock();app.cameraCut();
+ status.textContent=name==='apparatus'?'Apparatus duty: sea/rail actions must be inactive.':name==='idle'?'Idle watch: only the designated rail action is available.':'Observation round: stand in the marked bay and look down at the water. Open ` → Interaction hot zones.';
+ if(name==='idle')s.obs[18]={wind:'fixture',sea:'fixture',visibility:'fixture'};
+}
+for(const button of document.querySelectorAll('[data-scene]'))button.onclick=()=>scene(button.dataset.scene);
+scene('due');document.querySelector('#controls').hidden=false;await ui.hideLoader();app.start();
+const diagnostics=document.createElement('output');document.querySelector('#review').append(diagnostics);
+setInterval(()=>{const w=s.weatherObservations;diagnostics.textContent=`${w.due?'Observation round due':'No observation due'} · ${w.watchBay?.label||'Outside a bay'} · sea target ${w.seaView()?'available':'inactive'}`;},1000);
+</script></body></html>

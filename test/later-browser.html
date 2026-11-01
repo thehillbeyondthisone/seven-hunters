@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Remaining watches · browser acceptance</title>
+<link rel="stylesheet" href="/src/ui/ui.css"><link rel="stylesheet" href="/src/story/story.css"><link rel="stylesheet" href="/src/mobile/mobile.css">
+<style>#route-review{position:fixed;bottom:12px;left:12px;z-index:105;width:min(480px,85vw);padding:10px;background:#101b24e8;color:#f3ead8;font:15px/1.4 system-ui}#route-review button{font:inherit;padding:9px 14px;color:inherit;background:#263b46;border:1px solid #c6b992}#route-review p{margin:8px 0}.sh-game:has(.sh-root.is-modal) #route-review{opacity:.15;pointer-events:none}</style></head><body><div id="app"></div><div id="fps" hidden></div>
+<div id="route-review"><p id="route-status">Loading the real scene…</p><button id="route-run" hidden>Run the revised chapters review</button><p id="photo-status"></p><p id="errors" role="status"></p></div>
+<script type="module">
+import {App} from '../src/App.js';import {UI} from '../src/ui/UI.js';import {AppUI} from '../src/ui/AppUI.js';import {Story} from '../src/story/Story.js';import {walkLaterStory} from './helpers/later-route.mjs';import {GPU} from '../src/engine/gpu/GPU.js';
+const app=new App(),ui=new UI(),status=document.querySelector('#route-status'),run=document.querySelector('#route-run');app.qs.set('laterWatchPreview','photography');
+const raf=requestAnimationFrame.bind(window),caf=cancelAnimationFrame.bind(window);window.requestAnimationFrame=cb=>document.hidden?setTimeout(()=>cb(performance.now()),16):raf(cb);window.cancelAnimationFrame=id=>{clearTimeout(id);caf(id);};
+await app.init((p,label,until)=>{ui.setLoading(p,label,until);status.textContent=label;});GPU.device.addEventListener('uncapturederror',e=>{document.querySelector('#errors').textContent+=e.error.message;});
+app.ui=new AppUI(app,ui);const s=app.story=new Story(app);s.save=()=>{};s.loadSave=()=>null;app.input.requestLock=()=>{};app.start();await ui.hideLoader();await s.later.begin('photography');run.hidden=false;
+status.textContent='Walks every journey through the real world. Read, answer and sign the actual story pages. No saves are written.';
+run.onclick=async()=>{run.hidden=true;const player=app.player,keys=app.input.keys;const step=seconds=>{for(let t=0;t<seconds-1e-8;t+=1/60){app.keeperSafety.beforeFrame(1/60);player.update(1/60);s.update(1/60);app.keeperSafety.afterFrame();app.input.endFrame();}};
+const face=at=>{const d=at.clone().sub(app.camera.position).normalize();player.yaw=Math.atan2(-d.x,-d.z);player.pitch=Math.asin(d.y);player.update(0);app.camera.updateMatrixWorld();};
+const tick=()=>new Promise(resolve=>setTimeout(resolve,16));
+try{await walkLaterStory({app,s,player,keys,step,face,yield:tick,checkpoint:async label=>{status.textContent=`Walking review · ${label}`;document.querySelector('#photo-status').textContent=s.photography.state.frames.map((q,i)=>`Frame ${i+1}: ${q.subject}, ${q.image.length} saved characters`).join(' · ');await tick();},reviewBoundary:async()=>{status.textContent='Scene13 is pending. Choose Review storm preparations to inspect the next approved chapter separately.';while(s.beat==='lw-review')await tick();}});status.textContent='PASS · actual photographs, fragment, deliberate storm review and explicit pending-story boundaries. No saves written.';}
+catch(error){keys.clear();status.textContent=`FAIL · ${error.message}`;console.error(error);}
+};
+</script></body></html>

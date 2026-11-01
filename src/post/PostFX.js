@@ -323,6 +323,7 @@ fn fragment( in: FSIn ) -> vec4f {
 		// build the lazily built passes now (the profiler tracks them after beginFrame)
 		if ( ! this.aoPass._pass ) this.aoPass._build();
 		if ( haze && ! haze._passes ) haze._build();
+		if ( haze?.roomAir && ! haze.roomAir._pass ) haze.roomAir._build();
 		if ( uw.renderShafts ) void uw.shaftPass;
 
 		// ---- bloom
@@ -680,6 +681,7 @@ fn fragment( in: FSIn ) -> vec4f {
 
 		if ( this.taau ) this.taau._needsRestart = true;
 		if ( this.motionBlur ) this.motionBlur._hasPrev = false;
+		if ( this.haze ) this.haze.cut();
 		this._hasPrev = false;
 
 	}
@@ -782,12 +784,13 @@ fn fragment( in: FSIn ) -> vec4f {
 			[ 'GTAO', this.aoPass._pass ], [ 'AO blur x', this._aoBlurXPass ], [ 'AO blur y', this._aoBlurYPass ], [ 'medium', this._mediumPass ] ];
 		if ( this.haze && this.haze._passes ) {
 
-			list.push( [ 'haze march', this.haze._passes.march ], [ 'haze sun mask', this.haze._passes.mask ] );
+			list.push( [ 'haze march', this.haze._passes.march ], [ 'haze shafts temporal', this.haze._passes.temporal[ 0 ] ], [ 'haze sun mask', this.haze._passes.mask ] );
 			this.haze._passes.blur.forEach( ( p, i ) => list.push( [ 'haze god rays ' + i, p ] ) );
 
 		}
 
 		if ( this.underwater._shaftPass ) list.push( [ 'underwater shafts', this.underwater._shaftPass ] );
+		if ( this.haze?.roomAir?._pass ) list.push( [ 'room air', this.haze.roomAir._pass ] );
 		list.push( [ 'beauty', this._beautyPass ], [ 'TAAU', this.taau._resolve[ 0 ] ], [ 'TAAU ', this.taau._resolve[ 1 ] ] );
 		this._bloomPasses.forEach( ( [ p ], i ) => list.push( [ 'bloom ' + i, p ] ) );
 		list.push( [ 'final', this._finalPass ], [ 'auto exposure', this.meterKernel ] );

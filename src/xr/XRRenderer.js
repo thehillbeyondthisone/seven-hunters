@@ -64,6 +64,7 @@ export class XRRenderer {
 		this.timer.beginFrame();
 		setFrameCamera( camera, app.sceneRenderer.width, app.sceneRenderer.height );
 		app.shadows.render( app.scene, mr, app.shadows.update( camera, G.sunDir.value ) );
+		app.handLampShadows?.render( app.scene, mr, app.localLights.enabled ? app.localLights.flashlight : null );
 		// Separate submissions preserve camera/material buffer ordering.
 		GPU.submit();
 		const sharedCpuMs = performance.now() - t0;

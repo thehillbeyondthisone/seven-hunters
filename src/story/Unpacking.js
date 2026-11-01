@@ -7,11 +7,13 @@ export const BROWNIE_PAPER = {
 		'A little black box, scarcely larger than your palm. The covering looks like leather; beneath it are card and wood. A small lens at the front, a shutter lever on top, a winding key at the side.',
 		'There is no finder to look through. The two lines on the top give you the direction. Hold the box level and steady; choose your picture in good daylight.',
 		'Mary had the shop load a roll before you left. Six square pictures. After each exposure the film must be wound to the next number in the little red window at the back. Keep the back shut until the roll is finished.',
+		'Begin with the place where you sit, as Mary asked. In the later daylight photography watch, rest the box securely, frame the chair and make a supported time exposure. The shutter guide will lead each step. Afterwards the remaining views are yours.',
 		'You cannot see what you have taken. The film will have to go ashore to be developed when the relief comes.',
 		'Her note is folded under the box: “Bring me a picture of the place where you sit. Then I shall know where to put you when I think of you.”',
 	],
-	provenance: 'Walter, Mary, her gift and this note are fiction. The prop represents the original 1900 Brownie, with approximate dimensions and controls. The museum documents its February 1900 introduction, card-and-wood box, optional finder and six 2¼-inch square negatives on 117 roll film. This scene introduces the camera; taking and developing photographs belong to a later part of the story.',
+	provenance: 'Walter, Mary, her gift and this note are fiction. The prop represents the original 1900 Brownie, with approximate dimensions and controls. The museum documents its February 1900 introduction, card-and-wood box, optional finder and six 2¼-inch square negatives on 117 roll film. The camera can be taken after unpacking and used in daylight. The prints are developed after Walter goes ashore.',
 	sources: [
+		{ label: 'Eastman Kodak: Brownie instructions, January 1900, printed pages 13–17 (time exposures indoors)', url: 'https://manuals.plus/m/ad159776d5786e3094c8bdc6c3c72eeabcd3de73de75beb3e8b1b8069ac8fd0a_optim.pdf' },
 		{ label: 'National Science and Media Museum · the original Brownie', url: 'https://blog.scienceandmediamuseum.org.uk/a-z-photography-collection-b-is-for-brownie/' },
 		{ label: 'Science Museum Group · surviving Brownie box camera', url: 'https://collection.sciencemuseumgroup.org.uk/objects/co8406729/no-1-brownie-box-camera' },
 		{ label: 'Early Photography collection · 1900 model and sight lines', url: 'https://www.earlyphotography.co.uk/site/entry_X30.html' },
@@ -57,11 +59,13 @@ export class Unpacking {
 		I.add( { id: 'brownieParcel', at: () => this.s.station.parts.unpacking?.parcel || ROOM.bag, size: .16, reach: 1.8,
 			when: () => this.stage === 3, text: ACTIONS[ 3 ], use: () => this.advance() } );
 		I.add( { id: 'brownie', at: () => this.s.station.parts.unpacking?.desk || ROOM.letter, size: .1, reach: 1.8,
-			when: () => this.stage === 4, text: 'Examine the Brownie and Mary’s note', use: () => this.examine() } );
+			when: () => this.stage === 4 && ! this.s.flags.photography?.taken,
+			text: () => this.state?.examined ? 'Take the Brownie · one roll, six pictures' : 'Examine the Brownie and Mary’s note',
+			use: () => this.state?.examined ? this.s.photography.take() : this.examine() } );
 		this.sync();
 	}
 	async useBag() {
-		if ( this.stage === 4 ) return this.s.ui.read( { title: 'Your bag', body: [ 'The canvas lies open. Your shirt and the blue stockings are drying on the chair. The Brownie is on the desk, beside the journal.' ] } );
+		if ( this.stage === 4 ) return this.s.ui.read( { title: 'Your bag', body: [ 'The canvas lies open. Your shirt and the blue stockings are drying on the chair.', this.s.flags.photography?.taken ? 'You have Mary’s Brownie with you. Keep its back shut until you go ashore.' : 'The Brownie is on the desk, beside the journal. You can take it with you.' ] } );
 		if ( ! this.ready ) return this.s.ui.read( { title: 'Your bag', body: [ 'The thick stockings are at the bottom, where Mary said she put them.', 'See to the light and its machinery first. Your things can wait.' ] } );
 		this.s.flags.unpacking ||= { stage: 0 };
 		this.advance();
@@ -77,13 +81,14 @@ export class Unpacking {
 		if ( this.stage !== 4 ) return;
 		this.state.lineRemaining = 0;
 		await this.s.ui.read( BROWNIE_PAPER );
-		this.state.examined = true; this.s.save();
+		this.state.examined = true; this.s.toast( 'The Brownie can be taken from the desk. One roll, six pictures in daylight.', 6000 ); this.s.save();
 	}
 	sync() {
 		const objects = this.s.moving.unpacking;
 		if ( ! objects ) return;
 		const stage = this.stage;
 		for ( const [ name, obj ] of Object.entries( objects ) ) {
+			if(name==='brownieOnDesk' && this.s.flags.photography?.taken){obj.visible=false;continue;}
 			obj.visible = name === 'closed' ? stage === 0 : name === 'open' ? stage > 0 :
 				name === 'packedClothes' ? stage === 1 : name === 'laidClothes' ? stage >= 2 :
 				name === 'parcel' ? stage === 1 || stage === 2 : name === 'wrapper' ? stage >= 3 :
@@ -95,7 +100,11 @@ export class Unpacking {
 		if ( ! this.pending ) return null;
 		const id = this.stage === 4 ? 'brownie' : this.stage === 3 ? 'brownieParcel' : 'bag';
 		const it = this.s.interact.get( id );
-		return { at: typeof it.at === 'function' ? it.at() : it.at, label: ACTIONS[ this.stage ] + ' · E', id };
+		const at = typeof it.at === 'function' ? it.at() : it.at;
+		const selected = this.s.interact.current?.id === id;
+		const distant = this.s.app.camera.position.distanceTo( at ) > it.reach + it.size;
+		const name = id === 'bag' ? 'your bag' : id === 'brownieParcel' ? 'the small parcel' : 'the Brownie on the desk';
+		return { at, label: selected ? ACTIONS[ this.stage ] : distant ? `Move closer to ${ name }` : `Look at ${ name }`, id };
 	}
 	update( dt, { blocked = false } = {} ) {
 		if ( blocked || ! this.inRoom || ! this.state?.lineRemaining || this.urgent ) return null;

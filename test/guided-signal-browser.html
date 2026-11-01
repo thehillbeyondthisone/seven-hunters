@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Guided signal UI review</title>
+<link rel="stylesheet" href="/src/story/story.css">
+<style>html,body{margin:0;min-height:100%;background:#263035;color:#eee;font-family:Georgia,serif}body:before{content:'Signal lamp interface review';position:fixed;top:18px;left:20px;opacity:.55;font-size:15px}.sh-root{position:fixed;inset:0}</style>
+</head><body><script type="module">
+import { StoryUI } from '/src/story/StoryUI.js';
+import { Watcher } from '/src/story/Watcher.js';
+import { GuidedSignal } from '/src/story/GuidedSignal.js';
+const input={enabled:false,keys:new Set(),requestLock(){}};
+const ui=new StoryUI({input});ui.setHUD(false);
+const sounds=[];
+const s={watcher:new Watcher(),flags:{},signal:true,paused:false,app:{isMobile:innerWidth<700},signalLight:{scale:0},ui,
+sound:{signalShutter:on=>sounds.push({on,at:performance.now()})},save(){},_leaveSignal(){this.signal=false;guide.pause();}};
+const guide=s.guidedSignal=new GuidedSignal(s);
+s.watcher.appear();s.watcher.call();
+const step=new URLSearchParams(location.search).get('step');
+if(step==='reply'){s.flags.signalLesson={practised:true};s.watcher.answer();s.watcher.update(0,{watched:true,hurry:true});guide.reply(0);}
+else if(step==='help'){s.flags.signalLesson={practised:true,firstReplyDone:true};guide.help();}
+else guide.enter();
+let last=performance.now();
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;guide.update(dt);requestAnimationFrame(frame);}requestAnimationFrame(frame);
+window.review={s,guide,sounds,frame(seconds){for(let i=0;i<seconds/.02;i++)guide.update(.02);},mark(mark){guide.flash(mark);},snapshot(){return{phase:guide.phase,active:guide.active,lamp:guide.lamp,chunk:guide.chunk,shutter:s.signalLight.scale,body:document.body.innerText};}};
+</script></body></html>

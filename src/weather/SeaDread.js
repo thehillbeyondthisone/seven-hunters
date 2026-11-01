@@ -77,12 +77,14 @@ export class SeaDread {
 		if ( ! this.model.enabled ) return;
 		const a = this.app, m = this.model, storm = Math.min( 1, a.seaWeather?.state.surf || 0 );
 		const breath = 0.82 + Math.sin( m.time * 0.075 ) * 0.12 + Math.sin( m.time * 0.031 + 2 ) * 0.06;
-		if ( a.haze ) a.haze.seaMist.value.set( ( 0.002 + storm * 0.005 ) * breath, 16 );
+		if ( a.haze ) a.haze.seaMist.value.set( ( 0.0015 + storm * 0.003 ) * breath, 16 );
 		// Keep the nearby rain from turning into a dark curtain over the sea.
 		if ( a.seaWeather ) a.seaWeather.uniforms.fields.rain.value *= 0.45;
 		const sky = G.skyIrradiance.value, sun = G.sunColor.value;
-		sky.r *= 0.58; sky.g *= 0.73; sky.b *= 0.9;
-		sun.r *= 0.65; sun.g *= 0.77; sun.b *= 0.92;
+		// Overcast light still reaches the upward-facing treads and rail silhouettes.
+		// Preserve this broad fill instead of relying on brief lightning to read them.
+		sky.r *= 0.72; sky.g *= 0.83; sky.b *= 0.98;
+		sun.r *= 0.72; sun.g *= 0.83; sun.b *= 0.96;
 		// Broad sheet-lightning fill; the distant bolt supplies the visible source.
 		const f = m.flash * ( stationShelter( a.camera.position ) ? 0.15 : 1 );
 		const fill = Math.max( 0.12, ( sky.r + sky.g + sky.b ) * 0.8 );
@@ -95,9 +97,9 @@ export class SeaDread {
 		if ( ! m.enabled ) return;
 		P.saturation.value = 0.2; P.warmth.value = - 0.09; P.contrast.value = 1.05;
 		// An authored overcast grade removes the sunset's warm cast while retaining the sea's detail.
-		P.gradeMode.value = 1; P.gradeLift.value.set( 0.003, 0.005, 0.007, 0 );
-		P.gradeGamma.value.set( 1, 1, 1, 0 ); P.gradeGain.value.set( 0.67, 0.9, 1.08, 1 );
-		P.vignette.value = 0.36 + m.impact * 0.1;
+		P.gradeMode.value = 1; P.gradeLift.value.set( 0.008, 0.011, 0.015, 0 );
+		P.gradeGamma.value.set( 1.08, 1.08, 1.08, 0 ); P.gradeGain.value.set( 0.82, 0.96, 1.07, 1 );
+		P.vignette.value = 0.19 + m.impact * 0.06;
 		if ( a.xr?.active || a.settings.cameraBob === false || ! m.shake ) return;
 		this.basePose.copy( a.camera.quaternion ); this.rendering = true;
 		const t = m.time, k = m.shake * 0.0048;

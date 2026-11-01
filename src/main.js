@@ -1,5 +1,4 @@
 import './core/BenchSeed.js';
-import { App } from './App.js';
 import { UI } from './ui/UI.js';
 import { AppUI } from './ui/AppUI.js';
 import './mobile/mobile.css';
@@ -21,6 +20,13 @@ if ( /[?&]bench\b/.test( location.search ) ) {
 
 }
 
+// Packed model downloads can fail before App.init; keep the loader actionable in that case.
+const { App } = await import( './App.js' ).catch( error => {
+
+	new UI().setLoadingError( 'The island could not be loaded. Please reload the page to try again.' );
+	throw error;
+
+} );
 const app = new App();
 if ( app.qs.has( 'firstWatchPreview' ) ) {
 	document.querySelector( '.loader-kicker.sh-only' ).textContent = 'Eilean Mòr · Your first watch';
@@ -53,7 +59,7 @@ if ( app.qs.has( 'unpackingPreview' ) ) {
 if ( app.qs.has( 'weatherObservationsPreview' ) ) {
 	document.querySelector( '.loader-kicker.sh-only' ).textContent = 'Eilean Mòr · Weather observations';
 	document.querySelector( '.loader-tagline.sh-only' ).textContent = 'Read the instruments. Go out and look. Chalk what you observed.';
-	document.querySelector( '.loader-tip-list.sh-only' ).innerHTML = '<p>Read the room barometer and the shaded thermometer outside the north wall.</p><p>Look up at the roof vane from the yard. From the balcony, watch open water and check both landmark bearings.</p><p>Return to the slate to chalk the captured readings. This study uses a separate save.</p><p>Use the named action button on touch screens; E interacts on desktop. Hold to observe the sea for four seconds.</p>';
+	document.querySelector( '.loader-tip-list.sh-only' ).innerHTML = '<p>Day two begins with the room barometer and the shaded thermometer outside the north wall.</p><p>Look up at the roof vane from the yard. Then step onto the balcony, observe the sea and identify Gallan Head and Eilean Tighe.</p><p>The pale timber rail marks a roomy lookout. Look broadly toward open water; each identified landmark keeps its name.</p><p>Return to the slate to chalk the captured readings. E interacts on desktop; touch uses the named action button. This study has a separate save.</p>';
 }
 
 if ( app.qs.has( 'morningPreview' ) ) {
@@ -69,9 +75,9 @@ if ( app.qs.has( 'keeperPreview' ) ) {
 		<p>Drag on the left to walk and on the right to look. Landscape gives you the clearest view.</p>
 		<p>Tap the action button to examine the lamp, light the burner and release the clockwork stop. Hold it at the crank to wind.</p>
 		<p>Winding raises the driving weight. The brass stop beside the crank starts the optic. The burner supplies the light.</p>
-		<p>Listen to the ratchet and watch the apparatus. This study has no completion meter. Tools holds the teaching notes in Papers.</p>` : `
+		<p>Listen to the ratchet and watch the apparatus. The prompt's dial shows how far each held task has got and how long is left. Tools holds the teaching notes in Papers.</p>` : `
 		<p>Use WASD to walk and the mouse to look. E examines the lamp, lights the burner and releases the clockwork stop.</p>
-		<p>Hold E at the crank to raise the driving weight. Listen to the ratchet and watch the apparatus; there is no completion meter.</p>
+		<p>Hold E at the crank to raise the driving weight. Listen to the ratchet and watch the weight rise; the prompt's dial shows how far it has risen and how long is left.</p>
 		<p>The flame and the revolving optic do different jobs. Attend to both before leaving the lantern.</p>
 		<p>B opens Papers, including teaching notes and the reconstruction boundaries. This study has its own save.</p>`;
 }
@@ -140,6 +146,7 @@ app.init( ( p, text, until ) => ui.setLoading( p, text, until ) ).then( async ()
 	}
 	ui.setLoading( 1, 'Ready' );
 	await ui.hideLoader();
+	app.startSceneWarmup();
 	if ( app.qs.has( 'vr' ) && ! app.qs.has( 'bench' ) ) {
 
 		await import( './xr/preview.css' );

@@ -23,6 +23,7 @@ function stationSurface( T, names, params = {} ) {
 export function createStationTimber( T, floor = false ) {
 
 	const m = stationSurface( T, [ 'indoorWoodA', 'indoorWoodN', 'keptPaintN' ], { defines: floor ? { STATION_BOARDS: 1 } : {} } );
+	if ( floor ) m.userData.warmup = 'station';
 	m.name = floor ? 'StationFloorboards' : 'StationJoinery';
 	m.surface = /* wgsl */`
 	let data = in.vs.vData;
@@ -50,9 +51,12 @@ export function createStationTimber( T, floor = false ) {
 #endif
 	let off = vec2f( vlmHash21( seed * 137.0, 1.3 ), vlmHash21( seed * 137.0, 7.9 ) );
 	let grainUV = uv / vec2f( 2.8, 0.76 ) + off;
-	let A = textureSample( stationindoorWoodA, smpAnisoRepeat, grainUV );
-	let N = textureSample( stationindoorWoodN, smpAnisoRepeat, grainUV );
-	let P = textureSample( stationkeptPaintN, smpAnisoRepeat, uv / vec2f( 1.0, 0.5 ) + off );
+	// Derivatives exclude per-board random offsets: crossing a board must not
+	// select a coarse mip and erase the grain at its edge.
+	let du = dpdx( uv ); let dv = dpdy( uv );
+	let A = textureSampleGrad( stationindoorWoodA, smpAnisoRepeat, grainUV, du / vec2f( 2.8, 0.76 ), dv / vec2f( 2.8, 0.76 ) );
+	let N = textureSampleGrad( stationindoorWoodN, smpAnisoRepeat, grainUV, du / vec2f( 2.8, 0.76 ), dv / vec2f( 2.8, 0.76 ) );
+	let P = textureSampleGrad( stationkeptPaintN, smpAnisoRepeat, uv / vec2f( 1.0, 0.5 ) + off, du / vec2f( 1.0, 0.5 ), dv / vec2f( 1.0, 0.5 ) );
 	let grain = A.rgb;
 	let tone = 0.92 + vlmHash21( seed * 91.0, 3.8 ) * 0.16;
 	let raw = in.vs.vTint * grain * tone * mix( 1.0, 0.82, end );
@@ -62,7 +66,7 @@ export function createStationTimber( T, floor = false ) {
 	s.albedo = mix( raw, paint, painted ) * ( 1.0 - seam * 0.55 );
 	s.roughness = clamp( mix( N.b + seam * 0.12, P.b, painted ), 0.42, 0.9 );
 	s.ao = mix( 0.94 + N.a * 0.06, 1.0, painted ) * ( 1.0 - seam * 0.25 );
-	let slope = mix( vlmSlopeOf( N ) * 0.8, vlmSlopeOf( P ) * 0.7 + vlmSlopeOf( N ) * 0.06, painted );
+	let slope = mix( vlmSlopeOf( N ), vlmSlopeOf( P ) * 0.7 + vlmSlopeOf( N ) * 0.06, painted );
 	s.normal = vlmNormalFromSlope( in.P, in.N, uv, slope + seamSlope );
 `;
 	return m;
@@ -108,11 +112,16 @@ export function createStationMasonry( T ) {
 	let gap = 1.0 - clamp( ( d - vec2f( 0.006, 0.009 ) ) / aa + 0.5, vec2f( 0.0 ), vec2f( 1.0 ) );
 	let mortar = max( gap.x, gap.y ) * coursed;
 	let grain = textureSample( stationstoneN, smpAnisoRepeat, uv * 3.7 + vec2f( data.x ) ).a;
-	let wash = textureSample( stationgrime, smpAnisoRepeat, uv * 0.13 + vec2f( data.x, 0.7 ) );
-	let limeUV = uv / 1.6 + vec2f( data.x * .37, data.x * .13 );
+	// World projection keeps wash and trowel marks continuous around doorway
+	// pieces; boxPart's timber UV axes rotate on long horizontal lintels.
+	let aN = abs( in.N );
+	let wallUV = select( in.P.xy, in.P.zy, aN.x > aN.z );
+	let finishUV = mix( uv, select( wallUV, in.P.xz, aN.y > max( aN.x, aN.z ) ), plaster );
+	let wash = textureSample( stationgrime, smpAnisoRepeat, finishUV * 0.13 + vec2f( data.x, 0.7 ) );
+	let limeUV = finishUV / 1.6 + vec2f( data.x * .37, data.x * .13 );
 	let paint = textureSample( stationlimeN, smpAnisoRepeat, limeUV );
 	let lime = textureSample( stationlimeA, smpAnisoRepeat, limeUV );
-	let body = textureSample( stationlimeA, smpAnisoRepeat, uv / 5.3 + vec2f( data.x * .71, data.x * .23 ) ).r;
+	let body = textureSample( stationlimeA, smpAnisoRepeat, finishUV / 5.3 + vec2f( data.x * .71, data.x * .23 ) ).r;
 	let stone = in.vs.vTint * ( 0.73 + id * 0.45 ) * ( 0.96 + grain * 0.08 );
 	let jointCol = in.vs.vTint * 0.48;
 	var raw = mix( stone, jointCol, mortar * 0.78 );
@@ -123,12 +132,12 @@ export function createStationMasonry( T ) {
 	let kept = in.vs.vTint * limeTone * ( 1.0 - wash.r * 0.018 - lime.g * 0.065 );
 	var col = mix( raw, kept, plaster );
 	let foot = 1.0 - smoothstep( 0.04, 0.42, uv.y );
-	col *= 1.0 - foot * mix( 0.12, 0.045, plaster );
+	col *= 1.0 - foot * 0.12 * ( 1.0 - plaster );
 	let bevel = exp( -d / vec2f( 0.024 ) ) * ( 1.0 - smoothstep( vec2f( 0.008 ), vec2f( 0.055 ), aa ) );
 	let sign = select( vec2f( -1.0 ), vec2f( 1.0 ), vec2f( fract( u / stoneWidth ), fract( rowCoord ) ) > vec2f( 0.5 ) );
 	let slope = bevel * sign * 0.22 * coursed;
 	let film = vlmSlopeOf( paint ) * 0.8;
-	s.normal = vlmNormalFromSlope( in.P, in.N, in.uv, mix( slope, film, plaster ) );
+	s.normal = vlmNormalFromSlope( in.P, in.N, finishUV, mix( slope, film, plaster ) );
 	s.albedo = col;
 	s.roughness = mix( 0.9 + grain * 0.06, paint.b, plaster );
 	s.ao = 1.0 - mortar * 0.16 * ( 1.0 - plaster );
@@ -210,13 +219,20 @@ export function createStationFlags( T ) {
 	let q = uv + vec2f( fract( row * 0.5 ) * 0.76, 0.0 );
 	let cell = floor( q / vec2f( 0.76, 0.56 ) );
 	let local = fract( q / vec2f( 0.76, 0.56 ) ) * vec2f( 0.76, 0.56 );
-	let distance = min( local, vec2f( 0.76, 0.56 ) - local );
-	let aa = max( fwidth( uv ), vec2f( 0.0005 ) );
+	var distance = min( local, vec2f( 0.76, 0.56 ) - local );
+	let gallery = step( 4.5, in.vs.vData.y );
+	let radius = length( uv );
+	let angleCell = ( atan2( uv.y, uv.x ) / VLM_TAU + 0.5 ) * 32.0;
+	let across = fract( ( radius - 2.6 ) / .59 ) * .59;
+	let arc = min( fract( angleCell ), 1.0 - fract( angleCell ) ) * VLM_TAU * radius / 32.0;
+	distance = mix( distance, vec2f( arc, min( across, .59 - across ) ), gallery );
+	let aa = mix( max( fwidth( uv ), vec2f( 0.0005 ) ), vec2f( max( length( fwidth( uv ) ), 0.0005 ) ), gallery );
 	let gaps = clamp( ( vec2f( 0.002 ) - distance ) / aa + 0.5, vec2f( 0.0 ), vec2f( 1.0 ) ) * min( vec2f( 1.0 ), vec2f( 0.004 ) / aa );
 	let seam = max( gaps.x, gaps.y );
 	let G = textureSample( stationgrime, smpAnisoRepeat, uv * 0.7 );
 	let N = textureSample( stationstoneGrainN, smpAnisoRepeat, uv * 1.3 );
-	let tone = 0.9 + vlmHash21( cell.x, cell.y + in.vs.vData.x ) * 0.16;
+	let slabId = mix( cell, vec2f( floor( angleCell ), floor( ( radius - 2.6 ) / .59 ) ), gallery );
+	let tone = 0.9 + vlmHash21( slabId.x, slabId.y + in.vs.vData.x ) * 0.16;
 	s.albedo = in.vs.vTint * tone * ( 0.94 + G.a * 0.12 ) * ( 1.0 - seam * 0.5 );
 	s.roughness = clamp( N.b - G.a * 0.1 + seam * 0.12, 0.7, 0.96 );
 	s.ao = 1.0 - seam * 0.2;
@@ -277,6 +293,7 @@ export function createBurnerFlameMaterial() {
 		defines: { NO_LOCAL_LIGHTS: 1 }, uniforms: { glow: [ 'f32', 0 ] },
 	} );
 	m.name = 'fixedBurnerFlame';
+	m.userData.warmup = 'station';
 	m.surface = /* wgsl */`
 	s.albedo = vec3f( 0.0 );
 	s.alpha = mat.glow * 0.78;

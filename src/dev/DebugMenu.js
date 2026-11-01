@@ -1,5 +1,6 @@
 import { SeaWeather } from '../weather/SeaWeather.js';
 import { SEA_WEATHER } from '../weather/SeaWeatherState.js';
+import { HotspotDebug } from './HotspotDebug.js';
 import './debug.css';
 
 export class DebugMenu {
@@ -16,6 +17,10 @@ export class DebugMenu {
 		<a href="./?playground">Keeper’s Playground · gravity grabber</a><a href="./?playground&disco">Lighthouse disco</a>
 		<details><summary>Device previews</summary><a href="./?mobile&arrivalPreview">Touch · boat arrival</a><a href="./?mobile&keeperPreview">Touch · keeper duties</a><a href="./?vr">WebXR exploration</a></details>
 		</nav></details>
+		<details data-cutscenes><summary>Replay cutscenes</summary>
+		<div class="sh-debug-grid"><button type="button" data-cutscene="reveal">First look back</button><button type="button" data-cutscene="light">First lighting</button><button type="button" data-cutscene="weight">The driving weight</button></div>
+		<p>Replay here without reloading the island. Continue or Esc returns to your watch, with its position and progress preserved.</p>
+		</details>
 		<details data-reveal><summary>First look back · edit</summary>
 		<a data-reveal-link href="./?setting=flannan&islandRevealPreview">Open editing preview</a>
 		<div data-reveal-controls>
@@ -41,9 +46,22 @@ export class DebugMenu {
 		</div>
 		<details data-playground open><summary>Keeper’s Playground</summary><button type="button" data-grabber>Holster gravity grabber · F9</button><button type="button" data-props>Reset playground props · G</button><button type="button" data-play-yard>Return to station yard</button><p>Click / X grabs or places · Q drops · hold right click / C and release to throw · wheel sets distance · R rotates.</p></details>
 		<details data-disco open><summary>Lighthouse disco</summary><button type="button" data-disco-toggle>Start disco · J</button><button type="button" data-disco-view>Watch the light show</button><label class="sh-debug-row">Palette<select data-disco-setting="palette" aria-label="Disco palette"><option value="prism">Prism</option><option value="aurora">Aurora</option><option value="sunset">Sunset</option></select></label><label class="sh-debug-row">Tempo · BPM<input type="number" data-disco-setting="tempo" min="40" max="160" value="112" aria-label="Disco tempo"></label><label class="sh-debug-row">Brightness<input type="range" data-disco-setting="intensity" min="0" max="1" step="0.05" value="0.75" aria-label="Disco brightness"></label><label class="sh-debug-row">Mist<input type="range" data-disco-setting="mist" min="0" max="1" step="0.05" value="0.45" aria-label="Disco mist"></label><button type="button" data-disco-freeze>Freeze lights</button><button type="button" data-disco-music>Synth beat: Off</button><button type="button" data-disco-reduced>Gentle motion: Off</button><p>Colored lighthouse beams, a mirror ball and moving yard lights. Stop disco restores the previous time, mist and lamp. No strobe.</p></details>
+		<details><summary>Interaction hot zones</summary><button type="button" data-hotspots aria-pressed="false">Show hot zones: Off</button><button type="button" data-hotspots-inactive aria-pressed="false">Include inactive zones: Off</button><p>Shows target radius, reach, eligibility, selected target and designated standing areas. Close this menu to see live eligibility.</p></details>
 		<details><summary>Display & help</summary><button type="button" data-settings>Graphics settings · H</button><button type="button" data-help>Controls · F1</button><button type="button" data-ping>Replay waypoint ping</button><p>WASD walks · F flies · E doors · M sound. Backtick opens this panel; Esc closes it.</p></details>
 		<output data-status aria-live="polite"></output>`;
 		document.body.append( this.panel );
+		for ( const button of this.panel.querySelectorAll( '[data-cutscene]' ) ) button.onclick = () => {
+			this.close( false );
+			if ( ! app.story?.cutsceneReview.start( button.dataset.cutscene ) ) app.story?.toast( 'Finish the current action before replaying a cutscene.' );
+		};
+		this.panel.querySelector( '[data-hotspots]' ).onclick = () => {
+			this.hotspots ||= new HotspotDebug( app );
+			this.hotspots.setEnabled( ! this.hotspots.enabled ); this.sync();
+		};
+		this.panel.querySelector( '[data-hotspots-inactive]' ).onclick = () => {
+			this.hotspots ||= new HotspotDebug( app );
+			this.hotspots.showInactive = ! this.hotspots.showInactive; this.hotspots.elapsed = 1; this.sync();
+		};
 		this.panel.querySelector( '[data-reveal]' ).open = !! app.qs?.has( 'islandRevealPreview' );
 		for ( const el of this.panel.querySelectorAll( '[data-reveal-setting]' ) ) el.onchange = () => {
 			const reveal = app.story?.islandReveal;
@@ -161,6 +179,11 @@ export class DebugMenu {
 	}
 	sync() {
 		const a = this.app, w = a.seaWeather;
+		this.panel.querySelector( '[data-cutscenes]' ).hidden = ! a.story;
+		for ( const button of this.panel.querySelectorAll( '[data-cutscene]' ) ) button.disabled = ! a.story?.cutsceneReview.available;
+		for ( const [ selector, active, label ] of [ [ '[data-hotspots]', !! this.hotspots?.enabled, 'Show hot zones' ], [ '[data-hotspots-inactive]', !! this.hotspots?.showInactive, 'Include inactive zones' ] ] ) {
+			const button = this.panel.querySelector( selector ); button.textContent = `${ label }: ${ active ? 'On' : 'Off' }`; button.setAttribute( 'aria-pressed', String( active ) );
+		}
 		const playground = a.playground, disco = playground?.disco;
 		this.panel.querySelector( '[data-playground]' ).hidden = ! playground;
 		this.panel.querySelector( '[data-disco]' ).hidden = ! disco;
@@ -206,6 +229,7 @@ export class DebugMenu {
 		const output = this.panel.querySelector( '[data-status]' ); if ( output.textContent !== status ) output.textContent = status;
 	}
 	update( dt ) {
+		this.hotspots?.update( dt );
 		this.elapsed = ( this.elapsed || 0 ) + dt;
 		if ( this.open && this.elapsed > 0.5 ) { this.elapsed = 0; this.sync(); }
 		this.launcher.hidden = this.open || !! this.app.mobile?.paused || !! this.app.ui.ui._start || !! this.app.story?.ui.open || !! this.app.ui.ui.photoMode || !! this.app.story?.islandReveal?.active;

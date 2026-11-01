@@ -4,8 +4,8 @@ import { Vector3, Vector4 } from '../engine/math/index.js';
 
 // Light in the air, for the air haze's composite (src/post/AirHaze.js, define HZ_BEAMS):
 //  - the lighthouse's beams: four pencils from the lens, each a Gaussian tube that widens with distance,
-//    their single scattering in the haze integrated analytically along the view ray (closest approach of
-//    the ray to the beam's axis). Faint in clear air, sweeping shafts in sea mist.
+//    their single scattering integrated over the visible part of the view ray, beyond the lantern
+//    housing. Faint in clear air, sweeping shafts in sea mist.
 //  - far lights: points of light (the Watcher's lamp on Gallan Head, 33 km off) drawn as a core of a
 //    pixel or two and a little aureole, dimmed by the haze along the way and dropped by the Earth's
 //    curvature like the far shore.
@@ -54,6 +54,14 @@ fn beamsPhase( c: f32 ) -> f32 {
 	return ( 1.0 - g2 ) / ( 4.0 * PI * pow( max( 1.0 + g2 - 2.0 * g * c, 1e-4 ), 1.5 ) ) * 0.75 + 0.25 / ( 4.0 * PI );
 }
 
+// Gaussian integral for a finite view segment. Integrating the whole tube at
+// a clamped closest point put bright air in front of nearby opaque surfaces.
+fn beamsErf( x: f32 ) -> f32 {
+	let t = 1.0 / ( 1.0 + .3275911 * abs( x ) );
+	let p = ( ( ( ( 1.061405429 * t - 1.453152027 ) * t + 1.421413741 ) * t - .284496736 ) * t + .254829592 ) * t;
+	return sign( x ) * ( 1.0 - p * exp( - x * x ) );
+}
+
 fn beamsInScatter( cam: vec3f, dir: vec3f, dist: f32, density: f32, seaLevel: f32 ) -> vec3f {
 	var out = vec3f( 0.0 );
 	let O = beamParams.origin;
@@ -62,18 +70,34 @@ fn beamsInScatter( cam: vec3f, dir: vec3f, dist: f32, density: f32, seaLevel: f3
 	for ( var i = 0; i < i32( beamParams.count ); i++ ) {
 		let D = beamParams.dirs[ i ].xyz;
 		let b = dot( dir, D );
-		let denom = max( 1.0 - b * b, 1e-4 );
-		let d1 = dot( dir, r ); let e = dot( D, r );
-		// closest approach of the view ray to the beam's axis, kept in front of the camera and the scene
-		let t = clamp( ( b * e - d1 ) / denom, 0.0, dist );
+		let e = dot( D, r );
+		// The beam forms outside the glazing and drum. Clip the *integration
+		// interval*, so an interior wall or doorway cannot receive exterior air.
+		var start = 0.0; var end = max( dist, 0.0 );
+		if ( b > 1e-5 ) { start = max( start, ( 2.65 - e ) / b ); }
+		else if ( b < -1e-5 ) { end = min( end, ( 2.65 - e ) / b ); }
+		else if ( e < 2.65 ) { continue; }
+		if ( end <= start ) { continue; }
+		let transverse = dir - D * b;
+		let denom = dot( transverse, transverse );
+		let t = clamp( - dot( r - D * e, transverse ) / max( denom, 1e-8 ), start, end );
 		let s = e + t * b;
-		if ( s <= 0.0 ) { continue; }
 		let q = r + dir * t - D * s;
 		let w = 0.5 + s * beamParams.spread;
 		let sinP = sqrt( denom );
-		// the tube's cross-section integrated along the ray (bounded where the ray runs along the beam)
-		let across = 2.5066 * w / max( sinP, w / max( s, 1.0 ) + 0.02 );
-		let core = exp( - dot( q, q ) / ( 2.0 * w * w ) );
+		// Keep the widening-tube limit for nearly axial views, while bounding
+		// the Gaussian integral by both the camera and this pixel's scene depth.
+		let limit = 2.5066 * w / max( sinP, w / max( s, 1.0 ) + 0.02 );
+		var across = min( end - start, limit );
+		var nearest = q;
+		if ( denom > 1e-6 ) {
+			let offset = dot( q, transverse ) / denom;
+			nearest = q - transverse * offset;
+			let k = sinP / ( 1.41421356 * w );
+			let fraction = max( .5 * ( beamsErf( ( end - t + offset ) * k ) - beamsErf( ( start - t + offset ) * k ) ), 0.0 );
+			across = min( 2.5066 * w / sinP * fraction, limit );
+		}
+		let core = exp( - dot( nearest, nearest ) / ( 2.0 * w * w ) );
 		let T = exp( - sigB * ( s + t ) );
 		// (none inside the lantern: the pencil forms beyond the glazing)
 		let formed = smoothstep( 2.0, 6.0, s );

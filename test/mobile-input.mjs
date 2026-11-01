@@ -76,6 +76,8 @@ interact.items = []; interact.add( { id:'gate', at:new Vector3( 0, 0, -1 ), text
 input.tapKey( 'KeyE' ); interact.update( .1 ); input.endFrame(); interact.update( .1 ); assert.equal( uses, 1 );
 const app = { player, story:{ interact, aboard:false } };
 assert.equal( mobileAction( app ).target, 'gate' ); assert.equal( mobileAction( app ).label, 'Open gate' );
+player.prompt.detail = 'One press — you walk the stairs automatically';
+assert.match( mobileAction( app ).detail, /walk the stairs automatically/, 'touch action preserves the automatic stair explanation' );
 app.story.aboard = true; app.story.arrival = { ready:false }; assert.equal( mobileAction( app ).kind, 'landing' );
 assert.equal( mobileAction( app ).label, 'Go to landing' );
 app.story.arrival.ready = true; assert.equal( mobileAction( app ).label, 'Step ashore' );
@@ -105,12 +107,26 @@ console.log( 'ok simultaneous touch activation, duplicate-click suppression, can
 let papers = 0, leaves = 0;
 const story = Object.assign( Object.create( Story.prototype ), { app:{ mobile:{ paused:true } }, ui:{ open:false }, paused:false, beat:'watch', signal:false,
 	_readPapers:() => { papers ++; }, _leaveSignal:() => { leaves ++; }, h:18,
+	watcher:{ state:'sending' }, islandReveal:{ active:false, update() {} }, towerTravel:{ update:() => false },
+	weatherObservations:{ updateLabels() {} },
 } );
 story.mobileCommand( 'papers' ); assert.equal( papers, 0 ); story.update( 10 ); assert.equal( story.h, 18 );
 story.app.mobile.paused = false; story.mobileCommand( 'papers' ); assert.equal( papers, 1 );
 story.ui.open = true; story.mobileCommand( 'papers' ); assert.equal( papers, 1 ); story.ui.open = false;
 story.signal = true; story.mobileCommand( 'read' ); assert.equal( story._hurry, true );
-story.mobileCommand( 'leave' ); assert.equal( leaves, 1 ); story.mobileCommand( 'papers' ); assert.equal( papers, 1 );
+story._hurry = false; story.watcher.state = 'waiting'; story.mobileCommand( 'read' );
+assert.equal( story._hurry, false, 'a mobile finish tap cannot choose a reply or queue completion of the next message' );
+story.watcher.state = 'replying'; story.mobileCommand( 'read' ); assert.equal( story._hurry, true, 'mobile can complete the current outgoing reply' );
+story._hurry = false;
+const finishKey = repeat => ( { code:'Space', repeat, preventDefault() {} } );
+story._key( finishKey( true ) ); assert.equal( story._hurry, false, 'holding Space cannot complete another transmission' );
+story._key( finishKey( false ) ); assert.equal( story._hurry, true, 'one Space press completes the current transmission' );
+story._hurry = false; story.watcher.state = 'waiting'; story._key( finishKey( false ) );
+assert.equal( story._hurry, false, 'Space leaves every reply choice to the player' );
+story.watcher.state = 'sending'; story.ui.open = true; story._key( finishKey( false ) ); story.mobileCommand( 'read' );
+assert.equal( story._hurry, false, 'completion cannot be queued through an open reading or choice panel' ); story.ui.open = false;
+story.mobileCommand( 'leave' ); assert.equal( leaves, 0, 'the contextual leave button is unavailable mid-message' );
+story.watcher.state = 'waiting'; story.mobileCommand( 'leave' ); assert.equal( leaves, 1 ); story.mobileCommand( 'papers' ); assert.equal( papers, 1 );
 console.log( 'ok mobile pause freezes the director, modal gating, papers and signal commands' );
 
 const menuApp = { input, devMenu:{ open:true }, ui:{ ui:{ panelOpen:false, helpEl:{ hidden:true }, photoMode:false } },

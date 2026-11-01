@@ -5,6 +5,7 @@ import { standard } from '../materials/Materials.js';
 import { G } from '../engine/render/Frame.js';
 import { WORLD } from './WorldLayout.js';
 import { srgb, rot2, terrainShadingModule } from './terrain/TerrainShading.js';
+import { acquireMaritimeTurf } from './flannan/MaritimeTurf.js';
 
 // = GrassField FADE_T0 (vegetation/GrassField.js): tier 0 blades drop out at random distances in
 // this range. Kept as a literal so the terrain doesn't pull in the grass field's shaders.
@@ -35,6 +36,7 @@ export class Terrain {
 		this.data = terrainData;
 		this.gpu = terrainGPU;
 		this.stoneTexture = stoneTexture;
+		this.turf = terrainData.island ? acquireMaritimeTurf( terrainData ) : null;
 		const half = terrainData.size / 2;
 
 		this.lod = new CDLOD( {
@@ -106,6 +108,7 @@ export class Terrain {
 		const mat = this.material;
 		const shading = terrainShadingModule( this.stoneTexture );
 		const modules = [ this.gpu.module, shading, this.lod.module ];
+		if ( this.turf ) modules.push( this.turf.module );
 		if ( this.wetness ) {
 
 			modules.push( ...( this.wetness.modules || [] ) );
@@ -113,9 +116,10 @@ export class Terrain {
 
 		}
 
-		modules.push( new ShaderModule( { name: 'terrainMaterial', deps: [ this.gpu.module, shading ], code: TERRAIN_MATERIAL_WGSL } ) );
+		modules.push( new ShaderModule( { name: 'terrainMaterial', deps: [ this.gpu.module, shading, this.turf?.module ], code: TERRAIN_MATERIAL_WGSL } ) );
 		mat.modules = modules;
 		mat.defines.HAS_WETNESS = this.wetness ? 1 : 0;
+		mat.defines.MARITIME_TURF = this.turf ? 1 : 0;
 		mat.defines.MATERIAL_SUN_MODULATION = this.sunShadow ? 1 : 0;
 		mat.surface = TERRAIN_SURFACE;
 		mat.needsUpdate = true;
@@ -461,11 +465,13 @@ const TERRAIN_SURFACE = /* wgsl */`
 		let V = normalize( frame.cameraPos - p );
 		let NdV = sat( dot( N0, V ) );
 		var mt = terrainMeadowTone( macroA, macroB, slope, N0.z, dM.w * 0.65 + dN.w * 0.35, true );
-		// winter turf on a northern island: dull olive grazed sward, tawny dead grass, peaty brown patches
-		let winterK = smoothstep( 0.3, 0.8, macroA * 0.6 + macroB * 0.4 + ( dM.w - 0.5 ) * 0.3 );
-		var winter = mix( ${ S( 0.33, 0.38, 0.28 ) }, ${ S( 0.45, 0.45, 0.33 ) }, winterK );
-		winter = mix( winter, ${ S( 0.36, 0.29, 0.19 ) }, smoothstep( 0.62, 0.8, macroB + ( dN.w - 0.5 ) * 0.4 ) * 0.5 );
-		mt.tone = mix( mt.tone, winter, mat.maritime );
+#if MARITIME_TURF
+		// Exactly the same world-anchored broad patches and palette as the blades.
+		let maritimeShelter = maritimeShelterAt( xz );
+		let maritimeDry = maritimeDryness( xz, maritimeGrowthShelter( maritimeShelter ) );
+		let maritimeTone = maritimeTurfTone( maritimeDry );
+		mt.tone = maritimeTone;
+#endif
 		// clumps (1-3 m) and tussocks, blade-scale grain
 		let clump = dM.w * 0.6 + dN.y * 0.4;
 		// seen from afar the tussocks and their shadowed gaps are what makes tall grass read as
@@ -505,6 +511,15 @@ const TERRAIN_SURFACE = /* wgsl */`
 		let swardBase = mix( mt.tone * 0.4, MEADOW_soil, 0.4 ) * ( ( dN.y - 0.45 ) * 0.6 + 1.0 ) * ( ( dF.y - 0.4 ) * 0.3 + 1.0 );
 		// Only the dense tropical grass uses a dark forest-floor base.
 		lawn = mix( lawn, swardBase, fieldK * 0.85 * ( 1.0 - mat.maritime ) );
+#if MARITIME_TURF
+		// Low maritime turf has small shadowed gaps, not tall-meadow contrast.
+		// Restrained fine relief avoids the blocky speckle visible between blades.
+		let maritimeClump = maritimeTuft( xz );
+		lawn = maritimeTone * mix( .78, .96, maritimeClump ) * ( .98 + ( dF.y - .5 ) * .06 );
+		lawn = mix( lawn, vec3f( .076, .065, .045 ), smoothstep( .67, .87, maritimeDry ) * .16 );
+		let maritimeWind = ( 1.0 - maritimeWindShelter( maritimeShelter, frame.windDir ) * .73 ) * min( frame.windSpeed / 18.0, 1.4 );
+		lawn *= 1.0 + maritimeGust( xz, frame.time ) * maritimeWind * .045;
+#endif
 		let litter = mix( ${ S( 0.2, 0.15, 0.09 ) }, ${ S( 0.34, 0.25, 0.13 ) }, dF.y );
 		var jungle = mix( ${ S( 0.1, 0.16, 0.05 ) }, litter, smoothstep( 0.52, 0.7, dN.y ) );
 		jungle = mix( jungle, ${ S( 0.12, 0.1, 0.06 ) }, gully * 0.3 );
@@ -640,8 +655,11 @@ const TERRAIN_SURFACE = /* wgsl */`
 			+ rill * 0.006 * rillK;
 		// seagrass canopy stands proud of the sand with a ragged scarp; rubble is knobbly
 		let seabedH = seagrassW * ( blades * 0.05 + 0.08 ) + rubbleW * ( dN.x * 0.07 + dF.x * 0.015 );
-		let groundH = dN.y * mix( 0.05, 0.035, jungleW ) + dF.y * 0.012 + dM.y * 0.045 + canopyH * canopyW * 2.5
+		var groundH = dN.y * mix( 0.05, 0.035, jungleW ) + dF.y * 0.012 + dM.y * 0.045 + canopyH * canopyW * 2.5
 			+ clump * 0.12 * ( 1.0 - jungleW ) + comb * 0.03 * ( 1.0 - jungleW );
+#if MARITIME_TURF
+		groundH = dN.y * .012 + dF.y * .003 + maritimeClump * .014;
+#endif
 		let screeH = dN.z * 0.04 + dM.x * 0.06;
 		let dirtH = dN.z * 0.012 + dN.y * 0.01;
 		var hd = mix( mix( groundH, screeH, screeW ), dirtH, pathW );
@@ -652,8 +670,11 @@ const TERRAIN_SURFACE = /* wgsl */`
 		stoneSlope = rockStoneSlope * rockW * mat.maritime;
 
 		// ---- ambient occlusion: baked horizon + cavity, plus litter / crevices / seagrass canopy
-		let aoDetail = mix( 1.0, dN.y * 0.5 + 0.7, jungleW * ( 1.0 - sandW ) * notRock * landW )
+		var aoDetail = mix( 1.0, dN.y * 0.5 + 0.7, jungleW * ( 1.0 - sandW ) * notRock * landW )
 			* mix( 1.0, smoothstep( 0.2, 0.7, clump ) * 0.35 + 0.65, meadowW );
+#if MARITIME_TURF
+		aoDetail = mix( aoDetail, .92 + maritimeClump * .08, meadowW );
+#endif
 		outAO = nr.w * aoDetail * ( 1.0 - seagrassW * 0.3 ) * ( 1.0 - rubbleW * smoothstep( 0.55, 0.2, dN.x ) * 0.35 )
 			* mix( 1.0, smoothstep( 0.15, 0.6, canopyH ) * 0.6 + 0.4, canopyW );
 

@@ -81,7 +81,7 @@ export const GPU = {
 			this.canvas = canvas;
 			this.context = canvas.getContext( 'webgpu' );
 			this.format = navigator.gpu.getPreferredCanvasFormat();
-			this.context.configure( { device, format: this.format, alphaMode: 'opaque', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST } );
+			this.context.configure( { device, format: this.format, alphaMode: 'opaque', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC } );
 
 		}
 
@@ -146,6 +146,7 @@ export const GPU = {
 	},
 
 	// ---- pipelines
+	// Deferred mesh handles are discovered at startup but join _pending only when start() runs.
 	// Pipelines compile asynchronously: the browser compiles them in parallel on worker threads, and a
 	// pipeline created synchronously would stall the GPU process (and with it the page) at first use.
 	// Handles are { pipeline, label }; `pipeline` is null until the compile finishes. Users that must
@@ -160,9 +161,9 @@ export const GPU = {
 	_serial: null,
 	_compiling: null,
 
-	renderPipeline( desc ) {
+	renderPipeline( desc, { deferred = false } = {} ) {
 
-		return this._async( desc, 'render' );
+		return this._async( desc, 'render', deferred );
 
 	},
 
@@ -172,7 +173,7 @@ export const GPU = {
 
 	},
 
-	_async( desc, kind ) {
+	_async( desc, kind, deferred = false ) {
 
 		const h = { pipeline: null, label: desc.label, desc, kind, failed: false };
 		// syncPipelines (?syncPipelines): compile right away (software renderers, where the batch of
@@ -213,10 +214,18 @@ export const GPU = {
 
 		// started after the current task: a kernel dispatched right after it was made (a one-off bake)
 		// compiles once, synchronously, instead of twice
-		const start = this.serialPipelines ? ( this._serial = ( this._serial || Promise.resolve() ).then( compile ) ) : Promise.resolve().then( compile );
-		const p = start.finally( () => this._pending.delete( p ) );
-		p.label = desc.label;
-		this._pending.add( p );
+		h.start = () => {
+
+			if ( h.promise ) return h.promise;
+			const start = this.serialPipelines ? ( this._serial = ( this._serial || Promise.resolve() ).then( compile ) ) : Promise.resolve().then( compile );
+			const p = start.finally( () => this._pending.delete( p ) );
+			p.label = desc.label;
+			this._pending.add( p );
+			h.promise = p;
+			return p;
+
+		};
+		if ( ! deferred ) h.start();
 		return h;
 
 	},

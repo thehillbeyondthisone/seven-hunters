@@ -16,6 +16,8 @@ export async function loadWeatherInstruments( village ) {
 		const texture = await loadTexture( base + name + '.png', true );
 		const material = standard( { name: name + '-face', roughness: .85, textures: { instrumentFace: texture }, surface:
 			's.albedo = textureSample( instrumentFace, smpAnisoClamp, vec2f( in.uv.x, 1.0-in.uv.y ) ).rgb;' } );
+		// The outdoor thermometer remains ready for the arrival; the barometer is indoors.
+		if ( name === 'barometer' ) material.userData.warmup = 'station';
 		let geometry = quad01Part( width, height );
 		if ( name === 'barometer' ) {
 			const p = [ 0, 0, 0 ], n = [ 0, 0, 1 ], uv = [ .5, .5 ], idx = [];

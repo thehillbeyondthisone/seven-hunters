@@ -1,14 +1,19 @@
+import { gateWorkPart } from './GateWorkProps.js';
+import { keeperCraft } from './KeeperCraft.js';
 import { BufferAttribute, BufferGeometry, Color, Group, Matrix4, Mesh, Vector3 } from '../../engine/index.js';
 import { createLanternGlass, createLensMaterial, createBurnerFlameMaterial, createStationTimber, createStationFlags, createStationMasonry, createLandingConcrete, createLandingRock, createStationIron } from './StationMaterials.js';
 import { dressEastLanding } from './LandingCraft.js';
 import { bolt, railShoe } from './ApparatusCraft.js';
-import { stationCraft, workingDoorHardware, exteriorDoorFrame } from './StationCraft.js';
+import { balconyCraft } from './BalconyCraft.js';
+import { buildDaySignals } from './DaySignals.js';
+import { stationCraft, workingDoorHardware, exteriorDoorFrame, doorPanelBorder } from './StationCraft.js';
 import { portholeDrum } from './ReferenceDetails.js';
 import { fittedStoneWall, stoneBlock, islandStoneScatter } from './StoneMasonry.js';
 import { dressKeepersRoom, deskOilLamp } from './InteriorDressing.js';
 import { keeperTable, keeperChair, rangeDetails } from './InteriorCraft.js';
 import { roomCraft, roomLampGlassMaterial, roomLampFlameMaterial } from './RoomCraft.js';
 import { nextRooms, haulingShed, KITCHEN, HAULING_SHED } from './NextRooms.js';
+import { keepsakesRooms, workshopBench } from './KeepsakesRooms.js';
 import { ChimneySmoke } from './ChimneySmoke.js';
 import { morningServiceProps, serviceGlass } from './MorningServiceProps.js';
 import { Builder, Part, quad01Part, sagPoints } from '../village/GeoBuilder.js';
@@ -116,12 +121,32 @@ function stationDoorUnit( B, rand, cx, floorY, interior = false ) {
 		for ( const x of [ cx - w / 2 + 0.055, cx, cx + w / 2 - 0.055 ] ) B.box( 'stationTimber', x, floorY + h / 2, 0.029, 0.095, h, 0.027, { grain: 1, ...leaf } );
 		for ( const [ y, rh ] of [ [ 0.065, 0.13 ], [ 0.9, 0.12 ], [ h - 0.055, 0.11 ] ] ) B.box( 'stationTimber', cx, floorY + y, 0.029, w, rh, 0.027, { grain: 0, ...leaf } );
 
-	} else boardedLeaf( B, cx, floorY, w, h, rand.next() );
+	} else {
+
+		boardedLeaf( B, cx, floorY, w, h, rand.next() );
+		const paint = { tint: P.door, data: WOOD( .72, .08, .96 ) };
+		// Framed boarding, a weather bar and visible hinge straps keep the yard
+		// doors readable beside the stone reveals even in oblique lamplight.
+		doorPanelBorder( B, 'stationTimber', cx, floorY + h / 2, 0, w, h,
+			[ [ 0, .0225 ], [ .007, .035 ], [ .055, .035 ], [ .066, .023 ] ], paint, [ 1 ] );
+		B.box( 'stationTimber', cx, floorY + .1, .046, w - .035, .075, .065, { grain: 0, ...paint } );
+		const hinge = { tint: lin( 0x39413c ), data: HARD( .63, -1, .1, .59 ) };
+		for ( const y of [ .3, 1.79 ] ) {
+			B.box( 'hard', cx - w / 2 + .12, floorY + y, .039, .2, .033, .012, hinge );
+			B.cyl( 'hard', cx - w / 2 + .012, floorY + y - .047, .041, .012, .012, .094, { segs: 8, ...hinge } );
+			for ( const dx of [ .06, .17 ] ) bolt( B, [ cx - w / 2 + dx, floorY + y, .045 ], [ 0, 0, 1 ], hinge, .004 );
+		}
+
+	}
 	for ( const x of [ cx - w / 2 - 0.045, cx + w / 2 + 0.045 ] ) B.box( 'stationTimber', x, floorY + h / 2 + 0.02, 0.02, 0.09, h + 0.04, 0.04, { grain: 1, ...trim } );
 	B.box( 'stationTimber', cx, floorY + h + 0.1, 0.024, w + 0.24, 0.14, 0.048, { grain: 0, ...trim } );
 	B.box( 'stationTimber', cx, floorY + h + 0.18, 0.045, w + 0.3, 0.025, 0.09, { grain: 0, ...trim } );
+	doorPanelBorder( B, 'stationTimber', cx, floorY + h / 2 + .02, .041, w + .18, h + .04,
+		[ [ 0, 0 ], [ .008, .013 ], [ .025, .013 ], [ .038, .002 ] ], trim, [ 1 ] );
 	B.box( 'stationTimber', cx, floorY + 0.015, 0.05, w + 0.12, 0.03, 0.1, { grain: 0, tint: lin( 0x8d7656 ), data: WOOD( 0.48, 0.05 ) } );
+	B.box( 'hard', cx + w / 2 - .1, floorY + .93, .03, .055, .17, .009, { tint: C.brass, data: HARD( .48, .015, .85, .42 ) } );
 	B.lathe( 'hard', cx + w / 2 - 0.1, floorY + 0.98, 0.045, [ [ 0, 0 ], [ 0.012, 0 ], [ 0.012, 0.03 ], [ 0.028, 0.045 ], [ 0, 0.065 ] ], { segs: 8, rx: Math.PI / 2, tint: C.brass, data: HARD( 0.49, 0.03, 0.9, 0.35 ) } );
+	B.rod( 'hard', [ cx + w / 2 - .1, floorY + .88, .035 ], [ cx + w / 2 - .1, floorY + .88, .04 ], .006, .006, { segs: 8, tint: lin( 0x282c29 ), data: HARD( .49, -1, 0, .7 ) } );
 
 }
 
@@ -512,7 +537,6 @@ function keepersHouse( ctx, village, parts ) {
 	// walls to bump into: the closed parts of the house solid, the keepers' room walled
 	const { colliders } = ctx, R = ROOM, hy = new Vector3( 0, 2.6, 0 );
 	const box = ( x0, z0, x1, z1, tag = 'house' ) => colliders.addBox( new Vector3( ( x0 + x1 ) / 2, Y0 + 2.2, ( z0 + z1 ) / 2 ), hy.clone().setX( ( x1 - x0 ) / 2 ).setZ( ( z1 - z0 ) / 2 ), 0, { tag } );
-	box( - 22, - 1.8, R.x0, 6 ); // the west rooms
 	box( - 6, R.z1, - 5.4, 15, 'wall' );
 	box( 1.2, R.z1, 1.8, 15, 'wall' );
 	box( - 5.4, 14.4, 1.2, 15, 'wall' ); // playable kitchen and spare berth in the south wing
@@ -547,10 +571,7 @@ function keepersRoom( ctx, parts, S ) {
 
 	// the partitions: west (to the bedrooms) and south (to the kitchen), each with a shut door
 	const part = ( x0, z0, x1, z1 ) => wallBox( B, 'stationMasonry', x0, x1, F - 0.1, R.ceiling + 0.1, z0, z1, { u0: 0, ...plaster } );
-	part( R.x0 - 0.6, R.z0, R.x0, R.z1 );
-	B.pushAt( R.x0, 0, 2.6, Math.PI / 2 );
-	stationDoorUnit( B, rand, 0, F, true );
-	B.pop();
+	keepsakesRooms( ctx, parts, F, R.ceiling, door );
 	R.westDoor = new Vector3( R.x0 + 0.1, F + 1.0, 2.6 );
 	R.kitchenDoor = new Vector3( - 2.2, F + 1.0, R.z1 - 0.1 );
 
@@ -561,6 +582,9 @@ function keepersRoom( ctx, parts, S ) {
 
 			const wood = ( s ) => ( { tint: P.door, data: WOOD( s, 0.08, 0.96 ) } );
 			boardedLeaf( L, 0.5, 0, 1.0, 2.08, 0.81 );
+			doorPanelBorder( L, 'stationTimber', .5, 1.04, 0, 1, 2.08,
+				[ [ 0, .0225 ], [ .006, .034 ], [ .042, .034 ], [ .055, .023 ] ], wood( .81 ), [ -1 ] );
+			L.box( 'stationTimber', .5, .105, -.048, .96, .075, .055, { grain: 0, ...wood( .82 ) } );
 			for ( const y of [ 0.25, 1.04, 1.83 ] ) L.box( 'stationTimber', 0.5, y, 0.04, 0.9, 0.14, 0.03, { grain: 0, ...wood( 0.83 ) } );
 			L.beam( 'stationTimber', [ 0.09, 0.32, 0.04 ], [ 0.9, 1.77, 0.04 ], 0.085, 0.03, wood( 0.84 ) );
 			workingDoorHardware( L, 1.0 );
@@ -648,7 +672,7 @@ function oilStore( ctx, village, parts ) {
 	const walls = [
 		{ a: [ 11.8, - 4.8 ], b: [ 6.8, - 4.8 ], quoins: [ true, true ] },
 		{ a: [ 6.8, - 4.8 ], b: [ 6.8, - 0.4 ], quoins: [ true, true ], openings: [ { at: 2.2, w: 0.7, y0: Y0 + 1.2, y1: Y0 + 2.3, lit: 0 } ] },
-		{ a: [ 6.8, - 0.4 ], b: [ 11.8, - 0.4 ], quoins: [ true, true ], openings: [ { at: 2.5, kind: 'door', leaf: ! ctx.morningStudy } ] },
+		{ a: [ 6.8, - 0.4 ], b: [ 11.8, - 0.4 ], quoins: [ true, true ], openings: [ { at: 2.5, kind: 'door', leaf: ! (ctx.morningStudy || ctx.keeperStudy) } ] },
 		{ a: [ 11.8, - 0.4 ], b: [ 11.8, - 4.8 ], quoins: [ true, true ] },
 	];
 	let u0 = 0;
@@ -661,7 +685,7 @@ function oilStore( ctx, village, parts ) {
 	}
 
 	flatRoof( ctx, 7.2, - 4.4, 11.4, - 0.8, S.eaves );
-	if ( ctx.morningStudy ) {
+	if ( ctx.morningStudy || ctx.keeperStudy ) {
 		const box = ( x, z, hx, hz ) => ctx.colliders.addBox( new Vector3( x, S.floor + 1.5, z ), new Vector3( hx, 1.5, hz ), 0, { tag: 'oil-store-wall' } );
 		box( 7.025, -2.6, .225, 2.2 ); box( 11.575, -2.6, .225, 2.2 ); box( 9.3, -4.575, 2.5, .225 );
 		box( 7.775, -.625, .975, .225 ); box( 10.825, -.625, .975, .225 );
@@ -673,6 +697,7 @@ function oilStore( ctx, village, parts ) {
 				for ( const y of [ .25, 1.04, 1.83 ] ) L.box( 'stationTimber', .51, y, .035, .92, .12, .027, { grain: 0, tint: P.door, data: WOOD( .64, .03, 1 ) } );
 				workingDoorHardware( L, 1.02 );
 			} } ) );
+		workshopBench(ctx,S.floor);
 	} else ctx.colliders.addBox( new Vector3( 9.3, Y0 + 1.6, - 2.6 ), new Vector3( 2.5, 2.0, 2.2 ), 0, { tag: 'shed' } );
 	village.buildings.push( { name: 'store', x: 9.3, z: - 2.6, floorY: S.floor, roofTop: S.top, stilts: false } );
 	// paraffin barrels by the door
@@ -861,12 +886,27 @@ function lanternDoor( ctx, hinge, ah, width, height, rand ) {
 		name: 'gallery', hinge, ry: Math.atan2( - Math.cos( ah ), - Math.sin( ah ) ), swing: 1.75, width, height,
 		leaf: ( B ) => {
 
-			const iron = { tint: P.black, data: IRON( 0.61, 0.25 ) };
-			B.box( 'hard', width / 2, height * 0.3, 0, width, height * 0.6, 0.04, iron );
+			const iron = { tint: lin( 0x4a5750 ), data: HARD( 0.61, -1, 0, .54 ) };
+			const panel = { tint: lin( 0x536057 ), data: HARD( .67, -1, 0, .61 ) };
+			B.box( 'hard', width / 2, height * 0.3, 0, width, height * 0.6, 0.04, panel );
+			// Raised cast frame around an inset lower panel, with shallow bevels
+			// rather than a featureless slab. Relief stays within the old leaf's
+			// hardware depth and uses the adjacent drum's maintained enamel finish.
+			doorPanelBorder( B, 'hard', width / 2, height * .3, 0, width, height * .6,
+				[ [ 0, .02 ], [ .008, .033 ], [ .07, .033 ], [ .083, .023 ], [ .099, .021 ] ], iron );
+			doorPanelBorder( B, 'hard', width / 2, height * .3, 0, width - .21, height * .6 - .21,
+				[ [ 0, .021 ], [ .006, .026 ], [ .018, .026 ], [ .025, .021 ] ], panel );
 			for ( const x of [ 0.03, width - 0.03 ] ) B.box( 'hard', x, height * 0.8, 0, 0.06, height * 0.4, 0.05, iron );
 			B.box( 'hard', width / 2, height - 0.03, 0, width, 0.06, 0.05, iron );
+			doorPanelBorder( B, 'hard', width / 2, height * .8, 0, width - .025, height * .4 - .025,
+				[ [ 0, .025 ], [ .007, .034 ], [ .022, .034 ], [ .039, .018 ] ], iron );
 			B.part( 'glass', quad01Part( width - 0.1, height * 0.38 ), width / 2, height * 0.8, - 0.01, { tint: [ 0.2, 0.22, 0.2 ], data: [ rand.next() * 0.3, 0, 0, 0 ] } );
 			workingDoorHardware( B, width, height, height * .5 );
+			for ( const side of [ -1, 1 ] ) {
+				B.box( 'hard', width / 2, height * .6, side * .031, width - .09, .055, .018, iron );
+				B.box( 'hard', width / 2, .082, side * .026, width - .13, .032, .014, iron );
+				for ( const x of [ .075, width - .075 ] ) for ( const y of [ .09, height * .56, height - .08 ] ) bolt( B, [ x, y, side * .022 ], [ 0, 0, side ], iron, .006 );
+			}
 
 		},
 	} );
@@ -901,10 +941,7 @@ function lensPedestal( ctx, parts, deck, gm ) {
 	B.pop();
 	TOWER.crank = new Vector3( Math.cos( ca ) * 0.7, deck + 1.0, Math.sin( ca ) * 0.7 );
 	const crank = new Builder();
-	crank.box( 'hard', 0, 0.12, 0, 0.03, 0.26, 0.03, brass );
-	crank.box( 'hard', 0, 0, 0, .064, .064, .038, brass );
-	bolt( crank, [ 0, 0, .02 ], [ 0, 0, 1 ], iron, .016 );
-	crank.lathe( 'stationTimber', 0, .22, .018, [ [ .018, 0 ], [ .029, .025 ], [ .027, .13 ], [ .018, .15 ] ], { rx: Math.PI / 2, segs: 12, tint: lin( 0x5e4430 ), data: WOOD( .75, .04 ) } );
+	keeperCraft(crank,'crank');
 	parts.crank = { B: crank, position: TOWER.crank.clone(), ry: Math.PI / 2 - ca };
 	B.cyl( 'hard', 0, deck + 1.7, 0, 0.62, 0.58, 0.12, { segs: 24, ...brass } );
 	// the burner: a brass column with the concentric wicks at the focus
@@ -969,6 +1006,8 @@ function lensPedestal( ctx, parts, deck, gm ) {
 			flush();
 		}
 	}
+	for(let i=0;i<6;i++){const a=i*Math.PI/3;keeperCraft(B,'opticRoller',Math.cos(a)*.58,gm-1.51,Math.sin(a)*.58,{ry:-a});}
+	for(let i=0;i<12;i++){const a=(i+.5)*Math.PI/6,r=radiusAt(-.72)+.023;keeperCraft(L,'opticClamp',Math.cos(a)*r,-.72,Math.sin(a)*r,{ry:Math.PI/2-a});}
 	L.cyl( 'hard', 0, -1.40, 0, 0.68, 0.68, 0.10, { segs: 48, ...brass } );
 	parts.lens = { B: L, glass: G, position: new Vector3( 0, gm, 0 ), radius: rL };
 
@@ -1051,7 +1090,7 @@ function tower( ctx, parts ) {
 	const { B, rand, lights, colliders } = ctx;
 	const T = TOWER;
 	const white = { tint: P.white, data: PLASTER( 0.13 ) }, ochre = { tint: P.ochre, data: PLASTER( 0.19 ) };
-	const iron = { tint: P.black, data: IRON( 0.23, 0.12 ) };
+	const iron = { tint: lin( 0x343c38 ), data: HARD( 0.23, -1, 0, .57 ) };
 	const r = ( y ) => lerp( 3.2, 2.95, clamp( ( y - Y0 - 0.9 ) / 15.7, 0, 1 ) );
 	const dA = T.doorAngle, dw = DOOR_HALF, past = [ dA + dw, dA - dw + Math.PI * 2 ];
 
@@ -1203,7 +1242,7 @@ function tower( ctx, parts ) {
 
 	// stage 2: the corbelled walkway (a stone floor, iron railings)
 	revolve( B, 'stationMasonry', [ [ 2.95, Y0 + 16.2 ], [ 3.02, Y0 + 16.35 ], [ 3.02, Y0 + 16.5 ], [ 3.28, Y0 + 16.65 ], [ 3.28, Y0 + 16.85 ], [ 3.58, Y0 + 17.05 ], [ 3.58, Y0 + 17.22 ], [ 3.86, Y0 + 17.32 ], [ 3.86, Y0 + 17.58 ], [ 3.82, Y0 + 17.6 ] ], white );
-	revolve( B, 'stationMasonry', [ [ 3.82, T.deck ], [ 2.2, T.deck ] ], { segs: 48, tint: P.flags, data: PLASTER( 0.29, 0.3 ) } );
+	revolve( B, 'stationFlags', [ [ 3.82, T.deck ], [ 2.2, T.deck ] ], { segs: 96, tint: lin( 0x878b83 ), data: [ .29, 5, 0, 1 ] } );
 	revolve( B, 'stationMasonry', [ [ 2.2, T.deck - 0.2 ], [ T.rIn + 0.6, T.deck - 0.2 ] ], { segs: 48, tint: P.white, data: PLASTER( 0.31, 0.2 ) } );
 	// HES LB48143 describes a boarded timber deck supported on iron girders.
 	// Board width, species and finish are reconstruction; retain the open hatch.
@@ -1216,19 +1255,22 @@ function tower( ctx, parts ) {
 	for ( let i = 0; i < 40; i ++ ) {
 
 		const a = ( i + 0.5 ) / 40 * Math.PI * 2;
-		balconyRail.rod( 'hard', [ Math.cos( a ) * railR, deck, Math.sin( a ) * railR ], [ Math.cos( a ) * railR, deck + 1.06, Math.sin( a ) * railR ], 0.022, 0.018, { segs: 5, ...iron } );
+		balconyRail.rod( 'hard', [ Math.cos( a ) * railR, deck, Math.sin( a ) * railR ], [ Math.cos( a ) * railR, deck + 1.06, Math.sin( a ) * railR ], 0.022, 0.018, { segs: 10, tint: lin( 0x3c4441 ), data: HARD( .23, -1, 0, .57 ) } );
 
 	}
 
-	balconyRail.torus( 'hard', 0, deck + 1.06, 0, railR, G.railTube, { radial: 6, tubular: 64, ...iron } );
-	balconyRail.torus( 'hard', 0, deck + 0.55, 0, railR, 0.018, { radial: 5, tubular: 64, ...iron } );
-	balconyRail.torus( 'hard', 0, deck + 0.08, 0, railR, 0.014, { radial: 4, tubular: 64, ...iron } );
+	const railPaint = { tint: lin( 0x3c4441 ), data: HARD( .23, -1, 0, .57 ) };
+	balconyRail.torus( 'hard', 0, deck + 1.06, 0, railR, G.railTube, { radial: 10, tubular: 192, ...railPaint } );
+	balconyRail.torus( 'hard', 0, deck + 0.55, 0, railR, 0.018, { radial: 8, tubular: 192, ...railPaint } );
+	balconyRail.torus( 'hard', 0, deck + 0.08, 0, railR, 0.014, { radial: 8, tubular: 192, ...railPaint } );
+	balconyCraft( B, balconyRail, T );
+	T.daySignals = buildDaySignals( B, T );
 
 	// stage 3: the lantern's cast-iron pedestal and deck, with a light rail for cleaning the glazing; a
 	// door through the pedestal and one pane's height onto the walkway (pane 11, north-west)
 	const ga = T.galleryDoor, gw = 0.16, gPast = [ ga + gw, ga - gw + Math.PI * 2 ];
 	const top = deck + 1.38;
-	const drumPaint = { tint: P.white, data: HARD( 0.29, 0, 0, 0.78 ) };
+	const drumPaint = { tint: lin( 0xc4c0b3 ), data: HARD( 0.29, -1, 0, 0.64 ) };
 	portholeDrum( B, { bottom: deck, top, radius: G.wallOuter, doorAngle: ga, doorHalf: gw, paint: drumPaint, iron } );
 	// Keep the cleaning ledge inside the walking lane, including room to turn
 	// clear of the doorway. Its former overhang pinched a standing capsule.
@@ -1246,16 +1288,29 @@ function tower( ctx, parts ) {
 	B.torus( 'hard', 0, top + 0.48, 0, G.cleaningRail, 0.012, { radial: 5, tubular: 64, ...iron } );
 	// the door's frame: jambs through the pedestal and the sill, a head; the leaf is a moving part
 	const doorTop = deck + 1.95;
+	const doorPaint = { tint: lin( 0x4a5750 ), data: HARD( .64, -1, 0, .54 ) };
 	for ( const a of [ ga - gw, ga + gw ] ) {
 
 		B.pushAt( 0, 0, 0, Math.PI / 2 - a );
-		B.box( 'hard', 0, ( deck + doorTop ) / 2, 2.21, 0.06, doorTop - deck, 0.3, iron );
+		B.box( 'hard', 0, ( deck + doorTop ) / 2, 2.21, 0.06, doorTop - deck, 0.3, doorPaint );
+		for ( const radius of [ 2.054, 2.366 ] ) {
+			B.box( 'hard', 0, ( deck + doorTop ) / 2, radius, .082, doorTop - deck, .012, doorPaint );
+			for ( const y of [ deck + .15, deck + 1.08, doorTop - .13 ] ) bolt( B, [ 0, y, radius ], [ 0, 0, radius < 2.2 ? -1 : 1 ], doorPaint, .006 );
+		}
 		B.pop();
 
 	}
 
 	B.pushAt( 0, 0, 0, Math.PI / 2 - ga );
-	B.box( 'hard', 0, doorTop + 0.03, 2.1, 0.76, 0.06, 0.5, iron );
+	B.box( 'hard', 0, doorTop + 0.03, 2.1, 0.76, 0.06, 0.5, doorPaint );
+	B.box( 'hard', 0, doorTop + .065, 2.21, .86, .025, .38, doorPaint );
+	B.box( 'hard', 0, deck + .014, 2.25, .77, .028, .38, { tint: lin( 0x7e887e ), data: HARD( .69, -1, .15, .65 ) } );
+	// The inner stop and outer drip edge make the frame meet the drum as a
+	// fitted assembly. Their small relief leaves the walking aperture intact.
+	for ( const [ radius, face ] of [ [ 2.035, -1 ], [ 2.385, 1 ] ] ) {
+		doorPanelBorder( B, 'hard', 0, deck + 1, radius, .86, 2,
+			[ [ 0, 0 ], [ .008, .012 ], [ .033, .012 ], [ .049, .003 ] ], doorPaint, [ face ] );
+	}
 	B.pop();
 	const leafHinge = new Vector3( Math.cos( ga - gw ) * 2.32, deck, Math.sin( ga - gw ) * 2.32 );
 	parts.doors.push( lanternDoor( ctx, leafHinge, ga - gw, 2 * 2.32 * Math.sin( gw ) - 0.02, doorTop - deck - 0.02, rand ) );
@@ -1467,6 +1522,13 @@ function compound( ctx, village, parts ) {
 
 	}
 
+
+    // The west tramway has its own physical gate. Earlier interaction code
+    // accidentally drove the second leaf of the east gate from this opening.
+    for (const [hx,ry,swing] of [[sg.x-sg.w/2,0,-1.45],[sg.x+sg.w/2,Math.PI,1.45]]) {
+        parts.doors.push(door(ctx,{name:'southGate',hinge:new Vector3(hx,Y0,sg.z),ry,swing,width:gl,height:gh+.2,leaf:L=>gateWorkPart(L,'southLeaf')}));
+    }
+
 }
 
 // ------------------------------------------------------------------ the landings
@@ -1475,7 +1537,9 @@ function landing( ctx, name, L ) {
 
 	const { B, rand, colliders, terrain } = ctx;
 	const [ dx, dz ] = L.dir, ry = Math.atan2( - dz, dx );
-	const concrete = ( s ) => ( { tint: lin( 0x727974 ), data: [ s, 0, 0, 0 ], v0: 0 } );
+	// The newly cast west works must separate from the dark, wet gneiss in the
+	// lookout view. This is the concrete's diffuse colour, without edge lighting.
+	const concrete = ( s ) => ( { tint: name === 'west' ? P.concrete : lin( 0x727974 ), data: [ s, 0, 0, 0 ], v0: 0 } );
 	const iron = { tint: P.black, data: IRON( 0.43, 0.55 ) };
 	const head = L.head, pts = L.steps.pts, stageY = L.stage.y;
 	B.pushAt( head.x, 0, head.z, ry ); // local x: seaward along the geo, z across it
@@ -1582,7 +1646,8 @@ function landing( ctx, name, L ) {
 	// Small local working details on the east stage; no modern quay equipment.
 	if ( name === 'east' ) {
 		dressEastLanding( ctx, L, at );
-		ropeCoil( B, 2.6, stageY + .015, -2.05, .028, .28, 4, .37 );
+		keeperCraft(B,'ropeCoil',2.6,stageY+.015,-2.05,{lod:'far',sx:1.3,sy:1.3,sz:1.3});
+		keeperCraft(B,'ropeKnot',2.34,stageY+.02,-1.9,{lod:'far'});
 		B.box( 'stationTimber', .1, stageY+.25, 2.45, 1.05, .5, .65, { tint:P.box, data:WOOD(.41,.15,.25,3) } );
 		for ( const x of [ -.27, .47 ] ) B.box( 'hard', x, stageY+.25, 2.45, .045, .52, .67, iron );
 	}
@@ -1857,6 +1922,7 @@ export function buildStation( ctx, village ) {
 	landing( ctx, 'east', E );
 	parts.westLanding = new Builder();
 	landing( { ...ctx, B: parts.westLanding }, 'west', W );
+	parts.westLandingBroken = brokenWestLanding( W );
 	tramway( ctx, [ ...eastTrack, ...inEast.slice( 1 ) ] );
 	tramway( ctx, [ ...westTrack, ...inSouth.slice( 1 ) ] );
 	flagstaff( ctx, STATION.flagstaff.x, STATION.flagstaff.z );
@@ -1885,6 +1951,90 @@ export function buildStation( ctx, village ) {
 
 // ------------------------------------------------------------------ the moving parts
 
+// A single stair joint defines the render, terrain and collision break. Keeping
+// the cut on a joint avoids floating treads above a differently sized CPU hole.
+export function westLandingBreak( L ) {
+	const run = L.steps.pts.findIndex( p => p[1] >= 28 );
+	const t = run < 0 ? L.steps.pts.length - 1 : run;
+	return { run: t, y: L.steps.pts[t][1] };
+}
+
+function brokenWestLanding( L ) {
+	const B = new Builder(), { run, y } = westLandingBreak( L );
+	const fresh = { tint: lin( 0xc0bcb0 ), data: [ .37, 0, 0, 0 ] };
+	const weathered = { tint: P.concrete, data: [ .53, 0, 0, 0 ] };
+	const iron = { tint: lin( 0x353834 ), data: IRON( .43, .65 ) };
+	B.pushAt( L.head.x, 0, L.head.z, Math.atan2( -L.dir[1], L.dir[0] ) );
+	// Exposed aggregate and a chipped, unequal end to the surviving flight.
+	// These remnants provide no new support or handholds over the missing route.
+	const edge = [ [-1.19,.3,.48,2.75],[-.82,.57,.12,2.31],[-.18,.44,.32,2.96],[.35,.87,.61,2.48],[.8,.49,.16,2.85],[1.19,.28,.66,2.4] ];
+	for ( let i = 1; i < edge.length; i ++ ) {
+		const a=edge[i-1],b=edge[i],at=[-run+a[1],y-a[2],a[0]],bt=[-run+b[1],y-b[2],b[0]],ab=[at[0],y-a[3],a[0]],bb=[bt[0],y-b[3],b[0]];
+		poly(B,'landingConcrete',[at,ab,bb,bt],p=>[p[2],p[1]],{...fresh,face:[1,0,0]});
+		poly(B,'landingConcrete',[[-run-.12,y,a[0]],at,bt,[-run-.12,y,b[0]]],p=>[p[0],p[2]],{...weathered,face:[0,1,0]});
+		for(const [q,r]of [[at,ab],[bt,bb]])poly(B,'landingConcrete',[[-run-.12,q[1],q[2]],q,r,[-run-.12,r[1],r[2]]],p=>[p[0],p[1]],{...fresh,face:[0,0,q[2]]});
+	}
+	// Rail lengths remain attached to the last intact stanchions, bent down
+	// toward the void. The regular paired lines visibly end at the fracture.
+	const lastPost = .3 + Math.ceil((run-.3)/1.6)*1.6;
+	const postY = L.steps.pts[Math.round(lastPost)][1];
+	for ( const side of [-1,1] ) for ( const h of [.5,1] ) {
+		const z=side*.93,tip=[-run+1.35,y-1.12+(h-.5)*.45,z+side*.28];
+		B.rod('hard',[-lastPost,postY+h,z],[-run+.03,y+h-.2,z],.023,.023,{segs:6,...iron});
+		B.rod('hard',[-run+.03,y+h-.2,z],tip,.023,.017,{segs:6,...iron});
+	}
+	// Fallen cast slabs and part of the iron derrick lie among the tidal rubble,
+	// below the former platform. Their broad shapes remain visible as sets drain.
+	B.box('landingConcrete',-15,-.18,2.4,3.7,3.4,3.1,{ry:.21,rz:.13,...fresh});
+	B.box('landingConcrete',-10,-.38,-1.1,3.1,2.7,2.2,{ry:-.31,rx:.2,...weathered});
+	B.box('landingConcrete',2.4,-.55,2.1,3.2,2.8,2.4,{ry:.4,rz:-.14,...fresh});
+	B.rod('hard',[-16,1.25,2.5],[-12.1,.85,5.3],.17,.12,{segs:12,...iron});
+	B.beam('hard',[-16,1.2,2.5],[-11.6,.35,1.2],.24,.25,iron);
+	B.pop();
+	return B;
+}
+
+// Keep the west works' concrete and derrick wire in the moving assembly. The
+// generic moving-parts list does not include landingConcrete, so using that
+// list here would render the iron fittings above an entirely invisible stage.
+export function assembleWestLanding( parts, L, mats, bake = () => {} ) {
+	const west = { upper: new Group(), lower: new Group(), broken: new Group() };
+	for(const key of Object.keys(west))west[key].name=`west-landing-${key}`;
+	west.broken.visible=false;
+	const {run}=westLandingBreak(L),[dx,dz]=L.dir;
+	const build = B => {
+		if(!B)return [];
+		const out=[];
+		for(const [key,batch]of Object.entries(B.batches)) {
+			const material=mats[key==='rope'?'hard':key];
+			if(!material||!batch.vcount)continue;
+			const geometry=batch.build();
+			if(key==='rope') {
+				const data=geometry.attributes.vdata.array;
+				for(let i=0;i<data.length;i+=4){data[i+3]=2+data[i+1];data[i+1]=0;data[i+2]=0;}
+			}
+			const mesh=new Mesh(geometry,material);mesh.name=`west-landing-${key}`;
+			mesh.castShadow=mesh.receiveShadow=true;mesh.onBeforeRender=bake;out.push(mesh);
+		}
+		return out;
+	};
+	for(const mesh of build(parts.westLanding)) {
+		const p=mesh.geometry.attributes.position.array,indices=mesh.geometry.index.array,upper=[],lower=[];
+		for(let i=0;i<indices.length;i+=3) {
+			let seaward=-Infinity;
+			for(let j=0;j<3;j++){const k=indices[i+j]*3;seaward=Math.max(seaward,(p[k]-L.head.x)*dx+(p[k+2]-L.head.z)*dz);}
+			const out=seaward>-run+.01?lower:upper;out.push(indices[i],indices[i+1],indices[i+2]);
+		}
+		for(const [indices,dest]of [[upper,west.upper],[lower,west.lower]]) {
+			if(!indices.length)continue;
+			const g=mesh.geometry.clone();g.setIndex(indices);g.computeBoundingSphere();
+			const part=new Mesh(g,mesh.material);part.name=mesh.name;part.castShadow=part.receiveShadow=true;part.onBeforeRender=bake;dest.add(part);
+		}
+	}
+	for(const mesh of build(parts.westLandingBroken))west.broken.add(mesh);
+	return west;
+}
+
 // The station's moving parts as meshes, after the village is assembled (its materials and texture bake):
 // the lantern's glass (blended), the lens (turning: src/station/Lamp.js), the machine's crank, the doors
 // and the gate (each a group turned about its hinge; door.open 0..1). Returns { lens, crank, doors, glass,
@@ -1892,6 +2042,9 @@ export function buildStation( ctx, village ) {
 export function assembleStation( village ) {
 
 	const S = village.station, parts = S.parts, mats = village.materials;
+	// Clear panes share the timber batch (pattern 9). Let sunlight through the
+	// glass while the separate sash, reveals and furniture still cast shadows.
+	mats.wood.shadow = 'return in.vs.vData.z < 8.5;';
 	// The 1901 station was newly built. Keep rubble detail, soften plaster trowel relief and grime.
 	mats.stone.uniforms.maintenance.value = 1;
 	mats.hard.uniforms.maintenance.value = 1;
@@ -1929,20 +2082,8 @@ export function assembleStation( village ) {
 
 	const group = new Group();
 	group.name = 'station_parts';
-	const westLanding = { upper: new Group(), lower: new Group() };
-	westLanding.upper.name='west-landing-upper';westLanding.lower.name='west-landing-lower';
-	if(parts.westLanding)for(const mesh of meshes(parts.westLanding)) {
-		const p=mesh.geometry.attributes.position.array,indices=mesh.geometry.index.array,upper=[],lower=[];
-		for(let i=0;i<indices.length;i+=3) {
-			const out=Math.max(p[indices[i]*3+1],p[indices[i+1]*3+1],p[indices[i+2]*3+1])<28?lower:upper;
-			out.push(indices[i],indices[i+1],indices[i+2]);
-		}
-		for(const [indices,dest] of [[upper,westLanding.upper],[lower,westLanding.lower]]) {
-			if(!indices.length)continue;const g=mesh.geometry.clone();g.setIndex(indices);g.computeBoundingSphere();
-			const part=new Mesh(g,mesh.material);part.castShadow=part.receiveShadow=true;part.onBeforeRender=bake;dest.add(part);
-		}
-	}
-	group.add(westLanding.upper,westLanding.lower);
+	const westLanding = assembleWestLanding( parts, S.landings.west, mats, bake );
+	group.add(westLanding.upper,westLanding.lower,westLanding.broken);
 	const yardFence = assembleYardFence( parts, createStationIron( village.textures.textures ), bake );
 	if ( yardFence ) group.add( yardFence );
 	const weightCover = new Group();
@@ -2085,7 +2226,8 @@ export function assembleStation( village ) {
 	balconyRail.name = 'balcony-rail-study-cutaway';
 	if ( parts.balconyRail ) for ( const mesh of meshes( parts.balconyRail ) ) balconyRail.add( mesh );
 	group.add( balconyRail );
-	S.moving = { group, lens, crank, doors, glass, lensMaterial, burnerMaterial, telescope, smoke, haulingChains, weightCover, unpacking, servicePanel, signalLamp, balconyRail, westLanding };
+	if ( parts.domesticCraft ) group.add( parts.domesticCraft.group );
+	S.moving = { domesticCraft: parts.domesticCraft, group, lens, crank, doors, glass, lensMaterial, burnerMaterial, telescope, smoke, haulingChains, weightCover, unpacking, servicePanel, signalLamp, balconyRail, westLanding };
 	return S.moving;
 
 }

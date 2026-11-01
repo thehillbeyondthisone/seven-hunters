@@ -22,7 +22,8 @@ export class KeeperSafety {
 		}
 	}
 	get active() { return ! this.story.aboard && ! this.story.titleView && ! [ 'intro', 'crossing', 'end' ].includes( this.story.beat ); }
-	get paused() { const a=this.app,s=this.story; return !this.active || s.paused || s.ui.open || a.mobile?.paused || a.devMenu?.open || a.freeCam || a.ui?.ui?.photoMode || !!globalThis.document?.hidden || !!s.towerTravel?.active || !!s.ruinInspect; }
+	railAvailable( rail ) { return this.active && rail.intact && ( this.coast.strength >= .55 || this.coast.sample( this.player.position ).washDepth > .03 || !! this.story.storm?.active ); }
+	get paused() { const a=this.app,s=this.story; return !this.active || s.paused || s.ui.open || s.cutsceneReview?.active || s.photography?.capturing || s.later?.busy || a.mobile?.paused || a.devMenu?.open || a.freeCam || a.ui?.ui?.photoMode || !!globalThis.document?.hidden || !!s.towerTravel?.active || !!s.ruinInspect; }
 	get canCheckpoint() {
 		const p=this.player, q=this.coast.sample(p.position);
 		if ( this.state!=='normal' || p.mode!=='walk' || !p.grounded || q.washDepth>.03 || p.position.y < this.waterHeight(p.waterH)+.8 ) return false;
@@ -51,7 +52,7 @@ export class KeeperSafety {
 		this.exertion=Math.max(0,this.exertion-this.dt*.08);
 		this.brace=null;
 		if(this.state!=='struggling'&&this.state!=='recovering') {
-			this.brace=this.rails.find(r=>r.intact && this.reachable(r.at,2));
+			this.brace=this.rails.find(r=>this.railAvailable(r) && this.reachable(r.at,2));
 			this.state=this.brace&&this.app.input.down('KeyE')?'braced':this.state==='swept'?'swept':'normal';
 		}
 	}
@@ -117,8 +118,8 @@ export class KeeperSafety {
 		if(this.paused||this.state==='dead') {this.story.ui.safety(null);return;}
 		const p=this.player;
 		if(p.mode==='swim')this.immerse();
-		if(this.target&&['struggling','recovering'].includes(this.state))p.prompt={key:'E',text:this.target.label,hold:true,progress:this.recovery/RECOVERY_SECONDS,safetyTarget:this.target.id};
-		else if(this.brace&&p.mode==='walk'&&!p.prompt)p.prompt={key:'E',text:'Brace against the rail',hold:true,hideProgress:true,safetyTarget:this.brace.id};
+		if(this.target&&['struggling','recovering'].includes(this.state))p.prompt={key:'E',text:this.target.label,hold:true,progress:this.recovery/RECOVERY_SECONDS,active:this.state==='recovering',eta:(1-this.recovery/RECOVERY_SECONDS)*RECOVERY_SECONDS,safetyTarget:this.target.id};
+		else if(this.brace&&p.mode==='walk'&&!p.prompt)p.prompt={key:'E',text:'Brace against the rail',hold:true,hideProgress:true,active:this.state==='braced',detail:this.state==='braced'?'Release E to move on':'Holds you steady while the wash breaks',safetyTarget:this.brace.id};
 		const messages={braced:'Braced against the rail. Release to move.',swept:'The wash is taking your footing. Get above the water.',struggling:'Reach the rungs or a low ledge. Hold E to climb.',recovering:'Hold on. Keep pressed to climb.'};
 		this.story.ui.safety(messages[this.state]||null);
 		if(this.exertion>.1&&this.app.camera.position.y>p.waterH-.1)this.app.stationSound?.breathing(this.exertion,this.state==='struggling');

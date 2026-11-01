@@ -2,19 +2,14 @@
 // These words are authored for the game. Sources support the facts, not the voice.
 const history = { label: 'Northern Lighthouse Board · contemporary accounts', url: 'https://www.nlb.org.uk/history/flannan-isles/' };
 const station = { label: 'Northern Lighthouse Board · station history', url: 'https://www.nlb.org.uk/lighthouses/flannan-islands/' };
-const building = { label: 'Historic Environment Scotland · station and tramways', url: 'https://portal.historicenvironment.scot/designation/LB48143' };
+const building = { label: 'Historic Environment Scotland · station, landings and stairs', url: 'https://portal.historicenvironment.scot/designation/LB48143' };
 
 export const INTRO_PAPERS = [
-	{ id: 'intro-relief', label: 'The boat and the relief', sub: 'Tender, landing boat, relief and fortnight.', title: 'The boat and the relief',
-		body: [
-			'A lighthouse tender is the service vessel that brings keepers and supplies. The Hesperus made the relief at Flannan on 26 December 1900; Joseph Moore went ashore from a smaller boat.',
-			'Relief means a change of keepers. A fortnight is two weeks. A planned return still depends on being able to land.',
-		], provenance: 'Historical background written for the game. Walter’s posting, the boatman’s dialogue and the promised return are fiction. This is not a recovered instruction sheet.', sources: [ history ] },
 	{ id: 'intro-landings', label: 'Steps, rails and stores', sub: 'How the landing places serve the station.', title: 'Steps, rails and stores',
 		body: [
 			'The island has east and west landing places. A landing is where a boat can put people and supplies ashore; it is not a sheltered harbour.',
 			'The tramways are rail routes for hauling supplies between the landings and the lighthouse. The stairs carry the men; the rails help carry the stores.',
-		], provenance: 'The landings, stairs and tramways are documented. Their exact appearance and the route you walk here are reconstructions.', sources: [ station, building ] },
+		], provenance: 'The landings, stairs and tramways are documented. Their exact appearance and the route you walk here are reconstructions.', sources: [ history, station, building ] },
 	{ id: 'intro-shore', label: 'The people ashore', sub: 'The keepers’ families and the shore station.', title: 'The people ashore',
 		body: [
 			'The Board built houses for the lightkeepers’ families at Breasclete on Lewis. The shore station was close to sheltered water in Loch Roag, where the tender could wait when relief was delayed.',
@@ -25,19 +20,16 @@ export const INTRO_PAPERS = [
 			'The Flannan light was established in 1899. In January 1901 this was a young working station, not an abandoned ruin.',
 			'The instruction to “exhibit the light” means to show it. Walter’s posting requires him to keep it burning from sunset to sunrise; he still has to learn the machinery inside.',
 		], provenance: 'The establishment date is historical. Walter’s instructions and solitary arrival are authored for the game; interiors and fittings are partly reconstructed.', sources: [ station ] },
-	{ id: 'intro-keepers', label: 'The men before you', sub: 'The surviving account, before rumour.', title: 'The men before you',
-		body: [
-			'James Ducat was Principal Keeper, Thomas Marshall the second Assistant, and Donald McArthur the Occasional Keeper, covering for William Ross.',
-			'Moore’s letter of 28 December describes empty beds, a cold fire and a lamp cleaned and supplied with oil. He and volunteers kept the light operating. The search had found no trace of the men.',
-		], provenance: 'A paraphrase of the Board’s contemporary records, including Moore’s letter, available before the game’s 3 January opening. It does not import the later 8 January investigation into Walter’s papers. Walter’s arrival is fiction.', sources: [ history ] },
 ];
 
 export const INTRO_CLIMB = [
-	{ id: 'landings', route: 'steps', at: 0.08, topic: 'intro-landings', from: 'The landing places', text: 'A landing is where a boat can put men and stores ashore. There is another on the west side; today, you have come by the east.' },
-	{ id: 'rails', route: 'steps', at: 0.36, topic: 'intro-landings', from: 'The tramway', text: 'The tramway is a rail route for hauling stores to the station. The men climb the steps; the supplies have their own way up.' },
-	{ id: 'shore', route: 'steps', at: 0.68, topic: 'intro-shore', from: 'The people ashore', text: 'The keepers’ families live at Breasclete, on Lewis. Their houses are ashore; the watch is out here on the rock.' },
-	{ id: 'station', topic: 'intro-station', from: 'A working station', text: 'The light was established in 1899. Barely a year later, three of its keepers were missing. The station still has work to do.' },
-	{ id: 'yard', topic: 'intro-keepers', from: 'The men before you', text: 'James Ducat. Thomas Marshall. Donald McArthur. Moore found the station empty on 26 December. Tonight, keeping the light falls to you.' },
+	{ id: 'landings', route: 'steps', at: 0.08, topic: 'intro-landings', from: 'Walter', text: 'The east landing. There is another on the west side. I need the steps up to the station.' },
+	{ id: 'footing', route: 'steps', at: 0.22, topic: 'intro-landings', from: 'Walter', text: 'The landing is open to the sea. I should keep climbing clear of the swell.' },
+	{ id: 'rails', route: 'steps', at: 0.36, topic: 'intro-landings', from: 'Walter', text: 'These rails are for hauling stores. I can follow the steps beside them.' },
+	{ id: 'established', route: 'steps', at: 0.53, topic: 'intro-station', from: 'Walter', text: 'The light began work in 1899. It is a young station. The machinery is waiting at the top.' },
+	{ id: 'shore', route: 'steps', at: 0.76, topic: 'intro-shore', from: 'Walter', text: 'The families’ houses are across the water at Breasclete. My place is up here tonight.' },
+	{ id: 'station', topic: 'intro-station', from: 'Walter', text: 'The instructions are clear. First, I need to learn the lamp and the machinery that turns it.' },
+	{ id: 'yard', topic: 'intro-station', from: 'Walter', text: 'Ducat, Marshall, McArthur. I have Moore’s account in my coat. The work is mine tonight.' },
 ];
 
 // Project onto the real graded flight / tramway, rather than an island-wide height trigger.
@@ -93,6 +85,8 @@ export class IntroLessons {
 		if ( s.beat === 'room' && ! s.flags.introLessons ) return null;
 		const state = s.flags.introLessons ||= { seen: [], pending: [], active: null, gap: 0, yard: false, done: false };
 		if ( blocked || state.done || s.islandReveal?.quietWalk ) return null;
+		// Let the boatman’s farewell finish before the first thought on the stairs.
+		if ( s.arrival?.departure != null && s.arrival.departure < 8 ) return null;
 		if ( s.beat === 'room' && ! state.yard ) {
 			state.yard = true;
 			// A hurried first climb stays readable, but its backlog does not spill into the house.
@@ -118,7 +112,7 @@ export class IntroLessons {
 			const id = state.pending.shift();
 			const cue = INTRO_CLIMB.find( c => c.id === id );
 			if ( cue ) {
-				state.active = { id: cue.id, remaining: Math.max( 17, cue.text.split( /\s+/ ).length / 2 + 5 ) };
+				state.active = { id: cue.id, remaining: Math.max( 12, cue.text.split( /\s+/ ).length / 2 + 4 ) };
 				state.seen.push( cue.id );
 				s.save();
 			}

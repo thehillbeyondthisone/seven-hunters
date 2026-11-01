@@ -13,63 +13,16 @@ export const DAY = {
 
 // Retained by the story desk as an outline of the landing; the crossing is now playable.
 export const PROLOGUE = [
-	'The Hesperus could not lie off the east landing for long in that swell.',
-	'They got you up onto the stage with a bag and a crate of stores, and then the sea came up the geo and the coxswain took her out again. The other two men were still aboard.',
-	'"Keep her lit," he shouted. "We\'ll be back within the fortnight."',
-	'The light has to be lit at sunset. The station is at the top of the steps.',
+	'Hesperus brought you to the island. The landing boat carries you the last stretch.',
+	'The boatman points out the instructions in your coat and the desk in the keepers’ room. See to the light first.',
+	'“Mind your footing. Keep her lit.”',
+	'The boat goes back. The station is at the top of the steps.',
 ];
 
 // The personal letter and embarkation slip are fiction. Moore's 28 December letter predates
 // this scene; its summary follows the Board's transcript, not Muirhead's later 8 January report.
 // Source: https://www.nlb.org.uk/history/flannan-isles/
-export const CROSSING_PAPERS = [
-	{
-		id: 'home', label: 'A letter from home', sub: 'Folded inside your coat. 1st January 1901.',
-		title: 'My dear Walter,',
-		body: [
-			'1st January 1901',
-			'I have put the thick stockings at the bottom of your bag. The blue pair are still damp at the heel; let them dry before you wear them.',
-			'You said there would be three of you. I am glad of that. A fortnight is not long when there is someone to talk to.',
-			'Write when the boat comes back. Tell me something ordinary: what you had for your supper, or whether the stove draws. The newspapers have told us quite enough of the island already.',
-			'I shall keep your place at the table.',
-			'Your sister, Mary',
-		],
-		provenance: 'A fictional letter to Walter Innes, an invented keeper.',
-	},
-	{
-		id: 'moore', label: 'What the relief found', sub: 'A summary of Joseph Moore’s letter, 28th December.',
-		title: 'Flannan Islands · 28th December 1900',
-		body: [
-			'An office summary of Assistant Keeper Joseph Moore’s account.',
-			'On 26 December the relief vessel received no answer from the island. Moore went ashore to investigate.',
-			'At the station he found no keepers. The beds were empty and the fire cold. The lamp had been cleaned and its oil supply filled.',
-			'Moore returned with volunteers to maintain the light. A search found no trace of the missing men.',
-			'The sea had damaged the west landing’s railings and washed away a box of ropes and tackle. Moore could not establish what had happened to the men.',
-		],
-		provenance: 'Paraphrased from Moore’s surviving letter. The office summary is a fictional prop; it is not an archival quotation.',
-		source: 'https://www.nlb.org.uk/history/flannan-isles/',
-	},
-	{
-		id: 'posting', label: 'Your posting', sub: 'The embarkation slip. The work waiting ashore.',
-		title: 'W. Innes · Flannan Islands',
-		body: [
-			'3rd January 1901 · Embarkation slip',
-			'Passage aboard Hesperus with the replacement keepers and station stores. Land at the east landing if the sea permits.',
-			'The light must be shown at sunset. Written instructions await you on the desk in the keepers’ room.',
-			'Your bag is to go with you. The rest of the stores will follow when the boat can make another landing.',
-			'Relief depends upon the weather. Bring sufficient clothing for a delay.',
-		],
-		provenance: 'Fictional posting and arrival within the game’s 3 January 1901 premise.',
-	},
-];
-
-export const CROSSING_LINES = [
-	{ at: 0, until: 21, lesson: true, from: '3rd January 1901 · The east approach', text: 'The Hesperus is a lighthouse tender, bringing keepers and supplies. Her landing boat carries you the last stretch to the island.' },
-	{ at: 27, until: 41, from: 'The boatman', text: '“That’s the light up there. Keep your bag close.”' },
-	{ at: 47, until: 65, lesson: true, from: 'The relief', text: 'Relief means a change of keepers. A fortnight is two weeks. The boat’s return depends on the sea.' },
-	{ at: 71, until: 85, from: 'The boatman', text: '“We’ll put you up first. Then we’ll see about the others.”' },
-	{ at: 90, until: Infinity, from: 'The east landing', text: 'The boat holds under the cliff. Your bag is ready.' },
-];
+export { CROSSING_PAPERS, CROSSING_LINES } from './ArrivalConversation.js';
 
 // objectives, by beat
 export const GOALS = {
@@ -85,11 +38,10 @@ export const GOALS = {
 	watch: 'Keep the watch. Gallan Head should show a light after dark.',
 	gallan: 'Gallan Head is calling. Take the telescope from the lantern’s sill, then use the signal lamp on the outside balcony.',
 	answer: 'Use the signal lamp on the outside balcony: look at it and press E to choose your reply.',
-	obs: 'Chalk the six o\'clock observations on the slate in the keepers\' room.',
 	bell: 'The machine is running down. Wind it.',
-	evening: 'Keep the watch. The machine wants winding every three hours.',
+	evening: 'Keep the watch. Attend to the driving weight while you are in the tower.',
 	haar: 'Keep the watch.',
-	gate: 'See to the gate in the yard below: use E on it.',
+	gate: 'Secure the gate. Hold E to close it and wrap the rope again.',
 	night: 'Keep the watch until dawn. Use E at the lantern’s stool or the chair by the desk.',
 	dawn: 'Put the lamp out at sunrise.',
 	journal: 'Write up the journal at the desk.',
@@ -108,7 +60,7 @@ export const LETTER = {
 		'Until the arrival of the Principal Keeper you will take sole charge of the light, and you will keep it in accordance with the General Instructions.',
 		'The light is to be exhibited from sunset to sunrise without interruption. Light the lamp at sunset precisely and set the machine going.',
 		'Wind the machine before its weight reaches the foot of the tube. Attend to the warning bell without delay.',
-		'Enter the barometer, wind, sea and visibility on the slate at six in the evening and at the prescribed hours. Copy the entries fair into the journal each morning, including the times of lighting and extinguishing.',
+		'For the first watch, attend to the lamp and machine, answer the observer when the air is clear, and write the lighting and extinguishing times in the morning journal. Begin the weather round by daylight on your second day: instruments, sea and the two landmarks. Thereafter enter the evening readings on the slate and copy them fair into the journal.',
 		'The observer at Gallan Head on Lewis keeps a nightly lookout. Use the signal lamp when the air is clear. The station signal book is in the lantern drawer.',
 		'You will not leave the station, nor go down to either landing in a heavy sea.',
 		'I am, Sir, your obedient servant,',

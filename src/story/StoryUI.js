@@ -26,6 +26,95 @@ const el = ( tag, cls, text ) => {
 
 };
 
+// A paper deck uses CSS columns as real sheets. The browser fragments prose at
+// line boundaries, so resizing never drops words, shrinks type or needs a scrollbar.
+// The original controls stay alive in the flow; choices and entered values survive
+// page turns. Only the current sheet participates in keyboard focus.
+function paperDeck( page, onTurn = () => {} ) {
+	if ( ! page.getBoundingClientRect().width ) return null; // inert Node renderer
+	page._paper?.destroy();
+	const source = [ ...page.children ];
+	const heading = source.find( node => node.classList.contains( 'sh-page-title' ) );
+	const actions = source.filter( node => node.matches( 'button.sh-btn, button.sh-reader-close, .sh-paper-actions' ) );
+	const windowEl = el( 'div', 'sh-sheet-window' );
+	const flow = el( 'div', 'sh-sheet-flow' );
+	const footer = el( 'div', 'sh-sheet-actions' );
+	const pager = el( 'nav', 'sh-sheet-pager' ); pager.setAttribute( 'aria-label', 'Paper sheets' );
+	const previous = el( 'button', 'sh-btn is-quiet', 'Previous sheet' );
+	const label = el( 'span', 'sh-sheet-count' ); label.setAttribute( 'aria-live', 'polite' );
+	const next = el( 'button', 'sh-btn is-quiet', 'Next sheet' );
+	pager.append( previous, label, next );
+	for ( const node of source ) {
+		if ( node === heading ) continue;
+		( actions.includes( node ) ? footer : flow ).append( node );
+	}
+	windowEl.append( flow );
+	page.replaceChildren( ...( heading ? [ heading ] : [] ), windowEl, pager, ...( actions.length ? [ footer ] : [] ) );
+	page.classList.add( 'sh-paged' );
+	let index = 0, count = 1, frame = 0, dead = false;
+	const refresh = () => {
+		frame = 0;
+		if ( dead || ! page.isConnected ) return;
+		const width = windowEl.clientWidth, height = windowEl.clientHeight;
+		if ( ! width || ! height ) return;
+		flow.style.setProperty( '--sh-sheet-space', `${ height }px` );
+		flow.style.columnWidth = `${ width }px`;
+		// Columns may contain subpixel widths. Round to the nearest page after
+		// subtracting a one-pixel tolerance, rather than creating a blank last sheet.
+		count = Math.max( 1, Math.ceil( ( flow.scrollWidth + 40 - 1 ) / ( width + 40 ) ) );
+		index = Math.min( index, count - 1 );
+		show( index, false );
+	};
+	const schedule = () => { if ( ! frame && ! dead ) frame = requestAnimationFrame( refresh ); };
+	const show = ( n, focus = true ) => {
+		index = Math.max( 0, Math.min( count - 1, n ) );
+		flow.style.transform = `translateX(${ -index * ( windowEl.clientWidth + 40 ) }px)`;
+		previous.disabled = index === 0; next.disabled = index === count - 1;
+		label.textContent = `Sheet ${ index + 1 } of ${ count }`;
+		page.dataset.sheet = String( index + 1 ); page.dataset.sheets = String( count );
+		if ( focus ) { page.focus( { preventScroll: true } ); onTurn(); }
+	};
+	const visible = node => {
+		if ( node.closest( '[hidden]' ) || ! node.getClientRects().length ) return false;
+		if ( ! flow.contains( node ) ) return true;
+		const bounds = windowEl.getBoundingClientRect();
+		return [ ...node.getClientRects() ].some( r => r.right > bounds.left + 1 && r.left < bounds.right - 1 && r.bottom > bounds.top && r.top < bounds.bottom );
+	};
+	const focus = e => {
+		if ( ! flow.contains( e.target ) || visible( e.target ) ) return;
+		const r = e.target.getBoundingClientRect(), bounds = windowEl.getBoundingClientRect();
+		show( index + Math.round( ( r.left - bounds.left ) / ( bounds.width + 40 ) ), false );
+	};
+	const key = e => {
+		if ( e.repeat || e.altKey || e.ctrlKey || e.metaKey || e.target.closest?.( 'input, select, textarea, [contenteditable=true]' ) ) return;
+		const direction = [ 'ArrowRight', 'PageDown' ].includes( e.code ) ? 1 : [ 'ArrowLeft', 'PageUp' ].includes( e.code ) ? -1 : 0;
+		if ( ! direction ) return;
+		e.preventDefault(); e.stopPropagation(); show( index + direction );
+	};
+	previous.addEventListener( 'click', () => show( index - 1 ) );
+	next.addEventListener( 'click', () => show( index + 1 ) );
+	page.addEventListener( 'keydown', key ); page.addEventListener( 'focusin', focus );
+	// Details, packet chapters, confirmation states and loaded images can all
+	// change the number of sheets without replacing their interactive elements.
+	const mutations = new MutationObserver( schedule );
+	mutations.observe( flow, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: [ 'hidden', 'open' ] } );
+	const resize = new ResizeObserver( schedule ); resize.observe( windowEl );
+	flow.addEventListener( 'load', schedule, true ); flow.addEventListener( 'toggle', schedule, true );
+	window.addEventListener( 'resize', schedule ); window.visualViewport?.addEventListener( 'resize', schedule );
+	document.fonts?.ready.then( schedule );
+	const deck = {
+		visible, refresh: schedule, first: () => show( 0, false ),
+		destroy() {
+			dead = true; cancelAnimationFrame( frame ); mutations.disconnect(); resize.disconnect();
+			window.removeEventListener( 'resize', schedule ); window.visualViewport?.removeEventListener( 'resize', schedule );
+			page.removeEventListener( 'keydown', key ); page.removeEventListener( 'focusin', focus );
+			flow.removeEventListener( 'load', schedule, true ); flow.removeEventListener( 'toggle', schedule, true );
+		},
+	};
+	page._paper = deck; refresh();
+	return deck;
+}
+
 export class StoryUI {
 
 	constructor( { input = null } = {} ) {
@@ -50,17 +139,20 @@ export class StoryUI {
 		this.revealSkip.hidden = true;
 		this.revealSkip.addEventListener( 'click', () => this.onRevealSkip?.() );
 		this.layer = el( 'div', 'sh-layer' );
-		this.guideEl = el( 'div', 'sh-guidance' );
-		this.guideEl.setAttribute( 'aria-hidden', 'true' );
-		this.guideMark = el( 'span', 'sh-guide-mark' );
-		this.guidePulse = el( 'span', 'sh-guide-pulse' );
-		this.guidePulse.innerHTML = '<i></i><i></i><b></b>';
-		this.guideArrow = el( 'span', 'sh-guide-arrow' );
-		this.guideArrow.innerHTML = '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 3 L25 23 L14 18 L3 23 Z" fill="currentColor" stroke="#142029" stroke-width="2.5" stroke-linejoin="round"/></svg>';
-		this.guideLabel = el( 'span', 'sh-guide-label' );
-		this.guideEl.append( this.guidePulse, this.guideMark, this.guideArrow, this.guideLabel );
+		this.pickupGuide = {};
+		for ( const guide of [ this, this.pickupGuide ] ) {
+			guide.guideEl = el( 'div', 'sh-guidance' );
+			guide.guideEl.setAttribute( 'aria-hidden', 'true' );
+			guide.guideMark = el( 'span', 'sh-guide-mark' );
+			guide.guidePulse = el( 'span', 'sh-guide-pulse' );
+			guide.guidePulse.innerHTML = '<i></i><i></i><b></b>';
+			guide.guideArrow = el( 'span', 'sh-guide-arrow' );
+			guide.guideArrow.innerHTML = '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 3 L25 23 L14 18 L3 23 Z" fill="currentColor" stroke="#142029" stroke-width="2.5" stroke-linejoin="round"/></svg>';
+			guide.guideLabel = el( 'span', 'sh-guide-label' );
+			guide.guideEl.append( guide.guidePulse, guide.guideMark, guide.guideArrow, guide.guideLabel );
+		}
 		this.safetyEl = el( 'div', 'sh-safety' ); this.safetyEl.hidden = true; this.safetyEl.setAttribute( 'role', 'status' );
-		this.root.append( this.vignette, this.objective, this.guideEl, this.stripEl, this.arrivalEl, this.layer, this.revealSkip );
+		this.root.append( this.vignette, this.objective, this.guideEl, this.pickupGuide.guideEl, this.stripEl, this.arrivalEl, this.layer, this.revealSkip );
 		this.root.append( this.safetyEl );
 		document.body.append( this.root );
 		this.modal = 0;
@@ -109,19 +201,22 @@ export class StoryUI {
 	}
 
 	// a page on the layer; resolves with what done( value ) is given
-	_page( build, { dismiss = true, cls = '', dismissKeys = [ 'Escape', 'KeyE', 'Enter' ], trapFocus = false, focusSelector = 'button:not(:disabled)' } = {} ) {
+	_page( build, { dismiss = true, cls = '', dismissKeys = [ 'Escape', 'KeyE', 'Enter' ], trapFocus = true, focusSelector = 'button:not(:disabled), summary, a[href], select, input' } = {} ) {
 
 		return new Promise( ( resolve ) => {
 
 			this._open();
 			const wrap = el( 'div', 'sh-page-wrap ' + cls );
 			const page = el( 'div', 'sh-page' );
+			page.tabIndex = -1; page.setAttribute( 'role', 'dialog' ); page.setAttribute( 'aria-modal', 'true' );
 			wrap.append( page );
 			let settled = false;
 			const done = ( v ) => {
 
 				if ( settled ) return;
 				settled = true;
+				page._paper?.destroy();
+				page._archiveResize?.disconnect();
 				wrap.inert = true;
 				window.removeEventListener( 'keydown', key, true );
 				wrap.classList.remove( 'is-on' );
@@ -134,14 +229,14 @@ export class StoryUI {
 			const key = ( e ) => {
 
 				if ( trapFocus && e.code === 'Tab' ) {
-					const buttons = [ ...page.querySelectorAll( focusSelector ) ].filter( b => ! b.closest( '[hidden]' ) );
+					const buttons = [ ...page.querySelectorAll( focusSelector ) ].filter( b => ! b.closest( '[hidden]' ) && ( ! page._paper || page._paper.visible( b ) ) );
 					const i = buttons.indexOf( document.activeElement );
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					buttons[ ( i + ( e.shiftKey ? -1 : 1 ) + buttons.length ) % buttons.length ]?.focus();
 					return;
 				}
-				if ( dismiss && dismissKeys.includes( e.code ) ) {
+				if ( ! e.repeat && dismiss && dismissKeys.includes( e.code ) && ( e.code === 'Escape' || ! e.target.closest?.( 'button, summary, a, input, select' ) ) ) {
 
 					e.preventDefault();
 					e.stopPropagation();
@@ -154,12 +249,19 @@ export class StoryUI {
 			build( page, done );
 			window.addEventListener( 'keydown', key, true );
 			this.layer.append( wrap );
+			paperDeck( page, () => this.onPaper?.( { kind: 'turn' } ) );
+			this.onPaper?.( { kind: 'open', title: page.getAttribute( 'aria-label' ) || page.querySelector( 'h1, h2' )?.textContent || '' } );
 			void wrap.offsetWidth;
 			wrap.classList.add( 'is-on' );
-			if ( trapFocus ) page.querySelector( 'button' )?.focus( { preventScroll: true } );
+			if ( trapFocus ) [ ...page.querySelectorAll( 'button:not(:disabled)' ) ].find( b => ! page._paper || page._paper.visible( b ) )?.focus( { preventScroll: true } );
 
 		} );
 
+	}
+
+	// A compact existing panel can opt into the same no-scroll sheets.
+	paperPanel( container ) {
+		return container ? paperDeck( container, () => this.onPaper?.( { kind: 'turn' } ) ) : null;
 	}
 
 	// ---- cards
@@ -214,9 +316,9 @@ export class StoryUI {
 	}
 
 	// a short black-out (a skip of the clock): resolves when it is fully dark, then fades back in
-	fade( text = '', hold = 1600 ) {
+	fade( text = '', hold = 1600, ready = null ) {
 
-		return new Promise( ( resolve ) => {
+		return new Promise( ( resolve, reject ) => {
 
 			const f = el( 'div', 'sh-fade' );
 			if ( text ) f.append( el( 'p', 'sh-fade-text', text ) );
@@ -225,13 +327,15 @@ export class StoryUI {
 			f.classList.add( 'is-on' );
 			setTimeout( () => {
 
-				resolve();
-				setTimeout( () => {
+				Promise.resolve().then( () => ready?.() ).then( () => {
+					resolve();
+					setTimeout( () => {
 
-					f.classList.remove( 'is-on' );
-					setTimeout( () => f.remove(), 1200 );
+						f.classList.remove( 'is-on' );
+						setTimeout( () => f.remove(), 1200 );
 
-				}, hold );
+					}, hold );
+				}, error => { f.remove(); reject( error ); } );
 
 			}, 900 );
 
@@ -239,15 +343,21 @@ export class StoryUI {
 
 	}
 
-	// Two seconds in either direction: a step/turn, fade through black, then
-	// settle at the destination. Move only at full black, with input locked.
+	// Short real tread paths at either end, with the long middle climb hidden.
+	// Quintic fades have zero speed/acceleration at the ends, avoiding a snap
+	// when handing the camera back to walking.
 	async travel( text, move, animate = () => {} ) {
 
 		this._open();
 		const f = el( 'div', 'sh-fade' );
 		f.style.transition = 'none';
-		f.style.background = '#050708';
-		f.append( el( 'p', 'sh-fade-text', text ) );
+		f.style.background = '#000';
+		f.style.opacity = '0';
+		const words = el( 'p', 'sh-fade-text', text );
+		words.style.opacity = '0';
+		words.style.transition = 'opacity .12s ease';
+		f.setAttribute( 'role', 'status' );
+		f.append( words );
 		this.layer.append( f );
 		try {
 			await new Promise( ( resolve, reject ) => {
@@ -255,9 +365,11 @@ export class StoryUI {
 				let arrived = false;
 				const frame = now => {
 					try {
-						const progress = Math.min( 1, ( now - start ) / 2000 );
-						const opacity = Math.min( 1, progress / .325, ( 1 - progress ) / .325 );
+						const progress = Math.min( 1, ( now - start ) / 5600 );
+						const ease = t => { const k = Math.max( 0, Math.min( 1, t ) ); return k * k * k * ( k * ( k * 6 - 15 ) + 10 ); };
+						const opacity = ease( ( progress - .28 ) / .14 ) * ( 1 - ease( ( progress - .57 ) / .33 ) );
 						f.style.opacity = String( opacity );
+						words.style.opacity = progress >= .42 && progress <= .57 ? '.85' : '0';
 						if ( progress >= .5 && ! arrived ) { f.style.opacity = '1'; move(); arrived = true; }
 						animate( progress, arrived );
 						if ( progress < 1 ) requestAnimationFrame( frame ); else resolve();
@@ -277,7 +389,7 @@ export class StoryUI {
 
 	// ---- HUD
 
-	guidance( target, camera, hasPrompt = false ) {
+	guidance( target, camera, hasPrompt = false, guide = this ) {
 
 		let insets;
 		if ( this.input?.touchMode ) {
@@ -291,28 +403,30 @@ export class StoryUI {
 		}
 		const pos = target && projectGuidance( target.at, camera, window.innerWidth, window.innerHeight, insets );
 		const hidden = ! pos || this.open || hasPrompt && pos.onScreen && pos.distance < 3;
-		this.guideEl.classList.toggle( 'is-visible', ! hidden );
+		guide.guideEl.classList.toggle( 'is-visible', ! hidden );
 		if ( hidden ) return;
 		// Identity, not position: moving stair markers and brief modal/aim hides must
 		// not repeatedly announce the same destination. A new objective can reuse a door.
-		const key = `${ this._goal || '' }|${ target.id || target.label }`;
-		if ( key !== this._guideKey ) {
-			this._guideKey = key;
-			this._guidePingUntil = performance.now() + 1450;
-			this.guideEl.classList.remove( 'is-pinging' );
-			void this.guidePulse.offsetWidth;
-			this.guideEl.classList.add( 'is-pinging' );
+		const key = `${ target.pingEvery ? 'pickup' : this._goal || '' }|${ target.id || target.label }`;
+		const now = performance.now();
+		if ( key !== guide._guideKey || target.pingEvery && now >= guide._guideNextPing ) {
+			guide._guideKey = key;
+			guide._guidePingUntil = now + 1450;
+			guide._guideNextPing = now + ( target.pingEvery || Infinity );
+			guide.guideEl.classList.remove( 'is-pinging' );
+			void guide.guidePulse.offsetWidth;
+			guide.guideEl.classList.add( 'is-pinging' );
 		}
-		const pinging = performance.now() < this._guidePingUntil;
-		this.guideEl.classList.toggle( 'is-pinging', pinging );
-		this.guideEl.style.left = `${ pos.x.toFixed( 1 ) }px`;
-		this.guideEl.style.top = `${ pos.y.toFixed( 1 ) }px`;
-		this.guideEl.classList.toggle( 'is-edge', ! pos.onScreen );
-		this.guideEl.classList.toggle( 'has-label', pinging || ! pos.onScreen && ! this.input?.touchMode || pos.onScreen && pos.distance < 12 );
-		this.guideEl.classList.toggle( 'label-right', pos.x < 130 );
-		this.guideEl.classList.toggle( 'label-left', pos.x > window.innerWidth - 130 );
-		this.guideArrow.style.transform = `translate(-50%, -50%) rotate(${ pos.angle.toFixed( 1 ) }deg)`;
-		this.guideLabel.textContent = this.input?.touchMode ? touchInstruction( target.label ) : target.label;
+		const pinging = now < guide._guidePingUntil;
+		guide.guideEl.classList.toggle( 'is-pinging', pinging );
+		guide.guideEl.style.left = `${ pos.x.toFixed( 1 ) }px`;
+		guide.guideEl.style.top = `${ pos.y.toFixed( 1 ) }px`;
+		guide.guideEl.classList.toggle( 'is-edge', ! pos.onScreen );
+		guide.guideEl.classList.toggle( 'has-label', target.labelAlways || pinging || ! pos.onScreen && ! this.input?.touchMode || pos.onScreen && pos.distance < 12 );
+		guide.guideEl.classList.toggle( 'label-right', pos.x < 130 );
+		guide.guideEl.classList.toggle( 'label-left', pos.x > window.innerWidth - 130 );
+		guide.guideArrow.style.transform = `translate(-50%, -50%) rotate(${ pos.angle.toFixed( 1 ) }deg)`;
+		guide.guideLabel.textContent = this.input?.touchMode ? touchInstruction( target.label ).replace( / · E\b/g, ' · tap' ) : target.label;
 
 	}
 
@@ -367,7 +481,14 @@ export class StoryUI {
 		if ( s.cursor ) t.append( el( 'span', 'sh-strip-cursor', '▍' ) );
 		this.stripEl.append( t );
 		if ( s.translation ) this.stripEl.append( el( 'div', 'sh-strip-translation', `${ s.language || 'Translation' } · ${ s.translation }` ) );
-		if ( s.morse ) this.stripEl.append( el( 'div', 'sh-strip-morse', s.morse ) );
+		if ( s.morse ) {
+			if ( s.morse.length <= 90 ) this.stripEl.append( el( 'div', 'sh-strip-morse', s.morse ) );
+			else {
+				const marks = el( 'button', 'sh-strip-marks', 'Read received marks' );
+				marks.addEventListener( 'click', () => this.read( { title: s.from, body: [ s.morse, s.text, s.translation ].filter( Boolean ) } ) );
+				this.stripEl.append( marks );
+			}
+		}
 		if ( s.hint ) this.stripEl.append( el( 'div', 'sh-strip-hint', s.hint ) );
 
 	}
@@ -401,6 +522,7 @@ export class StoryUI {
 
 			const render = ( paper = null ) => {
 
+				page._paper?.destroy();
 				page.innerHTML = '';
 				if ( paper ) {
 
@@ -444,6 +566,7 @@ export class StoryUI {
 				const close = el( 'button', 'sh-btn', 'Put the papers away' );
 				close.addEventListener( 'click', () => done( null ) );
 				page.append( close );
+				if ( page.isConnected ) { paperDeck( page, () => this.onPaper?.( { kind: 'turn' } ) ); page.focus( { preventScroll: true } ); }
 
 			};
 			render();
@@ -512,7 +635,7 @@ export class StoryUI {
 			for ( const [ i, b ] of [ ...nav.children ].entries() ) b.setAttribute( 'aria-current', i === index ? 'page' : 'false' );
 			previous.disabled = index === 0; next.hidden = index === paper.chapters.length - 1;
 			if ( moveFocus ) article.focus( { preventScroll: true } );
-			page.scrollTop = 0;
+			page._paper?.first();
 		};
 		paper.chapters.forEach( ( chapter, i ) => {
 			const button = el( 'button', '', chapter.title ); button.addEventListener( 'click', () => render( i ) ); nav.append( button );
@@ -561,57 +684,64 @@ export class StoryUI {
 
 	}
 
-	// Original facsimiles have their own reader: fit, zoom and scroll without
-	// opening an external tab or resuming the watch. Prose stays separate from pixels.
+	// Original scans stay unchanged. Fit shows the whole sheet; detail views
+	// tile every part of it in a fixed window, with explicit navigation.
 	archive( paper ) {
 		const previousFocus = document.activeElement;
 		return this._page( ( page, done ) => {
 			page.classList.add( 'sh-archive-page' );
-			page.setAttribute( 'role', 'dialog' );
-			page.setAttribute( 'aria-modal', 'true' );
 			page.setAttribute( 'aria-label', paper.title );
 			page.append( el( 'div', 'sh-paper-kind', 'Original document · ' + paper.date ), el( 'h2', 'sh-page-title', paper.title ) );
+			const scan = el( 'section', 'sh-archive-scan' );
 			const tools = el( 'div', 'sh-archive-tools' );
-			const viewport = el( 'div', 'sh-archive-viewport' );
-			viewport.tabIndex = 0;
-			viewport.setAttribute( 'aria-label', 'Document image; scroll to inspect when enlarged' );
-			const image = el( 'img', 'sh-archive-image' );
-			image.src = paper.image; image.alt = paper.alt; image.draggable = false;
-			viewport.append( image );
-			const buttons = [];
-			for ( const [ label, scale ] of [ [ 'Fit width', 1 ], [ '2×', 2 ], [ '3×', 3 ] ] ) {
+			const canvas = el( 'canvas', 'sh-archive-image' );
+			canvas.tabIndex = 0; canvas.setAttribute( 'role', 'img' ); canvas.setAttribute( 'aria-label', paper.alt + ' Use the detail buttons to inspect the original without scrolling.' );
+			const status = el( 'p', 'sh-archive-status', 'Loading original scan…' ); status.setAttribute( 'aria-live', 'polite' );
+			const image = el( 'img' ); image.src = paper.image;
+			let scale = 1, tile = 0, tiles = 1, columns = 1;
+			const draw = () => {
+				if ( ! image.naturalWidth ) return;
+				const width = Math.max( 300, canvas.clientWidth ), height = Math.max( 100, canvas.clientHeight );
+				const pixelRatio = Math.min( 2, window.devicePixelRatio || 1 );
+				canvas.width = Math.round( width * pixelRatio ); canvas.height = Math.round( height * pixelRatio );
+				const ctx = canvas.getContext( '2d' ); ctx.clearRect( 0, 0, canvas.width, canvas.height );
+				columns = scale;
+				const sw = image.naturalWidth / scale;
+				const sh = scale === 1 ? image.naturalHeight : Math.min( image.naturalHeight, sw * canvas.height / canvas.width );
+				tiles = scale === 1 ? 1 : columns * Math.ceil( image.naturalHeight / sh );
+				tile = Math.min( tile, tiles - 1 );
+				const fit = Math.min( canvas.width / sw, canvas.height / sh );
+				ctx.drawImage( image, ( tile % columns ) * sw, Math.min( Math.floor( tile / columns ) * sh, image.naturalHeight - sh ), sw, sh, ( canvas.width - sw * fit ) / 2, ( canvas.height - sh * fit ) / 2, sw * fit, sh * fit );
+				status.textContent = scale === 1 ? 'Whole original sheet' : `Detail ${ tile + 1 } of ${ tiles } · left to right, top to bottom`;
+				back.disabled = scale === 1 || tile === 0; forward.disabled = scale === 1 || tile === tiles - 1;
+				for ( const [ n, button ] of zooms ) button.setAttribute( 'aria-pressed', String( n === scale ) );
+			};
+			const zooms = [];
+			for ( const [ label, n ] of [ [ 'Whole sheet', 1 ], [ '2× details', 2 ], [ '3× details', 3 ] ] ) {
 				const button = el( 'button', 'sh-btn is-quiet', label );
-				button.setAttribute( 'aria-pressed', String( scale === 1 ) );
-				button.addEventListener( 'click', () => {
-					image.style.width = `${ scale * 100 }%`;
-					for ( const other of buttons ) other.setAttribute( 'aria-pressed', String( other === button ) );
-				} );
-				buttons.push( button ); tools.append( button );
+				button.addEventListener( 'click', () => { scale = n; tile = 0; draw(); } );
+				zooms.push( [ n, button ] ); tools.append( button );
+			}
+			const detailNav = el( 'div', 'sh-archive-detail-nav' );
+			const back = el( 'button', 'sh-btn is-quiet', 'Previous detail' ), forward = el( 'button', 'sh-btn is-quiet', 'Next detail' );
+			back.disabled = forward.disabled = true;
+			back.addEventListener( 'click', () => { tile = Math.max( 0, tile - 1 ); draw(); } );
+			forward.addEventListener( 'click', () => { tile = Math.min( tiles - 1, tile + 1 ); draw(); } );
+			detailNav.append( back, forward ); scan.append( tools, canvas, status, detailNav ); page.append( scan );
+			image.addEventListener( 'load', () => { draw(); page._paper?.refresh(); } );
+			image.addEventListener( 'error', () => { status.textContent = 'The scan could not be loaded. Its source is on the following sheets.'; } );
+			const resize = new ResizeObserver( draw ); resize.observe( canvas );
+			for ( const line of paper.body ) page.append( el( 'p', 'sh-page-p', line ) );
+			page.append( el( 'h3', 'sh-source-title', 'Source and story placement' ), el( 'p', 'sh-page-p', paper.provenance ) );
+			for ( const source of paper.sources || [] ) {
+				const link = el( 'a', '', source.label ); link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+				const row = el( 'p', 'sh-page-p sh-source-link' ); row.append( link ); page.append( row );
 			}
 			const close = el( 'button', 'sh-btn', 'Put it back' );
-			close.addEventListener( 'click', () => done( null ) ); tools.append( close );
-			queueMicrotask( () => close.focus() );
-			page.addEventListener( 'keydown', e => {
-				if ( e.code !== 'Tab' ) return;
-				const focusable = [ ...page.querySelectorAll( 'button, summary, a[href], [tabindex="0"]' ) ].filter( element => element.getClientRects().length );
-				const first = focusable[ 0 ], last = focusable.at( -1 );
-				if ( e.shiftKey && document.activeElement === first ) { e.preventDefault(); last?.focus(); }
-				else if ( ! e.shiftKey && document.activeElement === last ) { e.preventDefault(); first?.focus(); }
-			} );
-			image.addEventListener( 'error', () => {
-				viewport.innerHTML = '';
-				viewport.append( el( 'p', 'sh-page-p', 'The scan could not be loaded. Its source is listed below.' ) );
-			} );
-			page.append( tools, viewport );
-			for ( const line of paper.body ) page.append( el( 'p', 'sh-page-p', line ) );
-			const details = el( 'details', 'sh-paper-source' );
-			details.append( el( 'summary', '', 'Source and story placement' ), el( 'p', '', paper.provenance ) );
-			for ( const source of paper.sources ) {
-				const link = el( 'a', '', source.label ); link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-				const row = el( 'p' ); row.append( link ); details.append( row );
-			}
-			page.append( details );
-		}, { cls: 'is-archive', dismissKeys: [ 'Escape', 'KeyE' ] } ).then( value => { previousFocus?.focus?.(); return value; } );
+			close.addEventListener( 'click', () => { resize.disconnect(); done( null ); } ); page.append( close );
+			// The outer page can also dismiss by keyboard.
+			page._archiveResize = resize;
+		}, { cls: 'is-archive', dismissKeys: [ 'Escape', 'KeyE' ] } ).then( value => { previousFocus?.focus?.( { preventScroll: true } ); return value; } );
 	}
 
 	savedWatch( { date, time, objective = '', entry = '' } ) {
@@ -650,21 +780,13 @@ export class StoryUI {
 			resume.addEventListener( 'click', () => done( 'continue' ) );
 			const restart = el( 'button', 'sh-save-restart', 'Begin a new watch' ); restart.type = 'button';
 			actions.append( resume, restart );
-			const confirm = el( 'div', 'sh-save-confirm' ); confirm.hidden = true;
-			confirm.setAttribute( 'role', 'group' ); confirm.setAttribute( 'aria-label', 'Confirm a new watch' );
-			confirm.append( el( 'h3', '', 'Begin again?' ), el( 'p', '', 'This replaces your saved watch and returns you to the landing boat.' ) );
-			const keep = el( 'button', 'sh-save-continue', 'Keep this watch' ); keep.type = 'button';
-			const replace = el( 'button', 'sh-save-restart', 'Replace save & begin again' ); replace.type = 'button';
-			const back = () => { confirm.hidden = true; actions.hidden = false; restart.focus(); };
-			keep.addEventListener( 'click', back );
-			replace.addEventListener( 'click', () => done( 'new' ) );
-			confirm.append( keep, replace );
-			restart.addEventListener( 'click', () => { actions.hidden = true; confirm.hidden = false; keep.focus(); } );
-			page.addEventListener( 'keydown', e => {
-				if ( e.code === 'Escape' && ! confirm.hidden ) { e.preventDefault(); e.stopPropagation(); back(); }
+			actions.classList.add( 'sh-paper-actions' );
+			restart.addEventListener( 'click', async () => {
+				const choice = await this.choose( { title: 'Begin again?', intro: 'This replaces your saved watch and returns you to the landing boat.', options: [ { label: 'Replace save & begin again', value: 'new' } ], cancel: 'Keep this watch' } );
+				if ( choice === 'new' ) done( 'new' ); else restart.focus( { preventScroll: true } );
 			} );
-			paper.append( actions, confirm, el( 'p', 'sh-save-footnote', 'Your watch saves automatically in this browser.' ) );
-			page.append( cover, paper );
+			paper.append( el( 'p', 'sh-save-footnote', 'Your watch saves automatically in this browser.' ) );
+			page.append( cover, paper, actions );
 
 		}, { cls: 'is-save', dismiss: false, trapFocus: true } );
 
@@ -793,8 +915,21 @@ export class StoryUI {
 
 	}
 
+	album( { title, frames, intro } ) {
+		return this._page( ( page, done ) => {
+			page.append( el('h2','sh-page-title',title),el('p','sh-page-p',intro) );
+			const grid=el('div','sh-prints');
+			for(const [i,frame] of frames.entries()){
+				const figure=el('figure','sh-print'),img=el('img');img.src=frame.image;img.alt=frame.label;img.width=img.height=384;
+				figure.append(img,el('figcaption','',`Frame ${i+1} · ${frame.label}`));grid.append(figure);
+			}
+			if(!frames.length)grid.append(el('p','sh-page-p','No exposures on the roll. The camera has come home safely.'));
+			page.append(grid);const close=el('button','sh-btn','Write to Mary');close.addEventListener('click',()=>done());page.append(close);
+		},{dismiss:false,trapFocus:true});
+	}
+
 	// the last screen: the page as written, and play again
-	end( { heading, rows, lines, credits, next = null } ) {
+	end( { heading, rows, lines, credits, next = null, stayLabel = 'Stay on the island' } ) {
 
 		this._open();
 		const c = el( 'div', 'sh-end' );
@@ -815,9 +950,10 @@ export class StoryUI {
 		side.append( el( 'p', 'sh-end-credits', credits ) );
 		const again = el( 'button', 'sh-btn', 'Begin again' );
 		again.addEventListener( 'click', () => this.onRestart && this.onRestart() );
-		const stay = el( 'button', 'sh-btn is-quiet', 'Stay on the island' );
+		const stay = el( 'button', 'sh-btn is-quiet', stayLabel );
 		stay.addEventListener( 'click', () => {
 
+			page._paper?.destroy();
 			c.classList.remove( 'is-on' );
 			setTimeout( () => c.remove(), 900 );
 			this._close();
@@ -826,11 +962,12 @@ export class StoryUI {
 		side.append( again, stay );
 		if ( next ) {
 			const onward = el( 'button', 'sh-btn', next.label );
-			onward.addEventListener( 'click', () => { c.remove(); this._close(); next.use(); } );
+			onward.addEventListener( 'click', () => { page._paper?.destroy(); c.remove(); this._close(); next.use(); } );
 			side.prepend( onward );
 		}
-		c.append( page, side );
+		page.append( side ); c.append( page );
 		this.layer.append( c );
+		paperDeck( page, () => this.onPaper?.( { kind: 'turn' } ) );
 		void c.offsetWidth;
 		c.classList.add( 'is-on' );
 

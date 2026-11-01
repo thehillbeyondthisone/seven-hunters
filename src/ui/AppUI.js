@@ -6,6 +6,7 @@ import { STYLES, STYLE_NAMES } from '../style/Styles.js';
 import { SETTINGS } from '../sky/Setting.js';
 import { hazeDensityForVisibility } from '../post/AirHaze.js';
 import { saveCameraBob } from '../player/CameraComfort.js';
+import { saveStationDustAmount } from '../fx/StationMotes.js';
 
 // Binds the Tidewater UI (panel + HUD) to the running app.
 const SEA = {
@@ -169,6 +170,11 @@ export class AppUI {
 		} } );
 		speed = sun.addSlider( { label: 'Time speed', object: s, key: 'timeSpeed', min: 0.002, max: 1, log: true, unit: 'h/s', onChange: ( v ) => { if ( s.advance ) app.settings.timeSpeed = v; } } ).setVisible( s.advance );
 		const atmo = sky.addFolder( 'Atmosphere', { icon: 'cloud' } );
+		if ( app.haze?.coastalMist?.enabled ) atmo.addSlider( {
+			label: 'Coastal mist', object: app.haze.coastalMist, key: 'strength', min: 0, max: 2, step: .05,
+			format: ( v ) => v === 0 ? 'Off' : `${ Number( v.toFixed( 2 ) ) }×`,
+			tooltip: 'Slow, broken mist close to the island’s landings and sea caves. 1× recommended.',
+		} );
 		if ( app.clouds ) atmo.addSlider( { label: 'Cloud cover', object: s, key: 'clouds', min: 0, max: 1, step: 0.01, format: ( v ) => `${ Math.round( v * 100 ) }%`, onChange: ( v ) => { app.clouds.coverage.value = v; } } );
 		if ( app.clouds && app.clouds.cirrus ) atmo.addSlider( { label: 'Cirrus', object: s, key: 'cirrus', min: 0, max: 1, step: 0.01, format: ( v ) => `${ Math.round( v * 100 ) }%`, onChange: ( v ) => { app.clouds.cirrus.value = v; } } );
 		if ( app.haze ) {
@@ -186,7 +192,30 @@ export class AppUI {
 			atmo.addSlider( { label: 'Sun shafts', object: s, key: 'shafts', min: 0, max: 3, step: 0.05, tooltip: 'Volumetric light shafts and crepuscular rays in the haze (shadows of palms, the pier, hills and clouds). 0 turns them off.', onChange: ( v ) => { app.haze.shafts.value = v; } } );
 
 		}
-		if ( app.airMotes ) {
+		if ( app.stationMotes ) {
+
+			let saveDustTimer;
+			const saveDust = () => {
+				clearTimeout( saveDustTimer );
+				saveStationDustAmount( app.stationMotes.amount );
+			};
+			atmo.addSlider( { label: 'Interior dust', object: app.stationMotes, key: 'amount', min: 0, max: 10, step: 0.05,
+				format: ( v ) => v === 0 ? 'Off' : `${ Number( v.toFixed( 2 ) ) }× · ${ app.stationMotes.particleCount.toLocaleString() } motes`,
+				tooltip: 'Dust catching window light and lamplight inside the station. 1× is the recommended subtle amount; try up to 10× for denser air. More dust costs more to draw. Saved on this device.',
+				onChange: () => { clearTimeout( saveDustTimer ); saveDustTimer = setTimeout( saveDust, 200 ); }, onFinishChange: saveDust } );
+
+		}
+		if ( app.roomAir ) {
+
+			atmo.addSlider( { label: 'Window shafts', object: app.roomAir.sunStrength, key: 'value', min: 0, max: 3, step: .05,
+				format: ( v ) => v === 0 ? 'Off' : `${ Number( v.toFixed( 2 ) ) }×`,
+				tooltip: 'Sunlight scattered through the station’s actual window openings. Follows the sun, clouds and shadows. 1× recommended; north-facing windows remain diffuse.' } );
+			atmo.addSlider( { label: 'Lamp haze', object: app.roomAir.lampStrength, key: 'value', min: 0, max: 3, step: .05,
+				format: ( v ) => v === 0 ? 'Off' : `${ Number( v.toFixed( 2 ) ) }×`,
+				tooltip: 'Warm air around lit oil lamps and the kitchen fire. Shares their flicker and room boundaries. 1× recommended.' } );
+
+		}
+		if ( app.airMotes && ! app.flannan ) {
 
 			s.air = app.airMotes.intensity.value;
 			atmo.addSlider( { label: 'Air particles', object: s, key: 'air', min: 0, max: 2, step: 0.01, tooltip: 'Dust, pollen, salt haze, seed fluff and the odd gnat drifting in the air: they catch the light when backlit by the sun. 0 turns them off.', onChange: ( v ) => { app.airMotes.intensity.value = v; } } );
@@ -269,8 +298,32 @@ export class AppUI {
 		live.addInfo( { label: 'Frame rate', get: () => `${ ( app.fps || 0 ).toFixed( 0 ) } fps` } );
 		live.addInfo( { label: 'CPU per frame', get: () => `${ ( app.cpuMs || 0 ).toFixed( 2 ) } ms` } );
 		live.addInfo( { label: 'Render size', get: () => `${ app.sceneRenderer.width } × ${ app.sceneRenderer.height }` } );
+		if ( app.haze ) {
+			live.addInfo( { label: 'Light ray size', get: () => `${ app.haze.low.width } × ${ app.haze.low.height }` } );
+			live.addInfo( { label: 'Light ray GPU', tooltip: 'Latest measured GPU time for the active light ray passes. Includes ray rendering and smoothing; excludes the final fog composite. Add ?profile to the address for GPU timings on supported devices.', get: () => {
+				if ( ! app.profiler?.enabled ) return 'Not profiling';
+				const active = app.haze.activePassNames;
+				if ( ! active?.length ) return 'Off';
+				const measured = active.map( name => app.profiler.result.items.find( item => item.name === 'post ' + name ) );
+				if ( measured.some( item => ! item ) ) return 'Measuring…';
+				return `${ measured.reduce( ( sum, item ) => sum + item.ms, 0 ).toFixed( 2 ) } ms`;
+			} } );
+		}
+		if ( app.roomAir ) live.addInfo( { label: 'Room air GPU', tooltip: 'Latest GPU time for the local window and lamp scattering pass. The final composite is included in the scene’s beauty pass.', get: () => {
+			if ( ! app.roomAir.activePassNames.length ) return 'Off';
+			if ( ! app.profiler?.enabled ) return 'Not profiling';
+			const item = app.profiler.result.items.find( item => item.name === 'post room air' );
+			return item ? `${ item.ms.toFixed( 2 ) } ms` : 'Measuring…';
+		} } );
 		const quality = perf.addFolder( 'Quality', { icon: 'layers' } );
 		quality.addSlider( { label: 'Render scale', object: s, key: 'renderScale', min: 0.5, max: 1, step: 0.05, format: ( v ) => `${ Math.round( v * 100 ) }%`, tooltip: 'Internal resolution; the temporal upscaler reconstructs the full output resolution.', onChange: ( v ) => app.setRenderScale( v ) } );
+		if ( app.haze ) {
+			s.rayDetail = app.haze.resolutionScale;
+			quality.addSelect( { label: 'Light ray detail', object: s, key: 'rayDetail',
+				options: [ { label: 'Low', value: .5 }, { label: 'Balanced', value: 1 }, { label: 'High', value: 1.5 } ],
+				tooltip: 'Changes light ray resolution only. Balanced is the recommended starting point; High can cost more. This does not thicken the fog.',
+				onChange: ( v ) => { app.haze.setQuality( Number( v ) ); } } );
+		}
 		// anti-aliasing: SMAA edge smoothing plus 2..16 temporal sample positions, or none
 		s.aa = app.post.aaMode === 'none' ? 0 : app.post.taau.jitterPhaseOverride;
 		quality.addSelect( { label: 'Anti-aliasing', object: s, key: 'aa', tooltip: 'Smooths geometric edges with SMAA, then averages this many sub-pixel sample positions over successive frames to steady fine detail, dithered fades and shadow noise. More temporal samples take a few more frames to settle.', options: [ { label: 'Off', value: 0 }, { label: '2x', value: 2 }, { label: '4x', value: 4 }, { label: '8x', value: 8 }, { label: '16x', value: 16 } ], onChange: ( v ) => {
@@ -322,7 +375,7 @@ export class AppUI {
 			: p.mode === 'deck' ? 'On deck'
 			: p.mode === 'swim' ? ( app.keeperSafety ? 'Struggling in the sea' : app.camera.position.y < ( app.cameraWaterHeight ?? 0 ) - 0.3 ? 'Diving' : 'Swimming' ) : 'Walking';
 		ui.setMode( mode );
-		if ( p.prompt && ! app.story?.ui.open && ! app.story?.signal ) ui.setPrompt( p.prompt.key, p.prompt.text, p.prompt.hold && ! p.prompt.hideProgress ? p.prompt.progress : null );
+		if ( p.prompt && ! app.story?.ui.open && ! app.story?.signal ) ui.setPrompt( p.prompt.key, p.prompt.text, p.prompt.hold && ! p.prompt.hideProgress ? p.prompt.progress : null, { hold: !! p.prompt.hold, active: !! p.prompt.active, eta: p.prompt.eta, detail: p.prompt.detail } );
 		else ui.setPrompt( null );
 
 		const b = app.boatCtl;

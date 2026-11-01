@@ -1,0 +1,13 @@
+import {fixture} from './helpers/morning-fixture.mjs';
+import {CoastalState} from '../src/ocean/CoastalState.js';
+import {KeeperSafety} from '../src/player/KeeperSafety.js';
+import {walkLaterStory} from './helpers/later-route.mjs';
+const f=await fixture(false,{search:'laterWatchPreview=photography',morningStudy:false}),{s,app,player}=f;
+app.coastal=new CoastalState(app.terrainData);app.keeperSafety=new KeeperSafety(app,s);
+s.ui.travel=async(text,move)=>move();s.ui.choose=async q=>q.options[0].value;s.ui.journal=async()=>({fragment:true,disclose:true});s.ui.album=async()=>{};s.ui.end=q=>{s.lastEnd=q;};
+app.capturePhotograph=async()=> 'data:image/jpeg;base64,c2NlbmU=';
+f.step=seconds=>{for(let t=0;t<seconds-1e-8;t+=1/60){app.keeperSafety.beforeFrame(1/60);player.update(1/60);s.update(1/60);app.keeperSafety.afterFrame();}};
+f.checkpoint=async label=>console.log('ok',label);
+f.reviewBoundary=async()=>{if(s.lastEnd?.next?.label!=='Review storm preparations')throw Error('missing deliberate review entry');await s.lastEnd.next.use();};
+await walkLaterStory(f);
+console.log('PASS required chair photography, optional fragment, explicit reconnection boundary, deliberate repair/storm review and pending-middle boundary, with real walking collision and keyboard/touch actions.');

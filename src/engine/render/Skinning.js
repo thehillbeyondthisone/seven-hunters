@@ -5,6 +5,7 @@ import { BufferAttribute } from '../geometry/BufferAttribute.js';
 import { Texture, StorageBuffer } from '../gpu/Texture.js';
 import { generateMipmaps } from '../gpu/Mipmaps.js';
 import { Material } from './Material.js';
+import { Color } from '../math/Color.js';
 import { decodeImage } from '../loaders/GLTF.js';
 
 // Skinned, animated models (glTF skins) on the GPU.
@@ -47,7 +48,7 @@ const SKIN_VERTEX = ( J ) => /* wgsl */`
 
 // Default glTF-style PBR surface: base colour (sRGB, alpha), ORM (G roughness, B metalness), tangent-space
 // normal map through a derivative TBN. Extra surface code (e.g. skin / cloth tweaks) runs after it.
-export function skinnedMaterial( { name, joints, jointBuffer, textures = {}, alphaMode = 'OPAQUE', alphaCutoff = 0.5, doubleSided = false, surface = '', uniforms = {}, color = null, roughness = 1, metalness = 1, defines = {}, modules = [] } ) {
+export function skinnedMaterial( { name, joints, jointBuffer, textures = {}, alphaMode = 'OPAQUE', alphaCutoff = 0.5, doubleSided = false, surface = '', uniforms = {}, color = null, opacity = 1, normalScale = 1, roughness = 1, metalness = 1, defines = {}, modules = [] } ) {
 
 	const T = {};
 	if ( textures.albedo ) T.chAlbedo = textures.albedo;
@@ -65,7 +66,8 @@ export function skinnedMaterial( { name, joints, jointBuffer, textures = {}, alp
 	s.metalness *= orm.b;
 #endif
 #if HAS_NORMAL
-	let nm = textureSample( chNormal, smpAnisoRepeat, in.uv ).xyz * 2.0 - 1.0;
+	var nm = textureSample( chNormal, smpAnisoRepeat, in.uv ).xyz * 2.0 - 1.0;
+	nm = normalize( vec3f( nm.xy * ${ Number( normalScale ).toFixed( 6 ) }, nm.z ) );
 	s.normal = perturbNormalByMap( in.P, in.N, in.uv, nm );
 #endif
 ${ surface }
@@ -78,6 +80,7 @@ ${ surface }
 		textures: T,
 		uniforms,
 		color: color || undefined,
+		opacity,
 		roughness,
 		metalness,
 		vertex: SKIN_VERTEX( joints ),
@@ -208,6 +211,9 @@ export class SkinnedModel {
 		this.meshes = [];
 		this.materials = [];
 		this.onClipEnd = null;
+		// Optional constraints run after animation, before joint upload. They can
+		// adjust local bone transforms using the sampled world pose as evidence.
+		this.poseModifier = null;
 		this._pose();
 
 	}
@@ -276,6 +282,9 @@ export class SkinnedModel {
 					alphaMode: info.alphaMode,
 					alphaCutoff: gm.alphaCutoff ?? 0.5,
 					doubleSided: !! gm.doubleSided,
+					color: pbr.baseColorFactor ? new Color().setRGB( ...pbr.baseColorFactor.slice( 0, 3 ) ) : undefined,
+					opacity: pbr.baseColorFactor?.[ 3 ] ?? 1,
+					normalScale: gm.normalTexture?.scale ?? 1,
 					roughness: pbr.roughnessFactor ?? 1,
 					metalness: pbr.metallicFactor ?? 1,
 					...extra,
@@ -336,6 +345,21 @@ export class SkinnedModel {
 		const l = this.layers.find( ( x ) => x.target === 1 );
 		return l ? l.clip.name : null;
 
+	}
+
+	// An external clock (oar stroke, machinery) owns this clip's time. Preserve
+	// previous joints for motion vectors; reset only at a genuine camera/pose cut.
+	sample( name, time, { resetMotion = false } = {} ) {
+		const clip = this.clips.get( name );
+		if ( ! clip ) throw new Error( 'SkinnedModel: no clip ' + name );
+		if ( ! this._sampleLayer || this._sampleLayer.clip !== clip ) {
+			this._sampleLayer = { clip, time: 0, weight: 1, target: 1, fade: 1, loop: false, speed: 0, ended: false };
+		}
+		this._sampleLayer.time = Math.max( 0, Math.min( clip.duration, time ) );
+		this.layers[ 0 ] = this._sampleLayer; this.layers.length = 1;
+		if ( resetMotion ) this._first = true;
+		this._held = false;
+		this._pose();
 	}
 
 	// Hold the current pose: last frame's joints = this frame's (no motion vectors). Call it when
@@ -468,6 +492,17 @@ export class SkinnedModel {
 			if ( p < 0 ) W.set( M, i * 16 );
 			else mul4( W, i * 16, W, p * 16, M, 0 );
 
+		}
+		if ( this.poseModifier ) {
+			this.poseModifier( this );
+			// Constraints may have changed parents: propagate once in parent order.
+			for ( const i of this.order ) {
+				const L = this.local[ i ];
+				composeTRS( M, 0, L.t, L.r, L.s );
+				const p = this.parent[ i ];
+				if ( p < 0 ) W.set( M, i * 16 );
+				else mul4( W, i * 16, W, p * 16, M, 0 );
+			}
 		}
 
 		// previous frame's joints -> second half, then this frame's

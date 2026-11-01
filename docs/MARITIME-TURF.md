@@ -1,5 +1,11 @@
 # Eilean Mòr maritime turf
 
+The 23 October refinement unifies the ground and blade palette, adds local
+terrain/wall shelter and worn-edge variation, and reduces the inherited tall-meadow
+ground relief. See [the landscape pass](LANDSCAPE-PASS.md) and
+[focused turf notes](TURF-PASS-NOTES.md). The integration measurements below
+describe the original 9 October version.
+
 Terra was selected from the local source studies on 9 October 2026. The main game now uses a native WebGPU adaptation of its curved, tapered grass blades. The original source study remains available at `/tools/grass-study/`; `/grass-preview.html` compares the new turf and previous grass in the actual island scene without creating Story or reading/writing saved watches.
 
 ## Reference comparison

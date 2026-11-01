@@ -778,6 +778,76 @@ body {
 	to { transform: scaleX(0); }
 }
 
+/* Keeper's notices: small slips from the same paper stock as the action prompt. */
+.is-story .tw-toast {
+	--notice-tilt: -0.45deg;
+	isolation: isolate;
+	box-sizing: border-box;
+	gap: calc(11 * var(--tw-u));
+	padding: calc(12 * var(--tw-u)) calc(20 * var(--tw-u)) calc(15 * var(--tw-u));
+	overflow: visible;
+	border: 0;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
+	filter: drop-shadow(0 calc(3 * var(--tw-u)) calc(5 * var(--tw-u)) #0006);
+	font: normal calc(17 * var(--tw-u))/1.35 'IM Fell English', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+	color: #2a2118;
+	text-shadow: none;
+	transform: translateY(calc(-8 * var(--tw-u))) rotate(var(--notice-tilt));
+}
+
+.is-story .tw-toast::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background:
+		linear-gradient(176deg, #fffaf03d, transparent 45%, #8d6d3320),
+		repeating-linear-gradient(0deg, #7b633008 0 1px, transparent 1px 3px),
+		#e9dec6;
+	box-shadow: inset 0 0 calc(16 * var(--tw-u)) #86612c24;
+	clip-path: polygon(0.4% 3%, 14% 0, 37% 2%, 64% 0.5%, 85% 2%, 99.5% 0, 100% 35%, 99.6% 65%, 100% 97%, 81% 99%, 58% 97.5%, 32% 100%, 12% 98%, 0 100%, 0.5% 70%, 0 32%);
+}
+
+.is-story .tw-toast:nth-child(even) { --notice-tilt: 0.35deg; }
+.is-story .tw-toast.is-in { transform: rotate(var(--notice-tilt)); }
+.is-story .tw-toast.is-out { transform: translateY(calc(-6 * var(--tw-u))) rotate(var(--notice-tilt)); }
+.is-story .tw-toast.is-bump { animation-name: tw-notice-bump; }
+
+@keyframes tw-notice-bump {
+	40% { transform: translateY(calc(2 * var(--tw-u))) rotate(var(--notice-tilt)); }
+}
+
+.is-story .tw-toast-dot {
+	width: calc(5 * var(--tw-u));
+	height: calc(5 * var(--tw-u));
+	border-radius: 0;
+	background: #8a2b1b;
+	box-shadow: none;
+	transform: rotate(45deg);
+}
+
+.is-story .tw-toast-text {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.is-story .tw-toast-bar {
+	left: calc(20 * var(--tw-u));
+	right: calc(20 * var(--tw-u));
+	bottom: calc(7 * var(--tw-u));
+	background: #5e4e3640;
+	transform-origin: left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.is-story .tw-toast { transition: opacity var(--tw-med) ease; }
+	.is-story .tw-toast.is-bump, .is-story .tw-toast-bar { animation: none; }
+}
+
 /* bottom-centre: interaction prompt */
 .tw-prompt {
 	position: absolute;
@@ -847,6 +917,205 @@ body {
 @keyframes tw-ring {
 	0% { box-shadow: 0 0 0 0 rgba(var(--tw-aqua-rgb), 0.65); }
 	100% { box-shadow: 0 0 0 12px rgba(var(--tw-aqua-rgb), 0); }
+}
+
+/* the story's instruction, detail and rule (below); Tidewater shows only the key and the action */
+.tw-prompt-head,
+.tw-prompt-detail,
+.tw-prompt-bar { display: none; }
+.tw-prompt-words { display: flex; flex-direction: column; }
+
+/* ── the story's prompt: a slip from the keeper's logbook ────────────────
+   Cream paper and iron-gall ink, the key inked on it as a round stamp. The
+   action leads in the hand, with what the work does beneath it; to the
+   right, what to do ("Hold E") over how long it takes. Along the slip's
+   foot an ink rule draws across as a held action gets on. */
+.is-story .tw-prompt {
+	--pg-paper: #e9dec6;
+	--pg-ink: #2a2118;
+	--pg-ink-2: #5e4e36;
+	--pg-ink-3: #7d6a4b;
+	--pg-red: #8a2b1b;
+	--pg-rule: rgba(42, 33, 24, 0.16);
+	align-items: center;
+	gap: calc(14 * var(--tw-u));
+	box-sizing: border-box;
+	width: min(calc(440 * var(--tw-u)), calc(100vw - 32px));
+	padding: calc(11 * var(--tw-u)) calc(20 * var(--tw-u)) calc(13 * var(--tw-u)) calc(12 * var(--tw-u));
+	overflow: hidden;
+	border-radius: calc(2 * var(--tw-u));
+	border: 1px solid #b9a77f;
+	background: var(--pg-paper);
+	box-shadow:
+		inset 0 0 calc(18 * var(--tw-u)) rgba(122, 96, 52, 0.2),
+		0 calc(6 * var(--tw-u)) calc(22 * var(--tw-u)) rgba(0, 0, 0, 0.45);
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
+	font-family: 'IM Fell English', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+	font-weight: normal;
+	white-space: normal;
+	color: var(--pg-ink);
+}
+
+/* the words: action and instruction, then what the work does and how long */
+.is-story .tw-prompt-words {
+	flex: 1;
+	min-width: 0;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-areas: 'text how' 'note time';
+	align-items: baseline;
+	column-gap: calc(16 * var(--tw-u));
+	row-gap: calc(2 * var(--tw-u));
+}
+
+.is-story .tw-prompt-head,
+.is-story .tw-prompt-detail { display: contents; }
+.is-story .tw-prompt-detail[hidden],
+.is-story .tw-prompt-read { display: none; }
+
+.is-story .tw-prompt-text {
+	grid-area: text;
+	font-size: calc(19 * var(--tw-u));
+	line-height: 1.2;
+}
+
+.is-story .tw-prompt-how {
+	grid-area: how;
+	justify-self: end;
+	font-family: var(--tw-font);
+	font-size: calc(11 * var(--tw-u));
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	color: var(--pg-ink-2);
+	transition: color var(--tw-fast) ease;
+}
+
+.is-story .tw-prompt-note {
+	grid-area: note;
+	font-size: calc(14 * var(--tw-u));
+	font-style: italic;
+	line-height: 1.3;
+	color: var(--pg-ink-2);
+}
+
+.is-story .tw-prompt-time {
+	grid-area: time;
+	justify-self: end;
+	font-size: calc(14 * var(--tw-u));
+	white-space: nowrap;
+	color: var(--pg-ink-3);
+}
+
+.is-story .tw-prompt.is-active .tw-prompt-how,
+.is-story .tw-prompt.is-active .tw-prompt-time { color: var(--pg-ink); }
+.is-story .tw-prompt.is-complete .tw-prompt-how,
+.is-story .tw-prompt.is-done .tw-prompt-how { color: var(--pg-red); }
+
+/* the rule along the foot: a faint line to draw along, inked as far as the hold has got */
+.is-story .tw-prompt.is-hold::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: calc(3 * var(--tw-u));
+	background: var(--pg-rule);
+}
+
+.is-story .tw-prompt-bar {
+	display: block;
+	position: absolute;
+	z-index: 1;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: calc(3 * var(--tw-u));
+	background: var(--pg-ink);
+	transform: scaleX(0);
+	transform-origin: left;
+	transition: transform 90ms linear;
+}
+
+/* a hold with no end to measure (bracing): the whole rule, darkening and easing while held */
+.is-story .tw-prompt.is-ratchet .tw-prompt-bar { transform: scaleX(1); opacity: 0.16; transition: opacity var(--tw-med) ease; }
+.is-story .tw-prompt.is-ratchet.is-active .tw-prompt-bar { animation: tw-pg-steady 1.6s ease-in-out infinite alternate; }
+
+@keyframes tw-pg-steady {
+	from { opacity: 0.45; }
+	to { opacity: 0.9; }
+}
+
+/* the key: a round stamp, double-ringed and set a little askew; held, it inks solid */
+html.is-story .tw-prompt-key {
+	position: relative;
+	z-index: 1;
+	display: grid;
+	place-items: center;
+	flex: none;
+	box-sizing: border-box;
+	min-width: 0;
+	width: calc(34 * var(--tw-u));
+	height: calc(34 * var(--tw-u));
+	padding: 0;
+	border: calc(1.5 * var(--tw-u)) solid var(--pg-ink);
+	border-radius: 50%;
+	background: transparent;
+	box-shadow: inset 0 0 0 calc(2 * var(--tw-u)) var(--pg-paper), inset 0 0 0 calc(2.8 * var(--tw-u)) rgba(42, 33, 24, 0.55);
+	font-family: Georgia, 'Times New Roman', serif;
+	font-size: calc(16 * var(--tw-u));
+	font-weight: bold;
+	line-height: 1;
+	color: var(--pg-ink);
+	transform: rotate(-4deg);
+	transition: transform 80ms ease, background-color var(--tw-fast) ease, color var(--tw-fast) ease;
+}
+
+html.is-story .tw-prompt.is-active .tw-prompt-key {
+	transform: rotate(-4deg) scale(0.94);
+	background: var(--pg-ink);
+	color: var(--pg-paper);
+}
+
+html.is-story .tw-prompt-fill { display: none !important; }
+html.is-story .tw-prompt-key::after { box-shadow: 0 0 0 0 rgba(42, 33, 24, 0.45); }
+html.is-story .tw-prompt.is-on.is-bump .tw-prompt-key::after { animation-name: tw-pg-ring; }
+
+@keyframes tw-pg-ring {
+	0% { box-shadow: 0 0 0 0 rgba(42, 33, 24, 0.45); }
+	100% { box-shadow: 0 0 0 calc(10 * var(--tw-u)) rgba(42, 33, 24, 0); }
+}
+
+/* wide keys (Space): a long stamp */
+html.is-story .tw-prompt-key.is-wide {
+	width: auto;
+	height: calc(28 * var(--tw-u));
+	padding: 0 calc(12 * var(--tw-u));
+	border-radius: calc(4 * var(--tw-u));
+	font-family: var(--tw-font);
+	font-size: calc(11 * var(--tw-u));
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	transform: rotate(-2deg);
+}
+
+html.is-story .tw-prompt.is-active .tw-prompt-key.is-wide { transform: rotate(-2deg) scale(0.94); }
+
+/* a hold completed: the paper brightens for a moment */
+.is-story .tw-prompt.is-done { animation: tw-pg-done 900ms var(--tw-ease); }
+
+@keyframes tw-pg-done {
+	0% { background-color: #f7efdc; }
+	100% { }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.is-story .tw-prompt.is-done,
+	.is-story .tw-prompt.is-ratchet.is-active .tw-prompt-bar { animation: none; }
+	.is-story .tw-prompt.is-ratchet.is-active .tw-prompt-bar { opacity: 0.7; }
+	.is-story .tw-prompt-bar { transition: none; }
 }
 
 /* bottom-left: boat instruments */

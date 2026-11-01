@@ -1,3 +1,4 @@
+import { keeperCraft } from './KeeperCraft.js';
 import { Group, Mesh, Vector3 } from '../../engine/index.js';
 import { Builder, Part, lathePart } from '../village/GeoBuilder.js';
 import { lin, HARD, WOOD } from '../Props.js';
@@ -81,26 +82,13 @@ export function createMorningModels( village, layout ) {
 		}
 		group.add( g ); return g;
 	};
-	const can = make( 'oil-can', B => {
-		B.lathe( 'hard', 0, 0, 0, [ [ .13, 0 ], [ .16, .025 ], [ .16, .27 ], [ .12, .33 ], [ .055, .36 ], [ .055, .39 ] ], { segs: 24, ...tin } );
-		B.torus( 'hard', 0, .43, 0, .10, .013, { rx: Math.PI / 2, radial: 6, ...tin } );
-		B.rod( 'hard', [ .12, .27, 0 ], [ .29, .39, 0 ], .029, .018, tin );
-	} );
-	const cap = make( 'can-cap', B => B.cyl( 'hard', 0, .385, 0, .063, .063, .035, tin ) );
+	const can = make('oil-can',B=>keeperCraft(B,'oilCan'));
+	const cap = make('can-cap',B=>keeperCraft(B,'canCap',0,.385,0));
 	const canOil = make( 'oil-in-can', B => B.cyl( 'hard', 0, 0, 0, .147, .147, .01, oil ) );
-	const kit = make( 'service-kit', B => {
-		B.box( 'stationTimber', 0, .06, 0, .36, .12, .24, timber );
-		B.box( 'hard', -.08, .13, .02, .15, .04, .17, linen );
-		B.box( 'hard', .10, .13, .02, .08, .04, .17, { ...linen, tint: lin( 0xb7b096 ) } );
-		B.rod( 'hard', [ -.12, .15, -.05 ], [ .12, .15, -.05 ], .012, .012, brass );
-		for ( const x of [ -.07, .07 ] ) B.torus( 'hard', x, .16, -.04, .022, .005, { radial: 5, ...tin } );
-	} );
-	const fountain = make( 'working-oil-supply', B => {
-		B.lathe( 'hard', 0, 0, 0, [ [ .15, 0 ], [ .19, .04 ], [ .19, .23 ], [ .17, .27 ], [ .16, .27 ], [ .16, .06 ], [ 0, .06 ] ], { segs: 24, ...brass } );
-		B.rod( 'hard', [ 0, .04, 0 ], [ -.28, -.06, 0 ], .015, .015, brass );
-	} );
+	const kit = make('service-kit',B=>keeperCraft(B,'serviceKit'));
+	const fountain = make('working-oil-supply',B=>keeperCraft(B,'fountain'));
 	fountain.position.copy( layout.targets.fountain ).add( new Vector3( 0, -.30, 0 ) );
-	const fountainCap = make( 'fountain-cap', B => B.cyl( 'hard', 0, 0, 0, .195, .195, .025, brass ) );
+	const fountainCap = make('fountain-cap',B=>keeperCraft(B,'fountainCap'));
 	const fountainOil = make( 'oil-in-fountain', B => B.cyl( 'hard', 0, 0, 0, .155, .155, .012, oil ) );
 	const glassFilm = make( 'glass-deposits', B => {
 		for ( let i = 0; i < 9; i++ ) {
@@ -115,17 +103,9 @@ export function createMorningModels( village, layout ) {
 	const burnerFilm = make( 'burner-deposits', B => B.torus( 'hard', 0, layout.focal - .18, 0, .14, .012, { radial: 6, ...dark } ) );
 	const wick = make( 'wick-edge', B => B.cyl( 'hard', 0, layout.focal - .08, 0, .105, .105, .025, linen ) );
 	const carbon = make( 'wick-carbon', B => B.torus( 'hard', 0, layout.focal - .054, 0, .10, .012, { radial: 6, ...dark } ) );
-	const tool = make( 'working-cloth', B => {
-		B.box( 'hard', 0, 0, 0, .16, .035, .13, linen );
-		B.rod( 'stationTimber', [ 0, -.02, 0 ], [ 0, -.28, 0 ], .018, .018, timber );
-	} );
-	const housingTool = make( 'housing-cloth', B => {
-		B.box( 'hard', 0, 0, 0, .13, .035, .12, { ...linen, tint: lin( 0xb7b096 ) } );
-		B.rod( 'stationTimber', [ 0, -.02, 0 ], [ 0, -.28, 0 ], .018, .018, timber );
-	} );
-	const trimmer = make( 'wick-trimmer', B => {
-		for ( const x of [ -.022, .022 ] ) { B.rod( 'hard', [ x, 0, 0 ], [ -x, -.18, 0 ], .009, .006, tin ); B.torus( 'hard', -x, -.20, 0, .022, .006, { rx: Math.PI / 2, radial: 5, ...tin } ); }
-	} );
+	const tool = make('working-cloth',B=>keeperCraft(B,'glassTool'));
+	const housingTool = make('housing-cloth',B=>keeperCraft(B,'housingTool'));
+	const trimmer = make('wick-trimmer',B=>keeperCraft(B,'trimmer'));
 	const stream = make( 'oil-stream', B => B.cyl( 'hard', 0, 0, 0, .007, .007, 1, oil ) );
 	const usedCloths = make( 'used-cloths', B => B.box( 'hard', 0, .16, .02, .13, .04, .16, dark ) );
 	return { group, can, cap, canOil, kit, fountain, fountainCap, fountainOil, glassFilm, burnerFilm, wick, carbon, tool, housingTool, trimmer, stream, usedCloths };

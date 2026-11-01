@@ -4,12 +4,14 @@ import assert from 'node:assert/strict';
 import { GPU } from '../src/engine/gpu/GPU.js';
 import { ShaderModule } from '../src/engine/gpu/Shader.js';
 import { RenderTarget } from '../src/engine/gpu/Texture.js';
+import { readTexture } from '../src/engine/gpu/Readback.js';
 import { MeshRenderer } from '../src/engine/render/MeshRenderer.js';
 import { Material } from '../src/engine/render/Material.js';
 import { SunShadows } from '../src/engine/render/Shadows.js';
 import { setFrameCamera, G } from '../src/engine/render/Frame.js';
 import { CliffSurge } from '../src/ocean/CliffSurge.js';
 import { SeaWeather } from '../src/weather/SeaWeather.js';
+import { TOWER } from '../src/world/flannan/Station.js';
 import * as E from '../src/engine/index.js';
 
 await GPU.init( { headless: true } );
@@ -49,8 +51,29 @@ for ( let i = 0; i < 3; i ++ ) {
 		clearColors: [ [ 0.05, 0.1, 0.12, 1 ], [ 0, 0, 0, 0 ], [ 0, 0, 0, 0 ] ], depthView: target.depthTexture.view(), depthFormat: 'depth32float', clearDepth: 0 } );
 	GPU.submit(); await GPU.pipelinesReady(); await GPU.queue.onSubmittedWorkDone();
 }
+assert.ok( renderer.stats.draws >= 3, 'cliff sheet, rain and wet stone all draw' );
+
+// Look out from the keepers' room using the actual rain shader. A sheltered
+// listener must still see the shower beyond the opening; a view clipped to the
+// dry metre around that same listener must contain no drops.
+const rainScene = new E.Scene(); rainScene.add( weather.rain );
+camera.position.set( -5, TOWER.floor + 1.62, 2 );
+camera.lookAt( -5, camera.position.y, -20 );
+weather.uniforms.fields.rain.value = 1;
+const rainPixels = async ( far ) => {
+	camera.far = far; camera.updateProjectionMatrix();
+	GPU.beginFrame(); setFrameCamera( camera, 240, 160 );
+	renderer.render( rainScene, { camera, kind: 'main', colorViews: target.textures.map( ( t ) => t.view() ), colorFormats: target.formats,
+		clearColors: [ [ 0, 0, 0, 0 ], [ 0, 0, 0, 0 ], [ 0, 0, 0, 0 ] ], depthView: target.depthTexture.view(), depthFormat: 'depth32float', clearDepth: 0 } );
+	GPU.submit(); await GPU.pipelinesReady(); await GPU.queue.onSubmittedWorkDone();
+	const bits = new Uint16Array( ( await readTexture( target.texture ) ).data );
+	let count = 0;
+	for ( let i = 0; i < bits.length; i += 4 ) if ( bits[ i ] || bits[ i + 1 ] || bits[ i + 2 ] ) count ++;
+	return count;
+};
+assert.ok( await rainPixels( 30 ) > 20, 'outside rain remains visible when looking out from the sheltered room' );
+assert.equal( await rainPixels( 1 ), 0, 'the sheltered space around the listener stays dry' );
 const error = await GPU.device.popErrorScope();
 assert.equal( error, null, error?.message ); assert.deepEqual( errors, [] );
-assert.ok( renderer.stats.draws >= 3, 'cliff sheet, rain and wet stone all draw' );
-console.log( 'PASS WebGPU cliff run-up, rain and wet-surface materials: no shader or validation errors.' );
+console.log( 'PASS WebGPU cliff run-up, rain and wet-surface materials; rain remains visible outside a dry room; no shader or validation errors.' );
 process.exit( 0 );

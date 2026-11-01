@@ -5,6 +5,15 @@ import { routeGuidance } from './Guidance.js';
 import { SUNRISE, SUNSET } from './Script.js';
 
 const EPS = 1e-6, CAN = .65;
+// Held service work for the prompt's dial: progress per second held (work() below) and what the work is for.
+const WORK = {
+	fill: { rate: .22 / CAN, detail: 'From the store’s bulk supply into the service can' },
+	pour: { rate: .22, detail: 'From the service can into the lamp’s working supply' },
+	glass: { rate: 1 / 3, detail: 'Deposits on the glass dim the light' },
+	housing: { rate: 1 / 3, detail: 'Its own cloth, so no oil reaches the glass' },
+	wick: { rate: 1 / 3, detail: 'An even edge gives an even flame' },
+	familiar: { rate: 1 / 6, detail: 'Glass, burner housing, then the wick edge' },
+};
 const time = h => `${ String( Math.floor( h ) % 24 ).padStart( 2, '0' ) }.${ String( Math.floor( h % 1 * 60 ) ).padStart( 2, '0' ) }`;
 export const MORNING_PAPER = {
 	id: 'morning-service-study', label: 'Preparing the next light', title: 'The morning service', sub: 'Extinguish, inspect, clean, prepare and record.',
@@ -62,13 +71,14 @@ export class MorningServicing {
 		for ( const it of I.items ) if ( ! [ 'houseDoor', 'galleryDoor', 'journal', 'slate', 'clock', 'lens', 'crank' ].includes( it.id ) ) it.when = () => false;
 		const journal = I.get( 'journal' ); journal.text = () => this.state.done ? 'Read the signed morning journal' : 'Copy the slate and sign the journal'; journal.use = () => this.journal();
 		const slate = I.get( 'slate' ); slate.text = 'Read the night’s slate'; slate.use = () => this.s.ui.read( { title: 'The night’s slate · study handover', body: this.s.rows.filter( r => r[ 0 ] < SUNRISE + 24 ).map( r => `${ time( r[ 0 ] ) } · ${ r[ 1 ] }` ) } );
-		const crank = I.get( 'crank' ); crank.hideProgress = true;
+		const crank = I.get( 'crank' );
 		crank.when = () => this.serviced && ! this.state.panelOpen && ! this.state.done;
 		crank.text = () => this.s.lamp.wind >= .999 ? 'Driving weight fully raised' : 'Raise the driving weight · machine stopped';
 		const add = ( id, key, text, action, when, hold = false ) => I.add( {
 			id: 'morning' + id, at: () => this.at( key ), reach: key === 'wick' || key === 'burner' ? 2.5 : 1.8, size: .16,
 			text: typeof text === 'function' ? text : () => text,
-			when: () => ( ! this.state.done || action === 'door' ) && when(), hold: hold ? 1e9 : 0, hideProgress: true,
+			when: () => ( ! this.state.done || action === 'door' ) && when(), hold: hold ? 1e9 : 0,
+			progress: hold ? () => this.progress( action ) : undefined, rate: hold ? WORK[ action ].rate : undefined, detail: hold ? WORK[ action ].detail : undefined,
 			use: hold ? undefined : () => this.act( action ),
 			serviceAction: action,
 			onHold: hold ? dt => this.work( action, dt ) : undefined,
@@ -78,16 +88,16 @@ export class MorningServicing {
 		add( 'Inspect', 'panel', 'Inspect the extinguished apparatus', 'inspect', () => this.inLantern && ! this.s.lamp.lit && ! this.state.inspected );
 		add( 'Kit', 'kitHome', () => this.state.kitPlace === 'carried' ? 'Return the service kit' : 'Take the service kit', 'kit', () => this.inStore && this.state.inspected && this.state.kitPlace !== 'shelf' );
 		add( 'Can', 'canHome', () => this.state.canPlace === 'carried' ? 'Return the capped oil can' : 'Take the oil can', 'can', () => this.inStore && this.state.inspected && this.state.canPlace !== 'shelf' );
-		add( 'Fill', 'fill', () => this.s.hand.lit ? 'Put out the hand lantern before handling oil' : 'Fill the oil can · keep pressed', 'fill', () => this.inStore && [ 'carried', 'filling' ].includes( this.state.canPlace ) && this.state.oil.can < CAN - EPS && ! this.state.checked, true );
+		add( 'Fill', 'fill', () => this.s.hand.lit ? 'Put out the hand lantern before handling oil' : 'Fill the oil can', 'fill', () => this.inStore && [ 'carried', 'filling' ].includes( this.state.canPlace ) && this.state.oil.can < CAN - EPS && ! this.state.checked, true );
 		add( 'Cap', 'fill', 'Secure the can’s cap', 'cap', () => this.inStore && ! this.state.canCapped && this.state.canPlace === 'filling' && this.state.oil.can >= CAN - EPS );
 		add( 'Shelf', 'shelf', () => this.state.checked ? 'Take the can and kit downstairs' : 'Set the capped can and service kit on the shelf', 'shelf', () => this.inLantern && ( this.state.checked ? this.state.canPlace === 'shelf' || this.state.kitPlace === 'shelf' : this.state.canPlace === 'carried' || this.state.kitPlace === 'carried' ) );
 		add( 'Panel', 'panel', () => this.state.panelOpen ? 'Close the apparatus service section' : 'Open the apparatus service section', 'panel', () => this.inLantern && this.state.inspected && this.state.kitPlace === 'shelf' && ( this.state.panelOpen ? this.serviced && this.state.fountainCapped : ! this.serviced ) && ! this.state.checked );
-		add( 'Glass', 'glass', 'Wipe the glass with the clean glass cloth · keep pressed', 'glass', () => this.inLantern && this.state.panelOpen && this.state.glass > EPS && ! this.state.familiar, true );
-		add( 'Housing', 'burner', 'Wipe the burner housing with its own cloth · keep pressed', 'housing', () => this.atOpening && this.state.panelOpen && this.state.glass <= EPS && this.state.housing > EPS && ! this.state.familiar, true );
-		add( 'Wick', 'wick', 'Dress the wick edge evenly · keep pressed', 'wick', () => this.atOpening && this.state.panelOpen && this.state.housing <= EPS && this.state.wick > EPS && ! this.state.familiar, true );
-		add( 'Familiar', 'panel', 'Clean the apparatus and dress the wick · keep pressed', 'familiar', () => this.atOpening && this.state.panelOpen && ( this.state.glass > EPS || this.state.housing > EPS || this.state.wick > EPS ) && this.state.familiar, true );
+		add( 'Glass', 'glass', 'Wipe the glass with the clean glass cloth', 'glass', () => this.inLantern && this.state.panelOpen && this.state.glass > EPS && ! this.state.familiar, true );
+		add( 'Housing', 'burner', 'Wipe the burner housing with its own cloth', 'housing', () => this.atOpening && this.state.panelOpen && this.state.glass <= EPS && this.state.housing > EPS && ! this.state.familiar, true );
+		add( 'Wick', 'wick', 'Dress the wick edge evenly', 'wick', () => this.atOpening && this.state.panelOpen && this.state.housing <= EPS && this.state.wick > EPS && ! this.state.familiar, true );
+		add( 'Familiar', 'panel', 'Clean the apparatus and dress the wick', 'familiar', () => this.atOpening && this.state.panelOpen && ( this.state.glass > EPS || this.state.housing > EPS || this.state.wick > EPS ) && this.state.familiar, true );
 		add( 'Fountain', 'fountain', 'Open the working oil supply', 'fountain', () => this.inLantern && this.state.panelOpen && this.state.fountainCapped && this.state.oil.fountain < 1 - EPS );
-		add( 'Pour', 'fountain', 'Replenish the working supply · keep pressed', 'pour', () => this.inLantern && ! this.state.fountainCapped && this.state.oil.fountain < 1 - EPS, true );
+		add( 'Pour', 'fountain', 'Replenish the working supply', 'pour', () => this.inLantern && ! this.state.fountainCapped && this.state.oil.fountain < 1 - EPS, true );
 		add( 'Seal', 'fountain', 'Secure both oil caps', 'seal', () => this.inLantern && ! this.state.fountainCapped && this.state.oil.fountain >= 1 - EPS );
 		add( 'Check', 'panel', 'Examine the apparatus prepared for evening', 'check', () => this.inLantern && this.ready && ! this.state.checked );
 		add( 'Cloths', 'tin', 'Put used oily cloths in the covered receptacle', 'cloths', () => this.inStore && this.state.usedCloths && ! this.state.disposed );
@@ -163,6 +173,14 @@ export class MorningServicing {
 			q.disposed = true; this.record( 'cloths', 'Used oily cloths separated into the covered receptacle.' );
 		} else return false;
 		this.sync(); s.save(); return true;
+	}
+	// how far along held work is, 0..1 (the prompt's dial)
+	progress( action ) {
+		const q = this.state;
+		if ( action === 'fill' ) return q.oil.can / CAN;
+		if ( action === 'pour' ) return q.oil.fountain;
+		if ( action === 'familiar' ) return 1 - ( q.glass + q.housing + q.wick ) / 3;
+		return 1 - q[ action ];
 	}
 	work( action, dt ) {
 		const s = this.s, q = this.state;
@@ -262,7 +280,6 @@ export class MorningServicing {
 		const q = this.state, m = this.models, L = this.s.lamp;
 		L.update( 0, 0 ); // Apply restored/staged state to the flame, beams and optic.
 		this.s.interact.get( 'lens' ).hold = 0;
-		this.s.interact.get( 'crank' ).hideProgress = true;
 		this.s.keeper.drive.sync( L.wind );
 		if ( this.s.moving.servicePanel ) {
 			const a = this.layout.angle, k = q.panelOpen ? 1 : 0;

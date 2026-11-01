@@ -1,6 +1,7 @@
 import { ShaderModule, UniformBlock } from '../../gpu/Shader.js';
 import { commonModule } from './common.js';
 import { Matrix4, Vector4 } from '../../math/index.js';
+import { Texture } from '../../gpu/Texture.js';
 
 // Scene lighting (the former SceneLightingModel on top of three's PhysicalLightingModel):
 //   - sun / moon: GGX specular + Lambert diffuse, cascaded shadow maps (PCSS on the near cascade)
@@ -94,7 +95,7 @@ export const ShadowUniforms = new UniformBlock( 'SunShadow', {
 	blend: [ 'vec4f[4]', [ new Vector4(), new Vector4(), new Vector4(), new Vector4() ] ],
 } );
 
-let _shadowMap = null;
+let _shadowMap = new Texture( { label: 'inactive shadow map', width: 1, height: 1, depth: 1, dimension: '2d-array', format: 'depth32float', usage: [ 'sample', 'render' ] } );
 // the renderer's cascade texture array (depth32float), set by Shadows.js
 export function setShadowMap( tex ) {
 
@@ -102,14 +103,18 @@ export function setShadowMap( tex ) {
 
 }
 
+// Local point shadows share a reserved atlas layer with the sun cascades, so
+// enabling the lantern adds no sampled-texture binding to scene materials.
+export const shadowMapModule = new ShaderModule( {
+	name: 'shadow-map',
+	bindings: { sunShadowMap: { texture: () => _shadowMap, viewDimension: '2d-array' } },
+} );
+
 export const shadowModule = new ShaderModule( {
 	name: 'sunShadow',
-	deps: [ commonModule ],
+	deps: [ commonModule, shadowMapModule ],
 	uniforms: ShadowUniforms,
 	uniformName: 'shadowParams',
-	bindings: {
-		sunShadowMap: { texture: () => _shadowMap, viewDimension: '2d-array' },
-	},
 	code: /* wgsl */`
 fn shadowCascadeOf( viewDist: f32 ) -> i32 {
 	for ( var i = 0; i < i32( shadowParams.count ); i++ ) { if ( viewDist < shadowParams.cascades[ i ].x ) { return i; } }
@@ -135,7 +140,8 @@ fn _shadowDepth( uv: vec2f, layer: i32 ) -> f32 {
 //  3. percentage-closer filtering over that width
 // Both sample sets are Vogel disks rotated per pixel and per frame (interleaved gradient noise): the
 // TAA resolves the noise into a smooth gradient. Farther cascades: three's PCFShadowFilter (5 Vogel taps
-// of hardware comparisons over one texel, rotated per pixel).
+// of hardware comparisons over one texel, rotated per pixel). Final PCSS taps also use bilinear
+// depth comparisons: raw nearest-texel tests left stippled, stair-stepped edges on the station walls.
 const SHADOW_MAX_OCCLUDER_HEIGHT: f32 = 30.0; // m: search radius covers penumbrae of occluders up to this far above
 const SHADOW_SEARCH_TAPS: i32 = 8;
 const SHADOW_FILTER_TAPS: i32 = 12;
@@ -171,15 +177,14 @@ fn _sunShadowCascade( P: vec3f, N: vec3f, c: i32, noise: f32, pcfNoise: f32, pcs
 			// standard depth: an occluder is closer to the light = smaller depth
 			if ( d < z ) { blockSum += d; blockCount += 1.0; }
 		}
-		if ( blockCount < 0.5 ) { return 1.0; }
+		if ( blockCount < 0.5 ) { return _shadowTap( uvz.xy, c, z ); }
 		// 2. occluder-receiver distance (orthographic: depth is linear over the camera range)
 		let dz = abs( blockSum / blockCount - z ) * range;
 		let penumbraUV = clamp( dz * SD / width, texel * 1.2, texel * 32.0 );
 		// 3. PCF over the penumbra
 		var sum = 0.0;
 		for ( var i = 0; i < SHADOW_FILTER_TAPS; i++ ) {
-			let d = _shadowDepth( uvz.xy + vogelDiskSample( i, SHADOW_FILTER_TAPS, phi + 1.7 ) * penumbraUV, c );
-			sum += select( 0.0, 1.0, z <= d );
+			sum += _shadowTap( uvz.xy + vogelDiskSample( i, SHADOW_FILTER_TAPS, phi + 1.7 ) * penumbraUV, c, z );
 		}
 		return sum / f32( SHADOW_FILTER_TAPS );
 	}

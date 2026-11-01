@@ -3,7 +3,7 @@
 // painted into the colour/mask maps. RG = normal XY, B = roughness, A = AO.
 // Construction, joints and silhouettes remain in the existing geometry.
 export const STATION_SURFACE_SETS = [
-	{ name: 'stationWood', w: 1024, h: 512, mx: 2.8, my: .76, hs: .0009, ao: .35, out: 'indoorWoodA', nra: 'indoorWoodN' },
+	{ name: 'stationWood', w: 1024, h: 512, mx: 2.8, my: .76, hs: .0015, ao: .35, out: 'indoorWoodA', nra: 'indoorWoodN' },
 	{ name: 'stationPlaster', w: 512, h: 512, mx: 1.6, my: 1.6, hs: .0032, ao: .3, out: 'limeA', nra: 'limeN' },
 	{ name: 'stationPaint', w: 512, h: 512, mx: 1, my: .5, hs: .00065, ao: .2, out: null, nra: 'keptPaintN' },
 	{ name: 'stationIron', w: 512, h: 512, mx: 1, my: 1, hs: .0012, ao: .35, out: null, nra: 'castIronN' },
@@ -18,18 +18,23 @@ fn vlgGen( X: f32, Y: f32 ) -> VlgOut {
 	let radius = length( k.xy * vec2f( 2.8 / 5.0, .76 / 5.0 ) );
 	let influence = exp( -radius * 38.0 ) * knotMask;
 	let core = ( 1.0 - smoothstep( .009, .024, radius ) ) * knotMask;
-	let warp = vlgPf( X, Y, 2.0, 4.0, 3, 1203.0, .5 );
-	let rings = Y * 74.0 + warp * 2.8 + influence * 5.5;
+	let warp = vlgPf( X, Y, 2.0, 5.0, 3, 1203.0, .5 );
+	let flow = vlgPn( X, Y, 3.0, 13.0, 1205.0 );
+	// Wider irregular early/latewood bands remain legible at furniture distance.
+	// Long pigment streaks break up the formerly even pinstripe pattern.
+	let rings = Y * 42.0 + warp * 5.0 + flow * .85 + influence * 5.5;
 	let growth = .5 + .5 * sin( rings * VLG_TAU );
-	let late = smoothstep( .68, .95, growth );
+	let late = smoothstep( .55, .95, growth );
 	let fibres = vlgPn( X, Y, 9.0, 200.0, 1207.0 );
 	let pores = smoothstep( .18, .5, -vlgPn( X, Y, 24.0, 160.0, 1209.0 ) );
 	let broad = vlgN01( vlgPf( X, Y, 3.0, 5.0, 3, 1211.0, .5 ) );
+	let figure = vlgPf( X, Y, 2.0, 17.0, 3, 1213.0, .5 );
 	let wear = smoothstep( .45, .8, broad );
-	let height = .5 + late * .12 + fibres * .038 - pores * .035 - core * .06;
-	let tone = .96 - late * .16 + fibres * .025 - core * .25;
-	let rough = clamp( .68 + late * .1 + pores * .08 - wear * .17, .46, .88 );
-	return VlgOut( vec4f( height, rough, 1.0 - pores * .04, 0.0 ), vec4f( vec3f( tone ) * vec3f( 1.0, .985, .96 ), wear ) );
+	let height = .5 + late * .14 + fibres * .03 - pores * .065 - core * .075;
+	let tone = .98 - late * .25 + figure * .20 + fibres * .025 - core * .28 - pores * .045;
+	let rough = clamp( .67 + late * .12 + pores * .12 + figure * .08 - wear * .16, .46, .9 );
+	let pigment = mix( vec3f( 1.0, .985, .96 ), vec3f( 1.0, .95, .88 ), late * .5 );
+	return VlgOut( vec4f( height, rough, 1.0 - pores * .07, 0.0 ), vec4f( vec3f( tone ) * pigment, wear ) );
 }
 `,
 	stationPlaster: /* wgsl */`

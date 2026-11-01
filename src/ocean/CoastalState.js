@@ -12,12 +12,25 @@ export function coastalSample( site, time, strength, x, z, rogue = 0 ) {
 	const mask = ( 1 - smooth( site.width * .4, site.width * .6, across ) )
 		* ( 1 - smooth( 0, site.reach, -along ) ) * ( 1 - smooth( 40, 80, along ) );
 	const pulse = smooth( 0, .13, phase ) * ( 1 - smooth( .13, .49, phase ) );
-	const amplitude = ( .5 + Math.max( 0, strength ) * 4 ) * COAST_SETS[ wave % 5 ] * site.exposure + rogue;
+	const amplitude = ( .5 + Math.max( 0, strength ) * 4 ) * COAST_SETS[ wave % 5 ] * site.exposure;
+	// A broad arriving sea focuses into the rock cutting. Adding the full 48 m
+	// directly to the 13 m landing mask made a vertical rectangular ocean wall.
+	// Offshore the combined field stays below 12 m; the same travelling pulse runs
+	// higher against the rock, then dissipates before the upper lookout.
+	const inland = Math.max( 0, -along );
+	const rogueHalfWidth = 52 + ( 24 - 52 ) * smooth( -12, 26, -along );
+	const rogueMask = ( 1 - smooth( 0, rogueHalfWidth, across ) )
+		* ( 1 - smooth( 0, site.reach, inland ) ) * ( 1 - smooth( 80, 160, along ) );
+	const rogueAmplitude = rogue * ( .20 + .60 * smooth( 0, 32, inland ) );
+	const rogueWeight = clamp( rogue / 48 );
+	const windWave = 1 - .75 * rogueWeight * ( 1 - smooth( 0, 26, inland ) );
 	const ripple = .06 * Math.sin(x*.8+time*1.6) * Math.sin(z*.9+time*1.2);
-	const height = Math.max(0,(amplitude+ripple) * pulse * mask);
+	const height = Math.max(0,(amplitude+ripple) * pulse * mask * windWave + rogueAmplitude * pulse * rogueMask);
 	const draining = phase > .26;
-	const speed = Math.min( 9, amplitude * .9 ) * pulse * mask * ( draining ? .75 : -1 );
-	return { height, flowX: site.dx * speed, flowZ: site.dz * speed, phase, wave, foam: pulse * mask, mask, draining };
+	const speed = Math.min( 9, Math.min( 9, amplitude * .9 ) * pulse * mask
+		+ Math.min( 9, rogueAmplitude * .9 ) * pulse * rogueMask ) * ( draining ? .75 : -1 );
+	const foam = pulse * Math.max( mask, rogueMask * rogueWeight );
+	return { height, flowX: site.dx * speed, flowZ: site.dz * speed, phase, wave, foam, mask, draining };
 }
 export class CoastalState {
 	constructor( terrain ) {

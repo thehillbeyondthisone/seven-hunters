@@ -1,0 +1,54 @@
+{
+  "checked": "2026-10-07",
+  "files": [
+    {
+      "file": "ireland-room-1960s.jpg",
+      "bytes": 464062,
+      "width": 1200,
+      "height": 824,
+      "sha256": "6bccceadb2d71b6fd9a719a8a0ec3ec8e06bbf5af0b284f739e7337739d0a907"
+    },
+    {
+      "file": "ireland-kitchen-outlook-1960s.jpg",
+      "bytes": 164791,
+      "width": 1200,
+      "height": 800,
+      "sha256": "5d42f102580fe6c210b99ec36b1b690ef31fe35ab0179c998e6099d771cc462e"
+    },
+    {
+      "file": "late-service-interior-01.jpg",
+      "bytes": 19811,
+      "width": 280,
+      "height": 400,
+      "sha256": "73f2cb42ca388f19f7d7669554d67942df878894d6c99aaa12ba750f191ee364"
+    },
+    {
+      "file": "late-service-interior-02.jpg",
+      "bytes": 15361,
+      "width": 280,
+      "height": 400,
+      "sha256": "21c4accb78798f8ca82d706d0d11c7d98752b3cd25799da9918b1c58bdacfafd"
+    },
+    {
+      "file": "station-original-sheet-01.jpg",
+      "bytes": 273390,
+      "width": 1512,
+      "height": 1080,
+      "sha256": "9729bfad6ef8b5e6458b624dc2120e6411149e61698e80636d10f39b05e20f2a"
+    },
+    {
+      "file": "station-original-sheet-04.jpg",
+      "bytes": 285569,
+      "width": 1491,
+      "height": 1080,
+      "sha256": "f48e166aafb430560b369f712956c8117e18a2fcdc905a2bfa2864e21d404da0"
+    },
+    {
+      "file": "original-1899-optic-museum.jpg",
+      "bytes": 429271,
+      "width": 697,
+      "height": 973,
+      "sha256": "c40cd8ef9413157c34682b2db9fc82b9957c07f763f3df3aa7439409f998b3db"
+    }
+  ]
+}

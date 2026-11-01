@@ -6,20 +6,24 @@ import { routeGuidance, storyGuidance } from './Guidance.js';
 import { hazeDensityForVisibility } from '../post/AirHaze.js';
 import { Beams } from '../station/Beams.js';
 import { NOTES, EPISODES } from './NextScript.js';
+import { SmokeDiscovery, tramwayMarker } from './NextWatchCutscenes.js';
+import { upkeepHours } from './WatchPacing.js';
+import { DomesticCraft } from '../world/flannan/DomesticCraft.js';
 
 const nextBeat = b => /^d[234]/.test( b );
 const marker = ( at, label, id ) => ( { at: at.clone(), label, id } );
 const within = ( p, R ) => p.x > R.x0 && p.x < R.x1 && p.z > R.z0 && p.z < R.z1;
-const CAPS = { d2kitchen: 35.5, d2crate: 35.5, d2survey: 36.5, d2rest: 39.1, d2light: 39.4, d2wind: 40.4, d2signal: 44, d2sleep: 48.4, d2wake: 52, d2dawn: 56.9, d3journal: 57.1, d3breakfast: 60, d3light: 63.4, d3wind: 64.4, d3signal: 66, d3bank: 66, d3remote: 67, d3return: 67.5, d3sleep: 68, d4journalMorning: 81.1, d4rest: 87.1, d4light: 87.4, d4wind: 88.4, d4signal: 91, d4journal: 92 };
+const CAPS = { d2kitchen: 34, d2crate: 34, d2weather: 34.5, d2lookout: 35, d2survey: 36.5, d2rest: 39.1, d2light: 39.4, d2wind: 40.4, d2signal: 44, d2sleep: 48.4, d2wake: 52, d2dawn: 56.9, d3journal: 57.1, d3breakfast: 60, d3light: 63.4, d3wind: 64.4, d3signal: 66, d3bank: 66, d3remote: 67, d3return: 67.5, d3sleep: 68, d4journalMorning: 81.1, d4rest: 87.1, d4light: 87.4, d4wind: 88.4, d4signal: 91, d4journal: 92 };
 
 export class NextWatch {
-	constructor( story ) { this.s = story; this.busy = false; this.endShown = false; }
+	constructor( story ) { this.s = story; this.busy = false; this.endShown = false; this.smoke = new SmokeDiscovery( this ); this.domestic = new DomesticCraft( this ); }
 	get active() { return nextBeat( this.s.beat ); }
+	get cinematic() { return this.smoke.active; }
 	get state() { return this.s.flags.nextWatch || ( this.s.flags.nextWatch = {} ); }
 
 	install() {
 		const s = this.s, I = s.interact;
-		const later = () => this.active || s.returningLight?.active || s.storm?.active;
+		const later = () => this.active || s.returningLight?.active || s.storm?.active || s.later?.active;
 		const door = ( id, at, name, label ) => {
 			I.add( { id, at, reach: 2.2, size: 0.5, text: () => later() ? `${ s.doors[ name ][ 0 ].target > 0.5 ? 'Shut' : 'Open' } the ${ label }` : 'The kitchen',
 				use: () => later() ? s._toggle( name ) : s.ui.read( NOTES.bed ) } );
@@ -31,11 +35,19 @@ export class NextWatch {
 		const oldUse = kitchen.use;
 		kitchen.use = () => later() ? s._toggle( 'kitchen' ) : oldUse();
 		door( 'berthDoor', BERTH.door, 'berth', 'berth door' );
-		I.add( { id: 'kitchenStove', at: KITCHEN.stove, reach: 2, size: 0.35, hold: 1.2, when: () => this.active,
-			text: () => s.beat === 'd3bank' ? 'Bank the stove before you go' : s.beat === 'd3return' ? 'Look at the stove' : this.state.fireLit ? 'The kitchen stove' : 'Get the stove going', use: () => this.stove() } );
-		I.add( { id: 'storesCrate', at: KITCHEN.crate, size: 0.3, when: () => this.active, text: () => this.state.crate ? 'Read the signal book' : 'Unpack your stores', use: async () => {
+		I.add( { id: 'kitchenStove', at: KITCHEN.stove, reach: 2, size: 0.35, hold: 1.2, when: () => this.active && ( ! this.mealStep() || this.mealStep().id === 'kitchenStove' ),
+			text: () => this.mealStep()?.id === 'kitchenStove' ? this.mealStep().label : s.beat === 'd3bank' ? 'Bank the stove before you go' : s.beat === 'd3return' ? 'Look at the stove' : this.state.fireLit ? 'The kitchen stove' : 'Get the stove going', use: () => this.stove() } );
+		// Existing jug, kettle, cup and loaf are the targets. These are interaction
+		// states on the authored kitchen, not new modeled props or hand poses.
+		for ( const id of [ 'breakfastKettleTake', 'breakfastWater', 'breakfastKettle', 'breakfastTea', 'breakfastBread' ] ) {
+			I.add( { id, at: () => this.mealTarget( id ), reach: 2.1, size: .19, hold: { breakfastKettleTake: .65, breakfastWater: 2.1, breakfastKettle: 2.2, breakfastTea: 2, breakfastBread: 1.5 }[ id ],
+				when: () => this.active && this.mealStep()?.id === id,
+				text: () => this.mealStep()?.label || '', detail: () => this.mealStep()?.detail || '',
+				use: () => this.prepareMeal( id ) } );
+		}
+		I.add( { id: 'storesCrate', at: KITCHEN.crate, size: 0.3, when: () => this.active && ( s.beat === 'd2crate' || !! this.state.crate ), text: () => this.state.crate ? 'Read the signal book' : 'Unpack your stores', use: async () => {
 			await s.ui.read( this.state.crate ? this.signalBook() : NOTES.crate );
-			if ( s.beat === 'd2crate' ) { this.state.crate = true; s.setBeat( 'd2survey' ); }
+			if ( s.beat === 'd2crate' ) { this.state.crate = true; this.state.weatherIntroduced = true; s.setBeat( 'd2weather' ); }
 		} } );
 		I.add( { id: 'berth', at: BERTH.bed, size: 0.5, when: () => this.active, text: () => this.sleepText(), use: () => this.sleep() } );
 		I.add( { id: 'haulingBrake', at: HAULING_SHED.brake, reach: 2, size: 0.4, hold: 3,
@@ -63,11 +75,14 @@ export class NextWatch {
 
 	goal() {
 		const s = this.s, b = s.beat;
-		if ( s.lamp.lit && s.lamp.wind < 0.15 && ! [ 'd3remote', 'd3return' ].includes( b ) ) return 'The machine is running down. Wind it.';
+		if ( this.mealStep() ) return this.mealStep().goal;
+		if ( this.smoke.active ) return 'Smoke from the house. I banked the stove before I left.';
+		if ( s.lamp.lit && s.lamp.wind < 0.15 && ! this.protectedDuty() ) return 'The machine is running down. Wind it.';
+		if ( this.observationDue() ) return s.weatherObservations.goal();
 		return {
 			d2kitchen: 'Open the kitchen door beneath the clock. Get the stove going.', d2crate: 'Unpack your crate beside the kitchen table.',
 			d2survey: 'Follow the west tramway to the upper hauling shed. Inspect the brake; stay above the landing stairs.',
-			d2rest: 'Return to the station. Your berth is through the kitchen. Rest until sunset.',
+			d2rest: this.state.fogReturned ? 'Your berth is through the kitchen. Rest until sunset.' : 'Follow the tramway rails back to the station. Stay above the landing stairs.',
 			d2light: 'Light the lamp for the second watch.', d2wind: 'Wind the machine fully.', d2signal: 'Cate is watching. Answer at the signal lamp on the balcony.',
 			d2sleep: 'Keep the watch until the small hours, then wind fully and rest in your berth.', d2wake: 'Your two hours are up. Wind the machine again.',
 			d2dawn: 'Keep the watch until sunrise, then put out the lamp.', d3journal: 'Write up the second watch at the desk.',
@@ -80,6 +95,21 @@ export class NextWatch {
 			d4light: 'Light the lamp at sunset.', d4wind: 'Wind the machine.', d4signal: 'Gallan Head is in sight. Ask Cate at the signal lamp.',
 			d4journal: 'Write the evening’s remarks in the journal.', d4complete: '',
 		}[ b ] || '';
+	}
+
+	observationDue() {
+		const s = this.s;
+		if ( [ 'd2weather', 'd2lookout' ].includes( s.beat ) && ! s.obs[ 33 ] ) return 33;
+		// Finish the conversation before the evening routine. During this first
+		// taught watch, a pending round waits for the player instead of expiring.
+		if ( s.beat === 'd2sleep' && this.state.weatherIntroduced && s.lamp.lit ) {
+			for ( const at of [ 42, 45 ] ) if ( s.h >= at - .1 && ! s.obs[ at ] ) return at;
+		}
+		return 0;
+	}
+
+	nextObservation() {
+		return this.state.weatherIntroduced ? [ 42, 45 ].find( at => ! this.s.obs[ at ] ) : undefined;
 	}
 
 	lensText() {
@@ -127,6 +157,7 @@ export class NextWatch {
 		if ( ! this.active ) return;
 		const n = this.state.episode;
 		if ( this.state.lanternInBerth ) this.s.hand.setRest( BERTH.lantern, 0.4 );
+		this.smoke.release();
 		if ( n && EPISODES[ n ] ) {
 			this.state.episode = 0; this.episode( n ); this.s.watcher.load( savedWatcher );
 		} else this.s.watcher.load( savedWatcher );
@@ -140,8 +171,71 @@ export class NextWatch {
 		s.hand.glow = 1;
 	}
 
+	// No running-down deadline competes with domestic work, a conversation or
+	// an island round. The clock and the weather can still move within the beat.
+	protectedDuty() {
+		return !! this.s.signal || this.s.watcher.talking || this.smoke.active ||
+			[ 'd2kitchen', 'd2crate', 'd2weather', 'd2lookout', 'd2survey', 'd2rest', 'd3breakfast', 'd3bank', 'd3remote', 'd3return' ].includes( this.s.beat );
+	}
+
+	mealSteps() {
+		if ( ! [ 'd2kitchen', 'd3breakfast' ].includes( this.s.beat ) ) return [];
+		const full = this.s.beat === 'd2kitchen';
+		return [
+			...( full ? [ { id: 'kitchenStove', label: 'Open the stove draught and light the coals', goal: 'Open the kitchen door beneath the clock. Hold E at the stove to light the coals.', result: 'The coals have caught. I can take the kettle now.' } ] : [] ),
+			{ id: 'breakfastKettleTake', label: 'Take the kettle by its handle', detail: 'Carry it between the shelf, range and table.', goal: 'Take the kettle from the range or kitchen table.', result: 'I have the kettle. ' + ( full ? 'The water jug is on the shelf.' : 'Back to the range to warm it.' ) },
+			...( full ? [
+				{ id: 'breakfastWater', label: 'Fill the kettle from the water jug', detail: 'The jug is on the kitchen shelf.', goal: 'Use the water jug on the kitchen shelf to fill the kettle.', result: 'Water in the kettle. Back to the range.' } ] : [] ),
+			{ id: 'breakfastKettle', label: full ? 'Set the kettle on the hot range' : 'Warm the kettle on the range', detail: 'Hold until the water is ready.', goal: 'Hold E at the kettle on the range to heat the water.', result: 'The kettle is ready. I can make the tea.' },
+			{ id: 'breakfastTea', label: 'Pour the tea into your cup', detail: 'The cup is beside the bread on the kitchen table.', goal: 'Make the tea in the cup on the kitchen table.', result: 'A cup of tea. Something warm before the round.' },
+			{ id: 'breakfastBread', label: 'Break bread for breakfast', detail: 'Finish breakfast at the table.', goal: 'Break some bread at the kitchen table to finish breakfast.', result: 'Tea and bread. I can get on with the day.' },
+		];
+	}
+	mealState() {
+		const day = this.s.beat.slice( 0, 2 );
+		const meals = this.state.meals || ( this.state.meals = {} );
+		return meals[ day ] || ( meals[ day ] = { stage: 0, kettleAt: Object.values( meals ).some( meal => meal.kettleAt === 'table' ) ? 'table' : 'range' } );
+	}
+	mealStep() { const steps = this.mealSteps(); return steps.length ? steps[ this.mealState().stage || 0 ] || null : null; }
+	mealTarget( id ) { return this.domestic.target( id ); }
+
+	async prepareMeal( id ) {
+		if ( this.busy ) return;
+		const s = this.s, step = this.mealStep();
+		if ( ! step || step.id !== id ) return;
+		this.busy = true;
+		try {
+			const meal = this.mealState();
+			if ( ! meal.started ) { meal.started = s.h; s.onStoryCue?.( 'morning-preparation' ); }
+			if ( id === 'kitchenStove' || id === 'breakfastKettle' ) { this.state.fireLit = true; this.state.banked = false; }
+			if ( id === 'breakfastKettleTake' ) { meal.kettleCarried = true; meal.kettleAt = 'carried'; }
+			if ( id === 'breakfastWater' ) meal.water = true;
+			if ( id === 'breakfastKettle' ) meal.hot = true;
+			if ( id === 'breakfastTea' ) { meal.tea = true; meal.kettleCarried = false; meal.kettleAt = 'table'; }
+			if ( id === 'breakfastBread' ) meal.breadBroken = true;
+			meal.stage ++; s.toast( step.result, 4200 );
+			if ( meal.stage === this.mealSteps().length ) {
+				meal.finished = s.h; s.row( s.h, 'Made tea and bread in the kitchen.' );
+				s.onStoryCue?.( 'morning-preparation-end' );
+				s.setBeat( s.beat === 'd2kitchen' ? 'd2crate' : 'd3light' );
+			}
+		} finally { this.busy = false; s.save(); }
+	}
+
+	releaseFogLighting() {
+		if ( this.fogShafts !== undefined && this.s.app.haze?.shafts ) this.s.app.haze.shafts.value = this.fogShafts;
+		this.fogShafts = undefined;
+	}
+	async fogThought() {
+		if ( this.busy || this.state.fogThought ) return;
+		this.busy = true; this.state.fogThought = true; this.s.save();
+		try { await this.s.ui.read( NOTES.fogReturn ); }
+		finally { this.busy = false; this.s.save(); }
+	}
+
 	async stove() {
 		const s = this.s;
+		if ( this.mealStep() ) return this.prepareMeal( 'kitchenStove' );
 		if ( this.busy ) return;
 		this.busy = true;
 		try {
@@ -152,19 +246,17 @@ export class NextWatch {
 				s.lamp.wind = 1; s.lamp.warned = false; s.row( s.h, 'Machine wound before the evening round.' ); s.setBeat( 'd3remote' );
 			} else if ( s.beat === 'd3return' ) {
 				await s.ui.read( NOTES.embers ); this.state.inspected = s.h; s.setBeat( 'd3sleep' );
-			} else if ( [ 'd2kitchen', 'd3breakfast' ].includes( s.beat ) ) {
-				await s.ui.read( NOTES.breakfast ); this.state.fireLit = true; s.row( s.h, 'Made tea in the kitchen.' );
-				s.setBeat( s.beat === 'd2kitchen' ? 'd2crate' : 'd3light' );
 			} else await s.ui.read( this.state.banked ? NOTES.embers : NOTES.breakfast );
 		} finally { this.busy = false; s.save(); }
 	}
 	async brake() {
 		const s = this.s;
 		if ( s.beat === 'd2survey' ) {
-			await s.ui.read( NOTES.survey ); this.state.survey = true; s.row( s.h, 'Upper hauling gear inspected. Brake holds; retaining chain loose.' ); s.setBeat( 'd2rest' );
+			await s.ui.read( NOTES.survey ); this.state.survey = true; this.state.fogReturned = false; s.row( s.h, 'Upper hauling gear inspected. Brake holds; retaining chain loose.' ); s.setBeat( 'd2rest' );
 		} else if ( s.beat === 'd3remote' ) {
-			// The job finishes in the player's view. No fade, forced turn, discovery toast or sound cue.
-			this.state.chainSecured = s.h; s.row( s.h, 'Retaining chain secured on the upper hauling brake.' ); s.setBeat( 'd3return' );
+			// The close work finishes here; the first clear view outside supplies
+			// a brief, mandatory smoke discovery without a musical cue.
+			this.state.chainSecured = s.h; s.row( s.h, 'Retaining chain secured on the upper hauling brake.' ); s.setBeat( 'd3return' ); s.save();
 		}
 	}
 
@@ -181,6 +273,7 @@ export class NextWatch {
 		this.busy = true;
 		try {
 			if ( [ 'd2rest', 'd3light', 'd4rest' ].includes( b ) ) {
+				if ( b === 'd2rest' ) this.state.fogReturned = true;
 				const t = b === 'd2rest' ? 39.12 : b === 'd3light' ? 63.12 : 87.12;
 				await s._skipTo( t, 'A little sleep. Then the evening watch.' );
 				s.setBeat( b === 'd2rest' ? 'd2light' : b === 'd4rest' ? 'd4light' : b );
@@ -206,12 +299,19 @@ export class NextWatch {
 	}
 
 	watchText() {
+		if ( this.observationDue() ) return '';
+		if ( this.s.beat === 'd2sleep' && this.nextObservation() ) return `Keep the watch until the ${ this.nextObservation() === 42 ? 'six' : 'nine' } o’clock observations`;
 		if ( this.s.beat === 'd2sleep' && this.s.h < 48.35 ) return 'Keep the watch until the small hours';
 		if ( this.s.beat === 'd2dawn' && this.s.h < 56.65 ) return 'Keep the watch until sunrise';
 		return '';
 	}
 	async keepWatch() {
 		const s = this.s;
+		if ( this.observationDue() ) return;
+		if ( s.beat === 'd2sleep' && this.nextObservation() ) {
+			await s._skipTo( Math.max( s.h, this.nextObservation() ), 'You keep the watch until the next weather readings.' );
+			s.save(); return;
+		}
 		if ( s.beat === 'd2sleep' ) {
 			await s.ui.fade( 'The watch passes. You tend the light between rounds.' ); s.h = 48.4; s.lamp.wind = 0.65; s.lamp.warned = false; s.row( 45.4, 'Machine wound.' );
 		} else if ( s.beat === 'd2dawn' ) {
@@ -239,26 +339,37 @@ export class NextWatch {
 	showEnd() {
 		if ( this.endShown ) return;
 		this.endShown = true;
-		this.s.ui.end( { heading: 'The next watch', rows: this.s.rows.filter( r => r[ 0 ] >= 57 ).map( ( [ h, text ] ) => [ this.date( h ), text ] ), lines: [ 'The kitchen is warm. Beyond the glass, the sea is dark.', 'Cate is watching from Gallan Head.', 'The next clear watch is ahead. The relief has still to come.' ], credits: 'Seven Hunters. Walter Innes and Cate Macleod are fictional. The new rooms, hauling shed and incidents are authored reconstructions.', next: { label: 'Keep the next clear watch', use: () => this.s.returningLight.begin() } } );
+		this.s.ui.end( { heading: 'The next watch', rows: this.s.rows.filter( r => r[ 0 ] >= 57 ).map( ( [ h, text ] ) => [ this.date( h ), text ] ), lines: [ 'The kitchen is warm. Beyond the glass, the sea is dark.', 'Cate is watching from Gallan Head.', 'The next clear watch is ahead. The relief has still to come.' ], credits: 'Seven Hunters. Walter Innes and Cate Macleod are fictional. The new rooms, hauling shed and incidents are authored reconstructions.', next: { label: 'Keep the photography watch', use: () => this.s.later.begin() } } );
 	}
 
 	guidance() {
 		const s = this.s, p = s.app.player.position, b = s.beat;
 		if ( b === 'd4complete' ) return null;
 		let id, zone = 'room';
-		if ( s.lamp.lit && s.lamp.wind < 0.15 && ! [ 'd3remote', 'd3return' ].includes( b ) || /wind$/.test( b ) || b === 'd2wake' ) { id = 'crank'; zone = 'lantern'; }
+		const south = s.doors.southGate, gate = STATION.southGate;
+		if ( south?.[ 0 ].target < .5 && [ 'd2survey', 'd2rest', 'd3remote', 'd3return' ].includes( b ) &&
+			! within( p, ROOM ) && ! within( p, KITCHEN ) && ! within( p, BERTH ) && p.y < TOWER.floor + .65 && Math.hypot( p.x - gate.x, p.z - gate.z ) < 14 ) {
+			const action = s.interact.get( 'southGate' );
+			return marker( typeof action.at === 'function' ? action.at() : action.at, 'Unwrap the rope and open the south gate - E', 'southGate' );
+		}
+
+		if ( s.lamp.lit && s.lamp.wind < 0.15 && ! this.protectedDuty() || /wind$/.test( b ) || b === 'd2wake' ) { id = 'crank'; zone = 'lantern'; }
+		else if ( this.observationDue() ) {
+			const weather = s.weatherObservations.guidance();
+			return weather ? routeGuidance( p, weather, weather.zone ) : null;
+		}
 		else if ( /signal$/.test( b ) ) { id = s.hasTelescope ? 'signal' : 'telescope'; zone = s.hasTelescope ? 'gallery' : 'lantern'; }
 		else if ( /light$/.test( b ) || b === 'd2dawn' && ! this.watchText() || b === 'd4journalMorning' && s.lamp.lit ) { id = 'lens'; zone = 'lantern'; }
 		else if ( /journal/i.test( b ) ) id = 'journal';
 		else if ( b === 'd2crate' ) id = 'storesCrate';
+		else if ( this.mealStep() ) id = this.mealStep().id;
 		else if ( b === 'd2survey' || b === 'd3remote' ) {
 			if ( p.y > TOWER.floor + 1 && Math.hypot( p.x, p.z ) < 4.2 ) return routeGuidance( p, marker( HAULING_SHED.door, 'Upper hauling shed', 'haulingShed' ), 'yard' );
 			if ( within( p, BERTH ) ) return marker( BERTH.door, 'Kitchen', 'berthDoor' );
 			if ( within( p, KITCHEN ) ) return marker( KITCHEN.door, 'Keepers’ room', 'kitchenDoor' );
 			if ( within( p, ROOM ) ) return marker( new Vector3( ROOM.door.x, TOWER.floor +1, ROOM.door.z ), 'Yard door', 'houseDoor' );
 			if ( p.z < 23 && p.x > -30 ) return marker( new Vector3( -12, STATION.yard +1, 23 ), 'West tramway', 'westTramway' );
-			const path = [ [ -22, 27 ], [ -45, 27.5 ], [ -80, 27 ], [ -120, 29 ], [ -160, 35 ] ];
-			if ( p.x > -151 ) { const next = path.find( q => q[ 0 ] < p.x - 5 ) || path.at( -1 ); return marker( new Vector3( next[ 0 ], s.app.terrainData.heightAt( ...next ) +1, next[ 1 ] ), 'West tramway', 'westTramway' ); }
+			if ( p.x > -151 ) return tramwayMarker( s, false );
 			const inShed = Math.abs( p.x +160 ) < 1.75 && p.z > 38.3 && p.z < 41.6;
 			if ( ! inShed ) {
 				let x, z;
@@ -269,12 +380,10 @@ export class NextWatch {
 				return marker( new Vector3( -160, HAULING_SHED.floor +1, 40.8 ), 'Upper hauling shed', 'haulingShed' );
 			}
 			id = 'haulingBrake'; zone = 'shed';
-		} else if ( [ 'd3return', 'd2rest' ].includes( b ) && p.x < -30 ) {
+		} else if ( [ 'd3return', 'd2rest' ].includes( b ) && p.x < -15 && p.z > 23 ) {
 			if ( p.x < -157.3 && p.z > 37.8 && p.z < 43.5 ) return marker( new Vector3( -160, HAULING_SHED.floor +1, 44 ), 'Tramway', 'shedExit' );
-			if ( p.x < -155 && p.z > 41.8 ) return marker( new Vector3( -155, HAULING_SHED.floor +1, 44 ), 'Station', 'return' );
-			const x = p.x < -125 ? -120 : p.x < -85 ? -80 : p.x < -50 ? -45 : -22;
-			const z = x === -120 ? 29 : 27;
-			return marker( new Vector3( x, s.app.terrainData.heightAt( x, z ) +1, z ), 'Station', 'return' );
+			if ( p.x < -155.7 && p.z > 41.8 ) return marker( new Vector3( -155, HAULING_SHED.floor +1, 44 ), 'Station', 'return' );
+			return tramwayMarker( s, true );
 		} else if ( [ 'd3return', 'd2rest' ].includes( b ) && p.z > 20 ) {
 			const z = p.z > 21.5 && Math.abs( p.x +12 ) > 1 ? 24 : 18.5;
 			return marker( new Vector3( -12, STATION.yard +1, z ), 'Station', 'return' );
@@ -285,7 +394,7 @@ export class NextWatch {
 		else if ( this.watchText() ) { id = p.y > TOWER.floor +1 ? 'stool' : 'chair'; zone = id === 'stool' ? 'lantern' : 'room'; }
 		else id = 'kitchenStove';
 		const it = s.interact.get( id ); if ( ! it ) return null;
-		const at = typeof it.at === 'function' ? it.at() : it.at, target = marker( at, id === 'kitchenStove' && b === 'd3return' ? 'Kitchen' : id === 'berth' ? 'Your berth' : id === 'lens' ? 'Lamp · hold E' : id === 'crank' ? 'Wind · hold E' : id === 'signal' ? 'Signal lamp · E' : id === 'journal' ? 'Journal · E' : id === 'storesCrate' ? 'Your stores · E' : id === 'haulingBrake' ? 'Hauling brake · hold E' : 'Keep the watch · E', id );
+		const at = typeof it.at === 'function' ? it.at() : it.at, target = marker( at, id === 'kitchenStove' && b === 'd3return' ? 'Kitchen' : id === 'berth' ? 'Your berth' : id === 'lens' ? 'Lamp · hold E' : id === 'crank' ? 'Wind · hold E' : id === 'signal' ? 'Signal lamp · E' : id === 'journal' ? 'Journal · E' : id === 'storesCrate' ? 'Your stores · E' : id === 'haulingBrake' ? 'Hauling brake · hold E' : this.mealStep() ? this.mealStep().label + ' - hold E' : 'Keep the watch · E', id );
 		if ( zone === 'shed' ) return target;
 		const inKitchen = within( p, KITCHEN ), inBerth = within( p, BERTH );
 		// Approach the house's east door around the south wing, not through its corner.
@@ -301,16 +410,26 @@ export class NextWatch {
 	}
 
 	update( dt, modal ) {
-		const s = this.s, app = s.app, b = s.beat, hold = this.busy || s.paused || modal || app.freeCam || app.ui?.ui?.photoMode;
+		const s = this.s, app = s.app, b = s.beat, hold = this.busy || this.smoke.active || s.paused || modal || app.freeCam || app.ui?.ui?.photoMode || !! globalThis.document?.hidden;
 		if ( ! hold && b !== 'd4complete' ) {
-			const cap = CAPS[ b ] ?? s.h, rate = [ 'd3remote', 'd3return' ].includes( b ) ? 1 / 300 : s.watcher.talking ? 1 / 600 : 1 / 150;
-			const dh = Math.max( 0, Math.min( dt * rate, cap -s.h ) ); s.h += dh; s.lamp.update( dt, dh );
+			const round = b === 'd2sleep' ? this.nextObservation() : undefined;
+			const cap = round ? Math.min( CAPS[ b ], Math.max( s.h, round ) ) : CAPS[ b ] ?? s.h, rate = [ 'd3remote', 'd3return' ].includes( b ) ? 1 / 300 : s.watcher.talking ? 1 / 600 : 1 / 150;
+			const dh = Math.max( 0, Math.min( dt * rate, cap -s.h ) ); s.h += dh; s.lamp.update( dt, upkeepHours( s, dh ) );
 		} else s.lamp.update( dt, 0 );
 		s._applyClock();
+		const daylightFog = b.startsWith( 'd2' ) && ! this.state.fogReturned && ! [ 'd2light', 'd2wind', 'd2signal', 'd2sleep', 'd2wake', 'd2dawn' ].includes( b );
 		const remoteFog = [ 'd3remote', 'd3return', 'd3sleep' ].includes( b );
-		const density = hazeDensityForVisibility( remoteFog ? 2.5 : 60 );
-		if ( app.haze ) app.haze.density.value = density;
-		if ( app.clouds?.coverage ) app.clouds.coverage.value = remoteFog ? 0.82 : 0.62;
+		// Author-controlled continuity, not a claim about recorded January weather.
+		const density = hazeDensityForVisibility( daylightFog ? .065 : remoteFog ? 2.5 : 60 );
+		if ( app.haze ) {
+			app.haze.density.value = density;
+			// Dense, overcast haar has no distinct sun shafts. Keeping the direct
+			// shaft term at full strength leaves distant silhouettes unnaturally
+			// punched out of the fog even at the correct optical depth.
+			if ( daylightFog && app.haze.shafts ) { this.fogShafts ??= app.haze.shafts.value; app.haze.shafts.value = 0; }
+			else this.releaseFogLighting();
+		}
+		if ( app.clouds?.coverage ) app.clouds.coverage.value = daylightFog || remoteFog ? 0.82 : 0.62;
 		Beams.uniforms.far.value[ 1 ].w = 0;
 		for ( const ds of Object.values( s.doors ) ) for ( const d of ds ) updateDoor( d, dt );
 		const want = s.signal || s.hasTelescope && app.input.rightDown && app.input.enabled && ! hold;
@@ -321,26 +440,29 @@ export class NextWatch {
 		if ( s._leaveIn > 0 && ( s._leaveIn -= dt ) <= 0 && s.signal ) s._leaveSignal();
 		if ( s.signal ) { app.input.enabled = false; app.camera.position.set( TOWER.signalStand.x, TOWER.deck +1.62, TOWER.signalStand.z ); app.camera.lookAt( s._herRender( new Vector3() ) ); app.player.prompt = null; }
 		else if ( ! hold ) s.interact.update( dt );
+		s.weatherObservations.update();
+		if ( ! hold && b === 'd2weather' && s.weatherObservations.lessonInstrumentsComplete() ) s.setBeat( 'd2lookout' );
+		if ( ! hold && [ 'd2weather', 'd2lookout' ].includes( b ) && s.obs[ 33 ] ) { this.state.weatherLesson = true; s.setBeat( 'd2survey' ); }
 		if ( /signal$/.test( s.beat ) && s.watcher.state === 'done' && ! s.watcher.lost ) {
 			const n = Number( s.beat[ 1 ] ); this.state[ `conversation${ n }` ] = true;
 			s.setBeat( n === 2 ? 'd2sleep' : n === 3 ? 'd3bank' : 'd4journal' );
 		}
 		const smokeStrength = [ 'd3return', 'd3sleep' ].includes( s.beat ) ? 1 : this.state.fireLit && ! this.state.banked ? 0.3 : 0;
-		s.moving.smoke?.update( hold ? 0 : dt, app.camera, smokeStrength );
+		const smokePaused = this.busy || s.paused || modal || app.freeCam || app.ui?.ui?.photoMode || app.devMenu?.open || app.mobile?.paused || globalThis.document?.hidden;
+		s.moving.smoke?.update( smokePaused ? 0 : dt, app.camera, smokeStrength );
 		const fire = app.localLights?.sources.find( l => l.kind === 'kitchenFire' ); if ( fire ) fire.scale = this.state.fireLit ? this.state.banked ? 0.12 : 1 : 0;
 		if ( s.moving.haulingChains ) {
 			s.moving.haulingChains.loose.visible = ! this.state.chainSecured;
 			s.moving.haulingChains.secured.visible = !! this.state.chainSecured;
 		}
 		const p = app.player.position, outsideShed = Math.abs( p.x - HAULING_SHED.x ) > 2.5 || Math.abs( p.z - HAULING_SHED.z ) > 2.1;
-		if ( b === 'd3return' && outsideShed && ! hold && ! this.state.smokeSeen && p.distanceTo( KITCHEN.chimney ) > 35 ) {
-			const plume = KITCHEN.chimney.clone().add( new Vector3( 3, 7, 1 ) ), direction = plume.clone().sub( app.camera.position ).normalize();
-			let clear = true;
-			for ( let i = 1; i < 20 && clear; i ++ ) {
-				const q = app.camera.position.clone().lerp( plume, i /20 ); clear = q.y > app.terrainData.heightAt( q.x, q.z ) +0.25;
-			}
-			if ( clear && new Vector3( 0, 0, -1 ).applyQuaternion( app.camera.quaternion ).dot( direction ) > Math.cos( MathUtils.degToRad( 25 ) ) ) { this.state.smokeSeen = s.h; s.save(); }
+		if ( b === 'd2rest' && this.state.survey && ! this.state.fogReturned ) {
+			if ( p.x > -15 && p.z < 20 ) { this.state.fogReturned = true; s.save(); }
+			else if ( outsideShed && p.x < -30 && ! hold ) this.fogThought();
 		}
+		if ( this.smoke.active ) this.smoke.update( dt, !! ( s.paused || modal || app.freeCam || app.ui?.ui?.photoMode || app.devMenu?.open || app.mobile?.paused || globalThis.document?.hidden ) );
+		else if ( b === 'd3return' && outsideShed && ! hold && ! this.state.smokeSeen && this.smoke.clearView() ) this.smoke.start();
+
 		s.ui.setClock( `${ this.date( s.h ) } · ${ s.dayText() }` ); s.ui.setObjective( this.goal() ); s.ui.guidance( storyGuidance( s ), app.camera, !! app.player.prompt );
 		s.saveT += dt; if ( s.saveT > 20 && ! hold ) s.save();
 		if ( b === 'd4complete' && ! hold ) this.showEnd();

@@ -454,6 +454,11 @@ export function createHardMaterial( T ) {
 	let rust = smoothstep( thr - 0.06, thr + 0.06, HA.r ) * hasRust;
 	var base = aTint * ( 1.0 - HA.b * 0.2 ) * ( ( HA.r - 0.5 ) * 0.1 + 1.0 );
 	base = mix( base, vec3f( 0.3, 0.3, 0.29 ), HA.g * mix( 0.55, 0.045, mat.maintenance ) * hasRust * ( 1.0 - rust ) );
+#if STATION_IRON
+	// Negative rust marks maintained enamel: no legacy scratch/rust albedo.
+	let enamel = 1.0 - step( -0.5, aData.y );
+	base = mix( base, aTint * ( .97 + ( HN.b - .55 ) * .06 ), enamel );
+#endif
 	let rustCol = mix( vec3f( 0.12, 0.045, 0.02 ), vec3f( 0.4, 0.17, 0.06 ), smoothstep( 0.3, 0.9, HA.r ) );
 	let hardCol = mix( base, rustCol, rust ) * mix( 1.0, HN.a, 0.5 );
 #if STATION_IRON

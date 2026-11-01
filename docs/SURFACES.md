@@ -153,3 +153,81 @@ The mobile profile forces the 16 sampled-texture limit and checks the actual
 scene shaders; this is distinct from physical phone or headset validation.
 Surface microstructure remains an artistic reconstruction. All comparisons
 and changes in this pass are local.
+
+## Keepers’ room wall and timber — 15 October 2026
+
+The bedroom partitions accidentally passed `HARD` vertex data to
+`stationMasonry`. This selected exposed coursed stone; the box builder's timber
+UV orientation rotated those joints on tall wall pieces. The partitions now
+use the plaster data layout, and their ceiling uses painted timber data.
+Limewash uses continuous world-plane projection across doorway pieces, so
+lintels do not rotate or restart the wash and trowel marks.
+
+Indoor timber now has wider irregular growth bands, longitudinal pigment
+variation, deeper shallow pores and more varied roughness. The existing baked
+maps and mip chains are retained at the same resolution and memory cost.
+Explicit texture gradients exclude per-board random offsets from mip
+selection, preserving grain at floorboard boundaries without introducing
+unfiltered fine detail. No mesh or collision changes are involved.
+
+Matched daylight, night, close dresser and table views are in
+`artifacts/room-surfaces/index.html`; the original source snapshots are in
+`artifacts/room-surfaces/original/`. Reproduce with:
+
+```powershell
+node tools/shots/room-surfaces.mjs after
+node test/room-materials.mjs
+node test/station-surfaces.mjs artifacts/room-surfaces/maps
+node test/flannan.mjs
+node node_modules/vite/bin/vite.js build
+```
+
+The material-layout regression, GPU map readbacks, station geometry checks
+and production build pass. The surface map memory budget remains 10.67 MiB.
+
+## Balcony and designated observation bays — 15 October 2026
+
+The balcony uses radial stone flags with filtered joints, smoother rail
+silhouettes, bolted stanchion shoes and collars, perimeter drainage fittings,
+and maintained enamel on the lantern drum, door and ironwork. A timber hand-rest
+and inset brass floor marker identify each of two broad lookout areas. The pale
+timber hand-rest spans 1.8 metres and a local on-screen marker names the rail. These
+details are authored reconstruction. The existing walkway, door swing and
+collision boundaries remain; the original circular floor is retained.
+
+`GalleryStations.js` defines the east and west standing areas shared by their
+physical fittings, interaction eligibility, waypoint guidance and debug view.
+Sea readings begin in the day-two daylight lesson, followed by second-evening
+rounds. Any balcony position with an outward view and clear sight of deep water
+is accepted. The local rail target uses 2.5 m reach and an 80-degree aim cone;
+water sampling tolerates a broad view, including the horizon. Landmark actions
+accept a 35-degree aim cone and keep visible names after identification.
+Completing the reading removes the prompt until the next round. Leaving the balcony or losing
+eligibility releases and clears the unfinished hold.
+
+Holding the balcony rail is a continuous lookout at those bays, with no task
+completion or jump in the watch clock. Release to move on; deliberate waiting
+for the next duty remains at the chair and stool inside. Landing safety rails remain
+at their existing designated positions and become available during heavy seas,
+actual wash, or the storm chapter; recovery rungs remain usable in an emergency.
+
+Open backtick → **Interaction hot zones** → **Show hot zones** to inspect
+registered interactions, active eligibility, selected targets, aim radius,
+reach and standing areas. Inactive zones can be hidden. The overlay is read-only,
+updates at 20 Hz while enabled and allocates no GPU textures or meshes.
+
+Reproduction:
+
+```powershell
+node test/gallery-hotspots.mjs
+node test/demo-story.mjs --weather-walk
+node test/coastal-safety.mjs
+node tools/shots/balcony-pass.mjs after
+```
+
+`artifacts/balcony-pass/` contains five matched before/after views and source
+snapshots. `test/gallery-browser.html` offers apparatus-duty, observation-round,
+idle-watch and west-bay review states without writing watch saves. Both
+observation rounds pass at walking speed with the existing deadlines and lamp
+duties. The new geometry adds 4,176 static station triangles plus the separate
+rail fittings; no new texture sets are allocated.

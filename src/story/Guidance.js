@@ -49,9 +49,9 @@ const galleryDoor = () => marker( v( Math.cos( TOWER.galleryDoor ) * 2.28, TOWER
 function stair( p, up ) {
 
 	const T = TOWER, H = T.hatch;
-	if ( up ) return marker( v( Math.cos( T.start + .18 ) * 1.35, T.floor + 1, Math.sin( T.start + .18 ) * 1.35 ), 'Climb to the lantern · E', 'towerUp' );
+	if ( up ) return marker( v( Math.cos( T.start + .18 ) * 1.35, T.floor + 1, Math.sin( T.start + .18 ) * 1.35 ), 'Take the stairs up · E', 'towerUp' );
 	return marker( v( Math.cos( H.angle ) * H.r - Math.sin( H.angle ) * ( H.run + .15 ), T.deck + 1.1,
-		Math.sin( H.angle ) * H.r + Math.cos( H.angle ) * ( H.run + .15 ) ), 'Descend to the keeper’s room · E', 'towerDown' );
+		Math.sin( H.angle ) * H.r + Math.cos( H.angle ) * ( H.run + .15 ) ), 'Take the stairs down · E', 'towerDown' );
 
 }
 
@@ -64,6 +64,15 @@ export function routeGuidance( p, target, zone ) {
 	const above = p.y > TOWER.floor + 0.65 && r < 4.2;
 	const inside = room => p.x>room.x0&&p.x<room.x1&&p.z>room.z0&&p.z<room.z1&&Math.abs(p.y-TOWER.floor)<1;
 	const kitchen=inside(KITCHEN),berth=inside(BERTH);
+	const west=p.x<-9.3&&p.x>-21.4&&p.z>-1.2&&p.z<5.4&&Math.abs(p.y-TOWER.floor)<1;
+	const secondDoor=v(-15.3,TOWER.floor+1,2.6);
+	if(west){
+		if(p.x<-15.3&&(zone!=='room'||target.at.x>-15.3))return marker(secondDoor,'First bedroom · E','secondBedroom');
+		if(p.x>-15.3&&zone==='room'&&target.at.x<-15.6)return marker(secondDoor,'Second bedroom · E','secondBedroom');
+		if(zone!=='room'||target.at.x>-9.3)return marker(ROOM.westDoor,'Keepers’ room · E','westBedrooms');
+	}
+	if(inRoom&&zone==='room'&&target.at.x<-9.6)return marker(ROOM.westDoor,'West bedrooms · E','westBedrooms');
+	if(p.x>7.25&&p.x<11.35&&p.z>-4.35&&p.z<-.85&&(target.at.z>-.85||target.at.x<7.25))return marker(v(9.3,STATION.yard+1,-.58),'Workshop door · E','workshopDoor');
 	if(berth&&(target.at.z<10.8||zone!=='room'))return marker(BERTH.door,'Berth door · E','berthDoor');
 	if(kitchen&&zone==='room'&&target.at.z>10.8)return marker(BERTH.door,'Berth door · E','berthDoor');
 	if((kitchen||berth)&&(target.at.z<5.4||zone!=='room'))return marker(KITCHEN.door,'Keepers’ room · E','kitchenDoor');
@@ -114,15 +123,29 @@ export function routeGuidance( p, target, zone ) {
 
 }
 
+// An equipment reminder alongside the current duty, so urgent winding or
+// weather work cannot hide the lantern before the player has collected it.
+export function lanternPickupGuidance( s ) {
+
+	if ( [ 'intro', 'crossing', 'end' ].includes( s.beat ) || s.hand?.carried || ! s.hand?.rest || s.signal || s.tel > .3 || s.paused || s.ui.open || s.app.freeCam || s.app.devMenu?.open || s.app.ui?.ui?.photoMode || s.app.settings.guidance === false || s.app.keeperSafety?.active && s.app.keeperSafety.state !== 'normal' ) return null;
+	const at = s.hand.rest.position.clone(); at.y += .2;
+	if ( s.app.player.position.distanceTo( at ) > 35 ) return null;
+	return { at, id: 'handLamp', label: 'Take the storm lantern · E', pingEvery: 6000, labelAlways: true };
+
+}
+
 export function storyGuidance( story ) {
 
 	const s = story, p = s.app.player.position, L = s.lamp, W = s.watcher, b = s.beat;
 	if ( b === 'intro' || b === 'crossing' || b === 'end' || s.signal || s.tel > 0.6 || s.paused || s.ui.open || s.app.devMenu?.open || s.app.freeCam || s.app.ui?.ui?.photoMode || s.app.settings.guidance === false ) return null;
 	if ( s.app.keeperSafety?.active && s.app.keeperSafety?.state !== 'normal' ) return s.app.keeperSafety.guidance();
 	if ( s.storm?.active ) return s.storm.guidance();
+	if ( s.later?.active ) return s.later.guidance();
 	if ( s.returningLight?.active ) return s.returningLight.guidance();
 	if ( s.morning?.enabled ) return s.morning.guidance();
 	if ( s.next?.active ) return s.next.guidance();
+	const firstWatch = s.firstWatch?.guidance();
+	if ( firstWatch ) return firstWatch;
 	const keeper = s.keeper?.guidance();
 	if ( keeper ) return routeGuidance( p, marker( keeper.at, keeper.label, 'keeperDuty' ), keeper.zone );
 	let target, zone;

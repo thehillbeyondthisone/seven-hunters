@@ -27,3 +27,38 @@ Runtime: `engine/loaders/GLTF.js` (loadGLB) and `engine/render/Skinning.js` (Ski
 crossfades, GPU skinning, motion vectors, shadows); `game/Vendor.js` swaps the stand-in figure for
 the character once it has loaded. `test/character-smoke.mjs <glb> <out.png> [clip]` renders one
 headlessly.
+
+## Seven Hunters boatman
+
+The landing boat uses `boatman.glb`, a Joe adaptation with the original face,
+eyes and hands, a tailored oilskin jacket with a turned collar, welt pockets and
+horn buttons, knitted watch cap, wool cuffs, trousers and leather boots. This is an
+authored period reconstruction. The Tidewater vendor assets are preserved.
+
+Run these in order through live Blender MCP, from this workspace:
+
+1. `boatman-mcp.py`: isolated scene, clean metre-scale 80-bone skeleton,
+   retained anatomy, deforming wardrobe and short salt-and-pepper stubble.
+   Loads `boatman-tailoring-mcp.py` to fuse the shoulders and sleeves into one
+   shell, smooth the weights, cut sewn openings and author baked yarn detail.
+2. `boatman-performance-mcp.py`: seated rowing, planted feet, distributed
+   spinal movement and anatomically oriented finger closure. It runs
+   `boatman-fit-mcp.py` to fit the lower jacket against the posed trousers and
+   convert the correction back into the skin's bind space.
+3. `boatman-export-mcp.py`: PBR baking, merged near/far skins, selected-scene
+   GLB export, manifest, studio portrait and editable `boatman.blend`.
+
+The GLB is approximately 5.8 MB, with 42,918 / 15,450 near/far triangles and ten
+shared materials. `Boatman.js` samples the baked stroke from `ArrivalRowing.js`,
+then solves the live shoulders, elbows, wrists and grips against the moving
+oars. Horizon glances and blinks run on an independent clock. Geometry switches
+at 20 m, returns at 17 m, and shares the same skin buffer and textures.
+
+`node --run test:boatman` verifies the complete stroke, wave-driven grips,
+motion history, pause, colour and distance geometry. `node --run shots:boatman`
+renders eight views with the actual game renderer under `artifacts/boatman/game`.
+Headless GPU checks do not establish physical phone/headset performance.
+
+The second tailoring pass preserves the original screenshot and GLB under
+`artifacts/boatman/refinement/` for direct comparison. Construction volumes stay
+in the editable reference collection and are explicitly excluded from export.

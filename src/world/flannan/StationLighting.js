@@ -12,7 +12,7 @@ export function stationLightBounds( p ) {
 	if ( r < T.rIn && p.y > T.floor && p.y < T.deck ) {
 		return { min: [ -T.rIn, T.floor - .15, -T.rIn ], max: [ T.rIn, T.deck + .2, T.rIn ], softness: .3 };
 	}
-	for ( const R of [ ROOM, KITCHEN, BERTH ] ) {
+	for ( const R of [ ROOM, KITCHEN, BERTH, {x0:-15,x1:-9.6,z0:-1.2,z1:5.4}, {x0:-21.4,x1:-15.6,z0:-1.2,z1:5.4} ] ) {
 		if ( p.x > R.x0 && p.x < R.x1 + .35 && p.z > R.z0 && p.z < R.z1 && p.y > T.floor && p.y < ROOM.ceiling ) {
 			return { min: [ R.x0 - .05, T.floor - .15, R.z0 - .05 ], max: [ R.x1 + .35, ROOM.ceiling + .05, R.z1 + .05 ], softness: .3 };
 		}

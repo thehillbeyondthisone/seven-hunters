@@ -1,0 +1,112 @@
+import assert from 'node:assert/strict';
+import {fixture,TOWER} from './helpers/morning-fixture.mjs';
+import {CHAIR_EXPOSURE_HOLD,ROLL_FRAMES} from '../src/story/Photography.js';
+
+const f=await fixture(false,{search:'laterWatchPreview=photography',morningStudy:false});
+const {s,app,keys,taps,place,face}=f,photo=s.photography;
+s.ui.choose=async q=>q.options[0].value;
+s.ui.end=q=>{s.lastEnd=q;};
+const flush=async()=>{for(let i=0;i<16;i++)await Promise.resolve();};
+app.capturePhotograph=async()=> 'data:image/jpeg;base64,c2NlbmU=';
+
+await photo.take();await s.later.belongings();
+assert.equal(s.h,228,'the guided indoor picture starts at midday');
+assert.equal(photo.raised,false,'bag introduction does not silently equip the camera');
+assert.match(s.later.goal(),/Press C/);
+await s.later.finishPictures();
+assert.equal(s.beat,'lw-photos','the mandatory first picture cannot be declined');
+const chair=photo.sites[0];
+place(...chair.stand.toArray());face(chair.at);
+taps.add('KeyC');photo.update();assert.equal(photo.equipped,true);
+assert.equal(photo.expose(),false,'a fresh roll reserves its first exposure for Mary');
+assert.equal(photo.expose(photo.sites[1]),false);
+s.interact.update(0);assert.equal(s.interact.current.id,'photo-brace');
+keys.add('KeyE');s.interact.update(.9);
+assert.equal(photo.tutorial.braced,true);assert.equal(photo.state.frames.length,0);
+s.interact.update(5);await flush();
+assert.equal(photo.state.frames.length,0,'a held brace action cannot also expose');
+keys.clear();s.interact.update(0);
+assert.equal(s.interact.current.id,'photo-chair');
+assert.equal(s.interact.current.hold,CHAIR_EXPOSURE_HOLD);
+const eyeBefore=app.camera.position.clone(),supportPosition=eyeBefore.clone().add(new (eyeBefore.constructor)(0,-.8,.15));
+app.keeperHands={photographyView:{position:supportPosition,quaternion:app.camera.quaternion.clone()}};
+app.post={autoExposure:{snap:{value:0}}};
+keys.add('KeyE');s.interact.update(CHAIR_EXPOSURE_HOLD+.1);
+photo.beforeRender();assert.deepEqual(app.camera.position.toArray(),supportPosition.toArray(),'supported photo renders from the authored lens');
+assert.equal(app.post.autoExposure.snap.value,1);
+photo.restoreRenderView();assert.deepEqual(app.camera.position.toArray(),eyeBefore.toArray(),'ordinary eye view is restored after rendering');
+photo.beforeRender();photo.restoreRenderView();assert.equal(photo.captureSnap,0,'later frames retain the original ordinary exposure mode');
+await flush();
+assert.equal(photo.state.frames.length,1);assert.equal(photo.state.frames[0].subject,'chair');
+assert.deepEqual(photo.state.frames[0].position,supportPosition.toArray());delete app.keeperHands;
+assert.equal(app.post.autoExposure.snap.value,0,'a completed photograph restores ordinary adaptation');
+assert.equal(photo.state.frames[0].supported,true);assert.equal(photo.tutorialComplete,true);
+s.interact.update(3);assert.equal(photo.state.wound,false,'holding shutter cannot wind');
+keys.clear();s.interact.update(0);keys.add('KeyE');s.interact.update(1.3);
+assert.equal(photo.state.wound,true);s.interact.update(3);await flush();
+assert.equal(photo.state.frames.length,1,'holding winding cannot expose another picture');
+keys.clear();s.interact.update(0);
+face(app.camera.position.clone().add(new (app.camera.position.constructor)(0,1,-1)));
+s.interact.update(0);assert.equal(s.interact.current.id,'photo-view','remaining frames allow free composition');
+
+// A failed readback and an interrupted shutter leave the film and controls usable.
+app.capturePhotograph=async()=>null;
+assert.ok(photo.expose());await flush();assert.equal(photo.capturing,false);assert.equal(app.player.busy,false);
+assert.equal(photo.state.frames.length,1);assert.equal(photo.state.wound,true);
+const saved=JSON.parse(JSON.stringify(s._snapshot()));let complete;
+app.capturePhotograph=()=>new Promise(resolve=>{complete=resolve;});
+place(...photo.sites[0].stand.toArray());face(photo.sites[0].at);
+app.keeperHands={photographyView:{position:supportPosition,quaternion:app.camera.quaternion.clone()}};
+assert.ok(photo.expose(photo.sites[0]));photo.beforeRender();assert.equal(app.post.autoExposure.snap.value,1);
+await flush();s._restore(saved);assert.equal(app.post.autoExposure.snap.value,0,'cancelled readback restores ordinary adaptation');
+delete app.keeperHands;complete('data:image/jpeg;base64,b2xk');await flush();
+assert.equal(photo.state.frames.length,1,'loading invalidates an in-flight photograph');
+assert.equal(app.player.busy,false);assert.equal(photo.capturing,false);
+assert.ok(photo.tutorialComplete,'tutorial completion survives a save');
+
+// Pre-review saves can have spent all film. Rehearsal preserves every real frame.
+const oldFrames=Array.from({length:ROLL_FRAMES},(_,i)=>({subject:'view',image:`data:image/jpeg;base64,${i}`}));
+s.flags.photography={taken:true,wound:true,frames:structuredClone(oldFrames)};
+s.beat='lw-photos';photo.raised=true;photo.restore();
+place(...photo.sites[0].stand.toArray());face(photo.sites[0].at);
+s.interact.get('photo-brace').use();photo.ready();
+assert.equal(s.interact.get('photo-rehearse').when(),true);
+s.interact.get('photo-rehearse').use();
+assert.deepEqual(photo.state.frames,oldFrames);assert.equal(photo.state.tutorial.legacyFullRoll,true);
+await s.later.finishPictures();assert.equal(s.beat,'lw-photo-signal','full old roll cannot strand the chapter');
+
+// The revised story does not turn pending script or ending proposals into canon.
+await s.later.beginFog();s.later.finishFragment();await s.later.journal();
+assert.equal(s.beat,'lw-review');assert.equal(s.later.state.reviewBoundary,'scene13');
+assert.equal(s.lastEnd.next.label,'Review storm preparations');
+assert.ok(!s.watcher.log.some(entry=>entry.text.includes('REPORTED REASSURANCE')));
+const initialBoundary=s.lastEnd,heldEnvironment=structuredClone(s.later.state.reviewEnvironment);
+await s.later.journal();assert.notEqual(s.lastEnd,initialBoundary,'the journal can reopen a dismissed review boundary');
+const boundary=JSON.parse(JSON.stringify(s._snapshot()));s._restore(boundary);s.later.update(.1);
+assert.equal(s.beat,'lw-review','restore stays at the explicit review boundary');
+assert.equal(app.haze.density.value,heldEnvironment.haze,'a review boundary does not invent clearing weather');
+assert.equal(app.clouds.coverage.value,heldEnvironment.clouds);
+await s.lastEnd.next.use();assert.equal(s.beat,'lw-workshop');
+await s.later.beginRelief();assert.equal(s.beat,'lw-review');
+assert.equal(s.later.state.reviewBoundary,'held-ending');assert.equal(s.lastEnd.next,null);
+await s.later.begin('relief');assert.equal(s.beat,'lw-relief-look','held source remains available in explicit legacy review');
+assert.deepEqual(photo.state.frames,oldFrames);
+s.later.state.legacyReview=false;s.beat='lw-handover';s.later.restore({state:'done',log:[{from:'her',text:'Legacy saved progress'}]});
+assert.equal(s.beat,'lw-review','an old normal save does not silently accept the held ending');
+assert.equal(s.later.state.legacySourceSnapshot.beat,'lw-handover');
+assert.equal(s.lastEnd.next.label,'Review original held ending');
+await s.lastEnd.next.use();assert.equal(s.beat,'lw-handover');assert.equal(s.later.legacyReview,true);
+assert.ok(s.watcher.log.some(entry=>entry.text==='Legacy saved progress'));
+assert.deepEqual(photo.state.frames,oldFrames,'explicit legacy resume preserves all saved photographs');
+
+// A normal imported confession save is redirected, rather than accepted silently.
+s.later.state.legacyReview=false;s.beat='lw-confession';s.later.restore({state:'waiting',node:'december'});
+assert.equal(s.beat,'lw-review');assert.equal(s.later.state.reviewBoundary,'scene13');
+assert.equal(photo.state.frames.length,ROLL_FRAMES);
+s.later.state.packed=s.later.state.ashore=s.later.state.ending=s.later.state.relief=true;
+await s.later.begin('photography');
+assert.equal(photo.available,true,'re-entering a chapter clears ending presentation locks');
+assert.equal(s.later.state.packed,false);assert.equal(s.later.state.ashore,false);assert.equal(s.later.state.relief,false);
+s.later.update(.1);assert.equal(s.arrival.group.visible,false,'an earlier legacy relief boat cannot appear in photography');
+assert.deepEqual(photo.state.frames,oldFrames,'replaying a chapter never replaces existing photographs');
+console.log('PASS mandatory first chair photo, separate equip/brace/expose/wind inputs, free later frames, failed/interrupted shutter recovery, full legacy roll, scene13 review boundary and held ending guard.');

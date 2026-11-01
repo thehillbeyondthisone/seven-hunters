@@ -5,6 +5,7 @@ import { G } from '../engine/render/Frame.js';
 import { shadowModule } from '../engine/render/wgsl/lighting.js';
 import { commonModule } from '../engine/render/wgsl/common.js';
 import { MathUtils, Vector2 } from '../engine/math/index.js';
+import { CoastalMist } from './CoastalMist.js';
 
 // full-screen passes overwrite every pixel: clear instead of load (no tile load of the old contents on
 // tile-based GPUs)
@@ -43,6 +44,9 @@ const FAR_CLAMP = 60000; // m (fits half float)
 const SS_TAPS = 8;
 const SS_DECAY = [ 0.9, 0.97, 1.0 ];
 const SS_GAIN = 3.5;
+const SHAFT_PASSES = [ 'haze march', 'haze shafts temporal' ];
+const GOD_RAY_PASSES = [ ...SHAFT_PASSES, 'haze sun mask', 'haze god rays 0', 'haze god rays 1', 'haze god rays 2' ];
+const NO_PASSES = [];
 
 // haze layers: sea level extinction (1/m) and scale height (m)
 const MARINE = { sigma: 1.5e-4, H: 110 };
@@ -51,6 +55,11 @@ const AEROSOL = { sigma: 3.2e-5, H: 1400 };
 // the haze density that gives a visibility of `km` at sea level (Koschmieder: 3.912 / extinction);
 // the default density 1.6 is about 13 km
 export const hazeDensityForVisibility = ( km ) => 3.912 / ( ( MARINE.sigma + AEROSOL.sigma ) * Math.max( km, 0.05 ) * 1000 );
+// Ordinary aerial haze leaves the authored sky alone. Dense local fog must also
+// veil clouds behind it, or fully extinguished geometry becomes a silhouette
+// painted in a different colour from its sky background.
+const DENSE_SKY_START = hazeDensityForVisibility( .8 );
+const DENSE_SKY_FULL = hazeDensityForVisibility( .25 );
 
 const f = ( x ) => {
 
@@ -76,9 +85,10 @@ fn sunShadowHard( P: vec3f ) -> f32 {
 export class AirHaze {
 
 	// beams: src/station/Beams.js (the lighthouse's beams and far lights in the haze), optional
-	constructor( { depthTexture, underwater, atmosphere, sky = null, clouds = null, terrain = null, csm = null, beams = null } ) {
+	constructor( { depthTexture, underwater, atmosphere, sky = null, clouds = null, terrain = null, csm = null, beams = null, coastalMist = false } ) {
 
 		this.beams = beams;
+		this.coastalMist = coastalMist ? new CoastalMist() : null;
 
 		this.depthTexture = depthTexture;
 		this.uw = underwater;
@@ -127,6 +137,10 @@ export class AirHaze {
 		this.ssShafts = this.ssTargets[ 3 ];
 		this.godRays = true;
 		this.scale = 1;
+		this.resolutionScale = 1;
+		this._outputWidth = 0;
+		this._outputHeight = 0;
+		this.activePassNames = NO_PASSES;
 		this._module = null;
 		this._passes = null;
 
@@ -135,6 +149,31 @@ export class AirHaze {
 	setScale( s ) {
 
 		this.scale = s;
+		this.roomAir?.setScale( s );
+
+	}
+
+	// Independent ray detail, composed with the scene's render scale. 0.5 / 1 / 1.5
+	// cost 0.25 / 1 / 2.25 times the ray pixels, with the same shaders and pass count.
+	setQuality( value ) {
+
+		const n = Number( value );
+		if ( ! Number.isFinite( n ) ) return;
+		const s = MathUtils.clamp( n, 0.5, 1.5 );
+		if ( s === this.resolutionScale ) return;
+		this.resolutionScale = s;
+		this.roomAir?.setQuality( s );
+		this.cut();
+		if ( this._outputWidth > 0 && this._outputHeight > 0 ) this.setSize( this._outputWidth, this._outputHeight );
+
+	}
+
+	// A camera cut, resize or disabled interval cannot contribute old shaft history.
+	cut() {
+
+		this._histValid = false;
+		this.uniforms.fields.histValid.value = 0;
+		this.roomAir?.cut();
 
 	}
 
@@ -142,10 +181,13 @@ export class AirHaze {
 	// resolution scales of the original)
 	setSize( w, h ) {
 
-		const s = this.scale;
+		this._outputWidth = w;
+		this._outputHeight = h;
+		this.roomAir?.setSize( w, h );
+		const s = this.scale * this.resolutionScale;
 		this.low.setSize( Math.round( w * 0.5 * s ), Math.round( h * 0.5 * s ) );
 		for ( const r of this.hist ) r.setSize( Math.round( w * 0.5 * s ), Math.round( h * 0.5 * s ) );
-		this._histValid = false;
+		this.cut();
 		for ( const r of this.ssTargets ) r.setSize( Math.round( w * 0.25 * s ), Math.round( h * 0.25 * s ) );
 
 	}
@@ -180,16 +222,30 @@ export class AirHaze {
 	// record the march and the god ray passes (the post chain calls this before the composite)
 	render() {
 
+		// The composite keeps analytic aerial fog and lighthouse beams without a
+		// shaft texture. Skip both fullscreen passes when that texture is unused.
+		if ( this.enabled.value <= 0.5 || this.shafts.value <= 0 || G.cameraUnderwater.value >= 0.5 ) {
+
+			this.activePassNames = NO_PASSES;
+			this.cut();
+			this.roomAir?.render();
+			return;
+
+		}
+		// Room light remains independent of the outdoor sun-ray strength.
+		this.roomAir?.render();
 		if ( ! this._passes ) this._build();
 		const p = this._passes;
+		this.activePassNames = this.ssFade.value > 0.001 ? GOD_RAY_PASSES : SHAFT_PASSES;
 		p.march.render( { colorViews: [ this.low.texture ], clear: CLR } );
 		// accumulate: 16 jittered steps per pixel are noisy, and the final temporal resolve clamps the
 		// noisy history away, so the shafts flickered; here they settle over ~10 frames
-		const on = this.enabled.value > 0.5 && this.shafts.value > 0;
-		this.uniforms.fields.histValid.value = this._histValid && on ? 1 : 0;
+		this.uniforms.fields.histValid.value = this._histValid ? 1 : 0;
+		// Both history directions share one profiler slot: only one runs per frame.
+		p.temporal[ this._hc ].timestampWrites = p.temporal[ 0 ].timestampWrites;
 		p.temporal[ this._hc ].render( { colorViews: [ this.hist[ 1 - this._hc ].texture ], clear: CLR } );
 		this._hc = 1 - this._hc;
-		this._histValid = on;
+		this._histValid = true;
 		// the god ray passes only matter while the light is in view (the composite skips them otherwise)
 		if ( this.ssFade.value > 0.001 ) {
 
@@ -349,7 +405,7 @@ fn hazeVisibility( P: vec3f ) -> f32 {
 		if ( this._compositeModule ) return this._compositeModule;
 		this._compositeModule = new ShaderModule( {
 			name: 'haze-composite',
-			deps: [ this.module, this.beams && this.beams.module ].filter( Boolean ),
+			deps: [ this.module, this.beams && this.beams.module, this.roomAir?.compositeModule, this.coastalMist?.module ].filter( Boolean ),
 			bindings: {
 				hazeLow: { texture: () => this.hist[ this._hc ].texture },
 				hazeSS: { texture: () => this.ssShafts.texture },
@@ -422,6 +478,20 @@ fn hazeApply( uv: vec2f, c: vec4f ) -> vec4f {
 				if ( frame.styleMix.x > 0.0 ) { out = mix( out, styleFogApply( c.rgb, dist, dir, camH ), frame.styleMix.x ); }
 			}
 
+			// DENSE_SKY_BEGIN
+			// At low visibility the same foreground air lies in front of distant
+			// clouds as the island. Match their limiting radiance so a tower at
+			// nearly zero transmittance cannot remain a blue cutout in warm clouds.
+			// Clear-weather and Style Lab sky rendering stay unchanged.
+			if ( sky ) {
+				let denseSky = smoothstep( ${ f( DENSE_SKY_START ) }, ${ f( DENSE_SKY_FULL ) }, hazeParams.density ) * ( 1.0 - frame.styleMix.x );
+				if ( denseSky > 0.0 ) {
+					let skyTau = hazeOpticalDepth( camH, hazeVy( dir, ${ f( MARCH_DIST ) } ), ${ f( MARCH_DIST ) } );
+					out = mix( out, fog, denseSky * ( 1.0 - exp( - skyTau ) ) );
+				}
+			}
+			// DENSE_SKY_END
+
 			// ---- sun shafts: depth-aware upsample of the half resolution march
 			if ( hazeParams.shafts > 0.0 ) {
 				let ls = vec2i( textureDimensions( hazeLow ) );
@@ -452,6 +522,8 @@ fn hazeApply( uv: vec2f, c: vec4f ) -> vec4f {
 				out = max( out + near - deficit, vec3f( 0.0 ) );
 			}
 
+			// ---- finite, low spray banks: depth-clipped, with the same sky lighting.
+${ this.coastalMist ? '\t\t\tlet mistT = exp( - coastalMistOpticalDepth( underwaterParams.camPos, dir, dist ) );\n\t\t\tout = mix( fog, out, mistT );\n' : '' }
 			// ---- the lighthouse's beams and the far lights, scattered in the same haze
 ${ this.beams ? '\t\t\tout += beamsInScatter( underwaterParams.camPos, dir, select( dist, 1e6, sky ), hazeParams.density, frame.seaLevel );\n' : '' }
 			// ---- screen-space god rays: sun colour x phase x the near air's haze depth
@@ -462,7 +534,7 @@ ${ this.beams ? '\t\t\tout += beamsInScatter( underwaterParams.camPos, dir, sele
 			}
 		}
 	}
-	return vec4f( out, c.a );
+	${ this.roomAir ? 'return roomAirApply( uv, vec4f( out, c.a ) );' : 'return vec4f( out, c.a );' }
 }
 `,
 		} );

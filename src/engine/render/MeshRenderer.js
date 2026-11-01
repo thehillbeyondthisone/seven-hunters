@@ -37,7 +37,9 @@ export class MeshRenderer {
 	constructor() {
 
 		this.pipelines = new Map();
+		this.shaderPrograms = new Map(); // WGSL -> shared module and compatible pipeline variants
 		this.geometries = new WeakMap();
+		this.indexOverrides = new WeakMap(); // local shadows share vertices, retain their own bounded index buffers
 		this.capacity = 8192;
 		this.drawBuffer = null;
 		this.drawData = null;
@@ -184,11 +186,15 @@ export class MeshRenderer {
 
 	}
 
-	_indexBuffer( geometry ) {
+	_indexBuffer( geometry, override = null ) {
 
-		const index = geometry.index;
+		const index = override || geometry.index;
 		if ( ! index ) return null;
-		const g = this._geometryGPU( geometry );
+		let g;
+		if ( override ) {
+			g = this.indexOverrides.get( override );
+			if ( ! g ) { g = { index: null, indexVersion: -1 }; this.indexOverrides.set( override, g ); }
+		} else g = this._geometryGPU( geometry );
 		if ( g.indexRef && g.indexSrc === index.array && g.indexVersion === ( index.version ?? 0 ) ) return g.indexRef;
 		const arr = index.array instanceof Uint16Array || index.array instanceof Uint32Array ? index.array : new Uint32Array( index.array );
 		if ( ! g.index || g.index.size < arr.byteLength ) {
@@ -324,11 +330,17 @@ export class MeshRenderer {
 
 		const passKey = pass.passKey;
 		let c = vl.pipelines && vl.pipelines.get( passKey );
-		if ( c && c.materialKey === material.__pk ) return c.p;
+		if ( c && c.materialKey === material.__pk ) {
+
+			if ( ! this.deferMaterial?.( material, pass ) ) c.p.handle.start?.();
+			return c.p;
+
+		}
 		const key = `${ material.__pk }|${ vl.key }|${ passKey }`;
 		let p = this.pipelines.get( key );
 		if ( ! p ) p = this._createPipeline( material, vl, pass, key );
 		if ( vl.pipelines ) vl.pipelines.set( passKey, { materialKey: material.__pk, p } );
+		if ( ! this.deferMaterial?.( material, pass ) ) p.handle.start?.();
 		return p;
 
 	}
@@ -337,9 +349,7 @@ export class MeshRenderer {
 
 		const src = buildMeshShader( material, vl.layout, pass );
 		const c = composeShader( { modules: src.modules, bindings: src.bindings, code: src.code, defines: src.defines, stage: 'render', label: material.name } );
-		const module = createShaderModule( c.code, material.name );
 		this._ensureDrawBuffer();
-		const layout = GPU.device.createPipelineLayout( { bindGroupLayouts: [ c.group0.layout, c.bindings.layout, this.drawLayout ] } );
 
 		const blend = blendState( material.blending );
 		let targets = [];
@@ -361,13 +371,11 @@ export class MeshRenderer {
 		const cullMode = pass.cullOverride || ( side === 'double' ? 'none' : side === 'back' ? 'front' : 'back' );
 		const depthCompare = material.depthTest ? ( material.depthCompare || pass.depthCompare ) : 'always';
 		const desc = {
-			label: material.name + ' ' + pass.kind,
-			layout,
-			vertex: { module, entryPoint: 'vs', buffers: vl.buffers.map( ( b ) => b.layout ) },
+			vertex: { entryPoint: 'vs', buffers: vl.buffers.map( ( b ) => b.layout ) },
 			primitive: { topology: material.topology, cullMode, frontFace: 'ccw' },
 			multisample: { count: pass.sampleCount || 1 },
 		};
-		if ( src.hasFragment ) desc.fragment = { module, entryPoint: 'fs', targets };
+		if ( src.hasFragment ) desc.fragment = { entryPoint: 'fs', targets };
 		if ( pass.depthFormat ) desc.depthStencil = {
 			format: pass.depthFormat,
 			depthWriteEnabled: material.depthWrite,
@@ -375,10 +383,33 @@ export class MeshRenderer {
 			depthBias: pass.kind === 'depth' ? ( pass.depthBias || 0 ) : material.depthBias,
 			depthBiasSlopeScale: pass.kind === 'depth' ? ( pass.depthBiasSlopeScale || 0 ) : material.depthBiasSlopeScale,
 		};
-		// compiled in the background: the draw is skipped until it is ready (see GPU.renderPipeline)
-		const p = { handle: GPU.renderPipeline( desc ), bindings: c.bindings, label: desc.label };
+		// Match complete generated code, fixed state and binding layouts. Material values and
+		// resource identities stay in each material's BindingSet, never in the shared pipeline.
+		const state = JSON.stringify( desc );
+		const layouts = [ c.group0.layout, c.bindings.layout, this.drawLayout ];
+		let program = this.shaderPrograms.get( c.code );
+		if ( ! program ) {
+
+			program = { module: createShaderModule( c.code, material.name ), variants: [] };
+			this.shaderPrograms.set( c.code, program );
+
+		}
+		let shared = program.variants.find( ( v ) => v.state === state && v.layouts.every( ( l, i ) => l === layouts[ i ] ) );
+		const label = material.name + ' ' + pass.kind;
+		if ( ! shared ) {
+
+			desc.label = label;
+			desc.layout = GPU.device.createPipelineLayout( { bindGroupLayouts: layouts } );
+			desc.vertex.module = program.module;
+			if ( desc.fragment ) desc.fragment.module = program.module;
+			shared = { state, layouts, handle: GPU.renderPipeline( desc, { deferred: !! this.deferMaterial?.( material, pass ) } ) };
+			program.variants.push( shared );
+			this.stats.pipelines ++;
+
+		}
+		// Draws may share a handle while binding different uniform buffers and textures.
+		const p = { handle: shared.handle, bindings: c.bindings, label };
 		this.pipelines.set( key, p );
-		this.stats.pipelines = this.pipelines.size;
 		return p;
 
 	}
@@ -567,7 +598,7 @@ export class MeshRenderer {
 			for ( let i = 0; i < vl.buffers.length; i ++ ) rp.setVertexBuffer( i, this._attributeBuffer( geo, vl.buffers[ i ].attr ) );
 			const instances = o.isInstancedMesh ? o.count : geo.instanceCount ?? 1;
 			if ( instances === 0 ) continue;
-			const index = this._indexBuffer( geo );
+			const index = this._indexBuffer( geo, it.indexOverride );
 			if ( geo.indirect ) {
 
 				const ib = geo.indirect.buffer.getGPU ? geo.indirect.buffer.getGPU() : geo.indirect.buffer;
@@ -589,7 +620,7 @@ export class MeshRenderer {
 
 			if ( index ) {
 
-				const count = Math.min( it.count, geo.index.count - it.start );
+				const count = Math.min( it.count, ( it.indexOverride || geo.index ).count - it.start );
 				if ( count <= 0 ) continue;
 				rp.setIndexBuffer( index.buffer, index.format );
 				rp.drawIndexed( count, instances === Infinity ? 1 : instances, it.start, 0, 0 );

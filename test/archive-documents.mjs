@@ -53,6 +53,27 @@ for(const display of st.parts.archiveDisplays){
  s.ui._close();s.ui.layer.lastChild.remove();
  assert.equal(input.enabled,true);
 }
+// The balcony's historical assistance fittings can be read from the actual
+// walking ring. Inspection is optional and cannot transmit or advance a watch.
+const daylight=s.interact.get('daySignals');
+assert.ok(daylight,'daylight fittings have a normal interaction');
+const signalAngle=Math.atan2(daylight.at.z,daylight.at.x);
+player.position.set(Math.cos(signalAngle)*2.1,TOWER.deck,Math.sin(signalAngle)*2.1);
+assert.equal(daylight.when(),false,'discs cannot prompt through the solid lantern drum');
+player.position.set(Math.cos(signalAngle)*3.2,TOWER.deck-1,Math.sin(signalAngle)*3.2);
+assert.equal(daylight.when(),false,'inspection belongs to the gallery level');
+player.position.set(Math.cos(signalAngle)*3.2,TOWER.deck,Math.sin(signalAngle)*3.2);
+player.mode='walk';player.grounded=true;player.velocity.set(0,0,0);player._camY=null;player.pitch=0;player.update(0);
+camera.lookAt(daylight.at);camera.updateMatrixWorld();
+assert.equal(daylight.when(),true);
+assert.equal(s.interact.pick()?.id,'daySignals','stowed discs are selectable from the gallery');
+const signalState={h:s.h,beat:s.beat,flags:JSON.stringify(s.flags),watcher:s.watcher.state,wind:s.lamp.wind};
+const readingSignal=daylight.use();assert.ok(readingSignal instanceof Promise);assert.equal(s.ui.open,true);
+s.update(1);
+assert.deepEqual({h:s.h,beat:s.beat,flags:JSON.stringify(s.flags),watcher:s.watcher.state,wind:s.lamp.wind},signalState,'reading signals preserves clock, apparatus and conversation');
+s.ui._close();s.ui.layer.lastChild.remove();
+assert.equal(input.enabled,true,'inspection returns walking controls');
+assert.equal(TOWER.daySignals.state,'stowed','inspection leaves assistance signals secured');
 s.save();assert.ok(localStorage.getItem(s.saveKey));
 assert.equal(localStorage.getItem('sevenhunters.night1.v1'),'protected normal watch');
 assert.equal(localStorage.getItem('sevenhunters.chapter-preview.kitchen.v1'),'protected chapter preview');

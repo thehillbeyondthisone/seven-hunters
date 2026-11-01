@@ -38,11 +38,14 @@ export function touchInstruction( text ) {
 
 export function mobileAction( app ) {
 	const story = app.story;
-	if ( story?.signal ) return { label: 'Leave signal', detail: 'Return to the watch', kind: 'leave' };
+	if ( story?.signal ) return story.signalCanLeave === false
+		? { label: story.guidedSignal?.active ? 'Work the shutter above' : 'Receiving / sending', detail: story.guidedSignal?.active ? 'Follow the paper guide' : 'Finish this message, then choose your reply', kind: 'none', disabled: true }
+		: { label: 'Leave signal', detail: 'Return to the watch', kind: 'leave' };
+	if ( story?.aboard && story.arrivalConversation?.active ) return { label: 'Next remark', detail: 'Continue the handover', kind: 'landing' };
 	if ( story?.aboard ) return { label: story.arrival.ready ? 'Step ashore' : 'Go to landing',
 		detail: story.arrival.ready ? 'Leave the boat' : 'Skip the crossing', kind: 'landing' };
 	const prompt = app.player?.prompt;
-	if ( prompt ) return { label: prompt.text, detail: prompt.hold ? 'Keep pressed' : 'Tap to interact', kind: 'key', key: 'KeyE',
+	if ( prompt ) return { label: prompt.text, detail: prompt.detail ? touchInstruction( prompt.detail ) : prompt.hold ? 'Keep pressed' : 'Tap to interact', kind: 'key', key: 'KeyE',
 		hold: !! prompt.hold, progress: prompt.hideProgress ? 0 : prompt.progress ?? 0, target: prompt.safetyTarget || story?.interact?.current?.id };
 	return { label: 'Look at an object', kind: 'none', disabled: true };
 }

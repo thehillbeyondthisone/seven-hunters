@@ -4,6 +4,7 @@ import { saveCameraBob } from '../player/CameraComfort.js';
 const paths = {
 	lamp: 'M8 7V5a4 4 0 0 1 8 0v2M7 8h10l1 11H6L7 8Zm-2 13h14M9 4h6M10 10v6m4-6v6',
 	scope: 'm4 16 11-9 4 5-11 9-4-5Zm11-9 3-2 4 5-3 2M6 14l-3 2 3 4 3-2',
+	camera: 'M4 7h16v14H4V7Zm4 0V4h8v3m-4 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
 	papers: 'M5 3h10l4 4v14H5V3Zm10 0v5h4M8 12h8M8 16h6',
 	pause: 'M8 5v14M16 5v14',
 	hand: 'M8 13V6a2 2 0 0 1 4 0v6-3a2 2 0 0 1 4 0v4-2a2 2 0 0 1 4 0v6c0 4-3 6-6 6-3 0-5-1-7-4l-3-4a2 2 0 0 1 3-2l3 3',
@@ -55,17 +56,18 @@ export class MobileControls {
 			<button class="sm-pause-button" aria-label="Pause the watch">${ icon( 'pause' ) }<span>Pause</span></button>
 			<div class="sm-actions">
 				<button class="sm-papers" aria-label="Read papers">${ icon( 'papers' ) }<span>Read papers</span></button>
-				<button class="sm-read" hidden aria-label="Read signal faster"><span>Read on</span></button>
+				<button class="sm-read" hidden aria-label="Finish the current signal message"><span>Finish message</span></button>
 				<button class="sm-action" disabled><span class="sm-progress"></span><span class="sm-action-copy"><span class="sm-action-text">Look at an object</span><small class="sm-action-detail"></small></span><span class="sm-action-arrow" aria-hidden="true">›</span></button>
 				<button class="sm-tools" aria-label="Open tools" aria-expanded="false">${ icon( 'tools' ) }<span>Tools</span></button>
 			</div>
 			<div class="sm-drawer" hidden>
 				<button data-tool="lamp" aria-label="Storm lantern" aria-pressed="false">${ icon( 'lamp' ) }<span>Lantern</span></button>
 				<button data-tool="scope" aria-label="Telescope" aria-pressed="false">${ icon( 'scope' ) }<span>Telescope</span></button>
+				<button data-tool="camera" aria-label="Brownie camera" aria-pressed="false">${ icon( 'camera' ) }<span>Brownie</span></button>
 				<button data-tool="papers" aria-label="Read your papers">${ icon( 'papers' ) }<span>Papers</span></button>
 				<button data-tool="hurry" aria-label="Hurry" aria-pressed="false">${ icon( 'hurry' ) }<span>Hurry</span></button>
 				<button data-tool="jump" aria-label="Jump">${ icon( 'jump' ) }<span>Jump</span></button>
-				<button data-tool="read" aria-label="Read signal faster" hidden>${ icon( 'hurry' ) }<span>Read on</span></button>
+				<button data-tool="read" aria-label="Finish the current signal message" hidden>${ icon( 'hurry' ) }<span>Finish message</span></button>
 			</div>`;
 		document.body.append( root );
 		this.actionButton = root.querySelector( '.sm-action' );
@@ -121,8 +123,8 @@ export class MobileControls {
 		ui.helpEl.querySelector( '.tw-help-grid' ).innerHTML = `<section><h3>Move</h3><p>Drag anywhere on the left to walk. Drag on the right to look. Use both thumbs together.</p></section>
 			<section><h3>Interact</h3><p>Look at an object to reveal its action. Hold the button to light or wind; release to stop.</p></section>
 			<section><h3>Leave the boat</h3><p>Tap Read papers to open your packet. Tap Go to landing to finish the crossing, then Step ashore to leave the boat. You can also wait for the boat to arrive.</p></section>
-			<section><h3>Tools</h3><p>Open Tools for your papers, lantern, telescope, Hurry and Jump. Tap Telescope again to lower it.</p></section>`;
-		ui.helpEl.querySelector( '.tw-help-guide span' ).textContent = 'Light the lamp at sunset, keep the machine wound, answer Gallan Head when the air is clear, and write up the journal in the morning. Tap Read on to speed up signals.';
+			<section><h3>Tools</h3><p>Open Tools for your papers, lantern, telescope, Brownie, Hurry and Jump. Tap Telescope or Brownie again to put it away. The Brownie takes six daylight pictures; hold the exposure action, release, then wind the film.</p></section>`;
+		ui.helpEl.querySelector( '.tw-help-guide span' ).textContent = 'Light the lamp at sunset, keep the machine wound, answer Gallan Head when the air is clear, and write up the journal in the morning. Tap Finish message to complete the current signal. Choose each reply yourself.';
 		ui.helpEl.querySelector( '.tw-help-close' ).dataset.tip = 'Close controls';
 	}
 
@@ -181,6 +183,7 @@ export class MobileControls {
 		if ( tool === 'read' ) app.story?.mobileCommand( 'read' );
 		if ( tool === 'lamp' ) this.input.tapKey( 'KeyL' );
 		if ( tool === 'scope' ) this.input.touchScope = ! this.input.touchScope;
+		if ( tool === 'camera' ) app.story?.photography.toggle();
 		if ( tool === 'hurry' ) this.input.setTouchKey( 'ShiftLeft', ! this.input.touchKeys.has( 'ShiftLeft' ) );
 		if ( tool === 'jump' ) this.input.tapKey( 'Space' );
 		this.setDrawer( false ); this.resumeAudio();
@@ -235,7 +238,8 @@ export class MobileControls {
 		this.root.classList.toggle( 'is-aboard', !! s?.aboard );
 		this.root.classList.toggle( 'is-signalling', !! s?.signal );
 		this.papersButton.hidden = ! s?.aboard;
-		this.readButton.hidden = ! s?.signal;
+		const canFinish = !! s?.signal && ! s?.guidedSignal?.active && [ 'sending', 'replying' ].includes( s.watcher.state );
+		this.readButton.hidden = ! canFinish;
 		this.toolsButton.hidden = !! s?.aboard || !! s?.signal;
 		this.action = mobileAction( app );
 		if ( this.holdPointer != null && ( ! this.action.hold || this.action.target !== this.holdTarget ) ) this.releaseHold();
@@ -247,11 +251,12 @@ export class MobileControls {
 		for ( const button of this.root.querySelectorAll( '[data-tool]' ) ) {
 			const t = button.dataset.tool;
 			button.disabled = t === 'lamp' ? ! app.handLamp?.carried || !! s?.aboard || !! s?.signal
-				: t === 'scope' ? ! s?.hasTelescope || !! s?.signal : t === 'hurry' || t === 'jump' ? !! s?.aboard || !! s?.signal
+				: t === 'scope' ? ! s?.hasTelescope || !! s?.signal : t === 'camera' ? ! s?.photography?.available : t === 'hurry' || t === 'jump' ? !! s?.aboard || !! s?.signal
 					: t === 'papers' ? !! s?.signal : false;
 			if ( t === 'hurry' && s?.islandReveal?.quietWalk ) button.disabled = true;
-			if ( t === 'read' ) button.hidden = ! s?.signal;
+			if ( t === 'read' ) button.hidden = ! canFinish;
 			if ( [ 'lamp', 'scope', 'hurry' ].includes( t ) ) button.setAttribute( 'aria-pressed', String( t === 'lamp' ? !! app.handLamp?.lit : t === 'scope' ? !! this.input.touchScope : this.input.touchKeys.has( 'ShiftLeft' ) ) );
+			if ( t === 'camera' ) button.setAttribute( 'aria-pressed', String( !! s?.photography?.equipped ) );
 		}
 	}
 }
